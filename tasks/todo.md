@@ -14,8 +14,8 @@
 - [x] **T5** Population model + species catalog + mortality (M) — deps: T4
 - [x] **T6** Production, consumption, overflow chains + drain/harvest (M) — deps: T5
 - [ ] **CP2** — all sim suites green. Review: env dynamics + queue semantics
-- [ ] **T7** Scoring + economy + colony death/repopulate + migration (M) — deps: T6
-- [ ] **T8** Balance harness + first tuning pass (M) — deps: T7
+- [x] **T7** Scoring + economy + colony death/repopulate + migration (M) — deps: T6
+- [x] **T8** Balance harness + first tuning pass (M) — deps: T7
 - [ ] **CP3** — full suite green. **Human review of balance numbers (most important review)**
 
 ## Phase 2 — Persistence and DOM-playable game
@@ -54,5 +54,5 @@
 
 - [x] **I1** i18n runtime + locale catalogs + browser detection (M) — deps: T1 (∥ T6–T8; blocks all UI tasks)
 - [ ] **CP-i18n** — i18n suite green; default pt-BR unchanged; console `setLang` swaps chrome. Review: en/es copy
-- [ ] **I3** Catalog display-name namespaces + worm `latin` field (M) — deps: I1 (blocks T11/T12/T14)
+- [x] **I3** Catalog display-name namespaces + worm `latin` field (M) — deps: I1 (blocks T11/T12/T14)
 - [ ] **I2** Home-page language selector (S) — deps: I1, T10
