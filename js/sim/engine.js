@@ -2,8 +2,16 @@
 // `tick(state, rng)` advances the farm by one game hour and returns a NEW state.
 //
 // The full FarmState shape is defined here as a JSDoc typedef; later tasks fill
-// in the currently-stubbed subsystems (temperature, food queue, population,
-// production, scoring). For T2, tick only advances the clock.
+// in the currently-stubbed subsystems (food queue, population, production,
+// scoring). As of T3 tick advances the clock and updates bin temperature.
+
+import { getComposter } from './composters.js';
+import {
+  ambientTemperature,
+  solarGain,
+  fermentationHeat,
+  blendTemperature,
+} from './temperature.js';
 
 /**
  * A single food item decomposing in the bin.
@@ -102,6 +110,17 @@ export function absoluteTick(state) {
 }
 
 /**
+ * Total mass (liters) of fresh, still-decomposing food in the queue. For T3
+ * every queued entry counts as fresh; T4 introduces a freshness window as
+ * entries decompose.
+ * @param {FarmState} state
+ * @returns {number}
+ */
+function freshFoodMass(state) {
+  return state.queue.reduce((sum, entry) => sum + entry.liters, 0);
+}
+
+/**
  * Advance the simulation by one game hour and return a NEW FarmState. Does not
  * mutate the input. The caller must construct `rng` from `state.rngState` (so
  * the sequence resumes correctly after save/load); tick threads the RNG's
@@ -118,10 +137,19 @@ export function tick(state, rng) {
     day += 1;
   }
 
+  // Temperature: blend toward the environment target for the new hour.
+  const composter = getComposter(state.composterId);
+  const target =
+    ambientTemperature(hour) +
+    solarGain(state.wallPosition, hour) +
+    fermentationHeat(freshFoodMass(state));
+  const temperature = blendTemperature(state.env.temperature, target, composter);
+
   return {
     ...state,
     day,
     hour,
     rngState: rng.state,
+    env: { ...state.env, temperature },
   };
 }

@@ -7,7 +7,7 @@
 
 - [x] **T1** Static shell: index.html, screen routing, strings.js, base CSS (S) — deps: none
 - [x] **T2** Seeded RNG + FarmState shape + engine clock (S) — deps: none (∥ T1)
-- [ ] **T3** Temperature model + solarGain + composter catalog (M) — deps: T2
+- [x] **T3** Temperature model + solarGain + composter catalog (M) — deps: T2
 - [ ] **CP1** — suites green; shell loads. Review: FarmState typedef + composter catalog numbers
 - [ ] **T4** Food queue + foods catalog + bin environment dynamics (M) — deps: T3
 - [ ] **T5** Population model + species catalog + mortality (M) — deps: T4
