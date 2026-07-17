@@ -1,0 +1,168 @@
+/* Minhocário — base styles.
+   Layout goal for T1: establish the game-screen grid so later tasks slot HUD,
+   actions, canvas, and speed bar into fixed regions without reworking layout. */
+
+:root {
+  --bg: #1b2a1b;
+  --panel: #223322;
+  --panel-2: #2c3f2c;
+  --ink: #eaf2e6;
+  --ink-dim: #a9bda2;
+  --accent: #7bc043;
+  --accent-ink: #14210f;
+  --danger: #c0563f;
+  --radius: 8px;
+  --gap: 12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.4;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.is-active { background: var(--accent); color: var(--accent-ink); }
+
+h1, h2 { margin: 0 0 0.4em; }
+
+/* --- Developer navigation (temporary) --- */
+.dev-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 0.8rem;
+}
+.dev-nav__label { color: var(--ink-dim); margin-right: 4px; }
+.dev-nav button { padding: 4px 10px; }
+
+/* --- Screens --- */
+.screen {
+  min-height: 100vh;
+  padding: 56px 24px 24px; /* top padding clears the fixed dev-nav */
+}
+.screen[hidden] { display: none; }
+
+.screen__header { max-width: 900px; margin: 0 auto 16px; }
+.screen__back { margin-top: 16px; }
+
+/* --- Home --- */
+.home {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+.home__subtitle { color: var(--ink-dim); }
+.home__actions {
+  display: flex;
+  gap: var(--gap);
+  justify-content: center;
+  margin: 24px 0;
+}
+.home__actions button { background: var(--accent); color: var(--accent-ink); }
+
+.ranking { text-align: left; margin-top: 24px; }
+.ranking__table { width: 100%; border-collapse: collapse; }
+.ranking__table th,
+.ranking__table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-2);
+}
+.ranking__empty { color: var(--ink-dim); }
+
+/* --- Shop / Setup --- */
+.shop__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap);
+  max-width: 900px;
+  margin: 0 auto;
+}
+.wallet { color: var(--ink-dim); }
+.setup { max-width: 640px; margin: 0 auto; display: grid; gap: var(--gap); }
+.setup fieldset { border: 1px solid var(--panel-2); border-radius: var(--radius); }
+
+/* --- Game screen grid --- */
+/* Regions: HUD across the top, stage (3D canvas) fills the middle,
+   actions on the right, speed bar across the bottom. */
+.screen--game {
+  padding: 0;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'hud     hud'
+    'stage   actions'
+    'speed   speed';
+}
+
+.hud {
+  grid-area: hud;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 44px 16px 10px; /* clears dev-nav */
+  background: var(--panel);
+  border-bottom: 1px solid var(--panel-2);
+}
+.hud__item { color: var(--ink-dim); }
+.hud__item span:last-child { color: var(--ink); font-weight: 600; }
+
+.stage {
+  grid-area: stage;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(#2a3a4a, #1b2a1b);
+}
+.stage canvas { display: block; width: 100%; height: 100%; }
+
+.actions {
+  grid-area: actions;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--panel);
+  border-left: 1px solid var(--panel-2);
+  overflow-y: auto;
+}
+.actions__slider { display: grid; gap: 4px; color: var(--ink-dim); font-size: 0.85rem; }
+
+.speed {
+  grid-area: speed;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--panel-2);
+}
+.speed__buttons { display: flex; gap: 6px; }
+.speed__buttons button { padding: 6px 12px; }

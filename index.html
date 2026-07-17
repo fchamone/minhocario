@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Title is set from strings.js by main.js on load -->
+  <title>Minhocário</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Temporary developer navigation: lets us switch screens while each
+       screen is still being built. Text filled from strings.js by main.js. -->
+  <nav id="dev-nav" class="dev-nav" aria-label="dev">
+    <span class="dev-nav__label" data-string="devNav.label"></span>
+    <button type="button" data-nav="home" data-string="devNav.home"></button>
+    <button type="button" data-nav="shop" data-string="devNav.shop"></button>
+    <button type="button" data-nav="setup" data-string="devNav.setup"></button>
+    <button type="button" data-nav="game" data-string="devNav.game"></button>
+  </nav>
+
+  <main id="app">
+    <!-- HOME -->
+    <section id="screen-home" class="screen" data-screen="home" hidden>
+      <div class="home">
+        <h1 class="home__title" data-string="home.title"></h1>
+        <p class="home__subtitle" data-string="home.subtitle"></p>
+        <div class="home__actions">
+          <button type="button" id="btn-play" data-string="home.play"></button>
+          <button type="button" id="btn-continue" data-string="home.continue" hidden></button>
+        </div>
+        <section class="ranking">
+          <h2 data-string="home.rankingTitle"></h2>
+          <table class="ranking__table">
+            <thead>
+              <tr>
+                <th data-string="home.rankingHeaderNick"></th>
+                <th data-string="home.rankingHeaderScore"></th>
+                <th data-string="home.rankingHeaderDays"></th>
+              </tr>
+            </thead>
+            <tbody id="ranking-body"></tbody>
+          </table>
+          <p id="ranking-empty" class="ranking__empty" data-string="home.rankingEmpty"></p>
+        </section>
+      </div>
+    </section>
+
+    <!-- SHOP -->
+    <section id="screen-shop" class="screen" data-screen="shop" hidden>
+      <header class="screen__header">
+        <h1 data-string="shop.title"></h1>
+        <p data-string="shop.subtitle"></p>
+        <p class="wallet"><span data-string="shop.walletLabel"></span>: <span id="shop-wallet">—</span></p>
+      </header>
+      <div id="shop-list" class="shop__list"></div>
+      <button type="button" class="screen__back" data-nav="home" data-string="shop.back"></button>
+    </section>
+
+    <!-- SETUP -->
+    <section id="screen-setup" class="screen" data-screen="setup" hidden>
+      <header class="screen__header">
+        <h1 data-string="setup.title"></h1>
+        <p data-string="setup.subtitle"></p>
+      </header>
+      <form id="setup-form" class="setup">
+        <fieldset>
+          <legend data-string="setup.speciesLabel"></legend>
+          <div id="setup-species"></div>
+        </fieldset>
+        <fieldset>
+          <legend data-string="setup.beddingLabel"></legend>
+          <div id="setup-bedding"></div>
+        </fieldset>
+        <fieldset>
+          <legend data-string="setup.firstWasteLabel"></legend>
+          <div id="setup-waste"></div>
+        </fieldset>
+        <fieldset>
+          <legend data-string="setup.placementLabel"></legend>
+          <input type="range" id="setup-placement" min="0" max="1" step="0.01" value="0.5">
+        </fieldset>
+        <button type="submit" id="setup-confirm" data-string="setup.confirm"></button>
+      </form>
+    </section>
+
+    <!-- GAME -->
+    <section id="screen-game" class="screen screen--game" data-screen="game" hidden>
+      <header class="hud" id="hud">
+        <span class="hud__item"><span data-string="game.hudScore"></span>: <span id="hud-score">0</span></span>
+        <span class="hud__item"><span data-string="game.hudMoney"></span>: <span id="hud-money">0</span></span>
+        <span class="hud__item"><span data-string="game.hudDay"></span>: <span id="hud-day">1</span></span>
+        <span class="hud__item"><span data-string="game.hudTime"></span>: <span id="hud-time">00h</span></span>
+        <span class="hud__item"><span data-string="game.hudStatus"></span>: <span id="hud-status" data-string="game.statusOk"></span></span>
+      </header>
+
+      <div class="stage" id="stage">
+        <!-- Three.js canvas mounts here (T16+) -->
+        <canvas id="scene-canvas"></canvas>
+      </div>
+
+      <aside class="actions" id="actions">
+        <h2 data-string="game.actionsTitle"></h2>
+        <button type="button" data-action="addWaste" data-string="game.addWaste"></button>
+        <button type="button" data-action="addSawdust" data-string="game.addSawdust"></button>
+        <button type="button" data-action="addWorms" data-string="game.addWorms"></button>
+        <button type="button" data-action="drain" data-string="game.drain"></button>
+        <button type="button" data-action="harvest" data-string="game.harvest"></button>
+        <button type="button" data-action="openShop" data-nav="shop" data-string="game.openShop"></button>
+        <button type="button" data-action="xray" data-string="game.xrayToggle"></button>
+        <label class="actions__slider">
+          <span data-string="game.move"></span>
+          <input type="range" id="wall-position" min="0" max="1" step="0.01" value="0.5">
+        </label>
+      </aside>
+
+      <footer class="speed" id="speed">
+        <span data-string="game.speedLabel"></span>
+        <div class="speed__buttons">
+          <button type="button" data-speed="0.25">0.25×</button>
+          <button type="button" data-speed="0.5">0.5×</button>
+          <button type="button" data-speed="1" class="is-active">1×</button>
+          <button type="button" data-speed="5">5×</button>
+          <button type="button" data-speed="20">20×</button>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
