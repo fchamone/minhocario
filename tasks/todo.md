@@ -12,7 +12,7 @@
 - [ ] **CP1** — suites green; shell loads. Review: FarmState typedef + composter catalog numbers
 - [x] **T4** Food queue + foods catalog + bin environment dynamics (M) — deps: T3
 - [x] **T5** Population model + species catalog + mortality (M) — deps: T4
-- [ ] **T6** Production, consumption, overflow chains + drain/harvest (M) — deps: T5
+- [x] **T6** Production, consumption, overflow chains + drain/harvest (M) — deps: T5
 - [ ] **CP2** — all sim suites green. Review: env dynamics + queue semantics
 - [ ] **T7** Scoring + economy + colony death/repopulate + migration (M) — deps: T6
 - [ ] **T8** Balance harness + first tuning pass (M) — deps: T7
@@ -52,7 +52,7 @@
 
 > Interleaves with the phases above (spec `.harn/devy/changes/C-0002-multilanguage-selector/spec.md`). Land **I1 next** (∥ T6–T8) so Phase-2 UI is built i18n-native. Cross-cutting: T10–T15 and T20 must use `t()` + `catalog.*` (no hardcoded strings); the T22 audit adds catalog parity + the food-labeling guard. Language pref lives in its own `minhocario.lang` key, outside the save schema.
 
-- [ ] **I1** i18n runtime + locale catalogs + browser detection (M) — deps: T1 (∥ T6–T8; blocks all UI tasks)
+- [x] **I1** i18n runtime + locale catalogs + browser detection (M) — deps: T1 (∥ T6–T8; blocks all UI tasks)
 - [ ] **CP-i18n** — i18n suite green; default pt-BR unchanged; console `setLang` swaps chrome. Review: en/es copy
 - [ ] **I3** Catalog display-name namespaces + worm `latin` field (M) — deps: I1 (blocks T11/T12/T14)
 - [ ] **I2** Home-page language selector (S) — deps: I1, T10
