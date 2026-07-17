@@ -6,7 +6,7 @@
 ## Phase 1 — Skeleton and pure sim core
 
 - [x] **T1** Static shell: index.html, screen routing, strings.js, base CSS (S) — deps: none
-- [ ] **T2** Seeded RNG + FarmState shape + engine clock (S) — deps: none (∥ T1)
+- [x] **T2** Seeded RNG + FarmState shape + engine clock (S) — deps: none (∥ T1)
 - [ ] **T3** Temperature model + solarGain + composter catalog (M) — deps: T2
 - [ ] **CP1** — suites green; shell loads. Review: FarmState typedef + composter catalog numbers
 - [ ] **T4** Food queue + foods catalog + bin environment dynamics (M) — deps: T3
