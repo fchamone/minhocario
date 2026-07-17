@@ -9,7 +9,7 @@
 - [x] **T2** Seeded RNG + FarmState shape + engine clock (S) — deps: none (∥ T1)
 - [x] **T3** Temperature model + solarGain + composter catalog (M) — deps: T2
 - [ ] **CP1** — suites green; shell loads. Review: FarmState typedef + composter catalog numbers
-- [ ] **T4** Food queue + foods catalog + bin environment dynamics (M) — deps: T3
+- [x] **T4** Food queue + foods catalog + bin environment dynamics (M) — deps: T3
 - [ ] **T5** Population model + species catalog + mortality (M) — deps: T4
 - [ ] **T6** Production, consumption, overflow chains + drain/harvest (M) — deps: T5
 - [ ] **CP2** — all sim suites green. Review: env dynamics + queue semantics

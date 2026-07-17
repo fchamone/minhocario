@@ -6,12 +6,32 @@
 // scoring). As of T3 tick advances the clock and updates bin temperature.
 
 import { getComposter } from './composters.js';
+import { getFood, queueDynamics } from './foods.js';
 import {
   ambientTemperature,
   solarGain,
   fermentationHeat,
   blendTemperature,
 } from './temperature.js';
+
+/** Smallest waste portion the player may add, in liters (§2.7). */
+export const MIN_PORTION_LITERS = 0.25;
+
+// Bin-environment dynamics constants (§2.5). First-pass; tuned at T8/T21.
+const NEUTRAL_PH = 7; // pH the bin eases back toward when nothing pushes it
+const PH_DRIFT_RATE = 0.02; // fraction of the gap to neutral closed per tick
+const TOX_DECAY_RATE = 0.001; // per-tick toxicity decay — deliberately very slow
+const SAWDUST_DRY_PER_LITER = 0.03; // moisture removed per liter of sawdust added
+
+/** Clamp to [0, 1]. */
+function clamp01(x) {
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+/** Clamp to [lo, hi]. */
+function clamp(x, lo, hi) {
+  return x < lo ? lo : x > hi ? hi : x;
+}
 
 /**
  * A single food item decomposing in the bin.
@@ -110,14 +130,43 @@ export function absoluteTick(state) {
 }
 
 /**
- * Total mass (liters) of fresh, still-decomposing food in the queue. For T3
- * every queued entry counts as fresh; T4 introduces a freshness window as
- * entries decompose.
+ * Add a waste portion to the food queue. Rejects unknown foods and portions
+ * below MIN_PORTION_LITERS (returns the input state unchanged). The queue is
+ * bounded by the composter's capacity: an over-capacity add is clamped to the
+ * remaining space, or rejected if less than a minimum portion remains.
+ * Deterministic — no RNG.
  * @param {FarmState} state
- * @returns {number}
+ * @param {string} foodId catalog id (js/sim/foods.js)
+ * @param {number} liters requested portion volume
+ * @returns {FarmState}
  */
-function freshFoodMass(state) {
-  return state.queue.reduce((sum, entry) => sum + entry.liters, 0);
+export function addFood(state, foodId, liters) {
+  if (!getFood(foodId)) return state;
+  if (!(liters >= MIN_PORTION_LITERS)) return state; // also rejects NaN/negatives
+
+  const composter = getComposter(state.composterId);
+  const capacity = composter ? composter.capacity : 0;
+  const used = state.queue.reduce((sum, e) => sum + e.liters, 0);
+  const remaining = capacity - used;
+  if (remaining < MIN_PORTION_LITERS) return state; // bin is full
+
+  const portion = Math.min(liters, remaining);
+  const entry = { foodId, liters: portion, addedAtTick: absoluteTick(state) };
+  return { ...state, queue: [...state.queue, entry] };
+}
+
+/**
+ * Add sawdust to dry the bin. Lowers moisture deterministically (§2.5 — this is
+ * the sawdust action's whole purpose); does not enter the food queue. Ignores a
+ * non-positive amount.
+ * @param {FarmState} state
+ * @param {number} liters sawdust volume added
+ * @returns {FarmState}
+ */
+export function addSawdust(state, liters) {
+  if (!(liters > 0)) return state;
+  const moisture = clamp01(state.env.moisture - SAWDUST_DRY_PER_LITER * liters);
+  return { ...state, env: { ...state.env, moisture } };
 }
 
 /**
@@ -137,12 +186,30 @@ export function tick(state, rng) {
     day += 1;
   }
 
+  const prevTick = absoluteTick(state);
+  const newTick = prevTick + 1;
+
+  // Food queue decomposition releases moisture/pH/toxicity gradually and yields
+  // the still-fresh mass that drives fermentation heat (§2.5, §2.7).
+  const dyn = queueDynamics(state.queue, prevTick, newTick);
+
+  // Environment dynamics: moisture accrues (sawdust removes it); pH eases back
+  // toward neutral then takes the food push; toxicity decays very slowly then
+  // takes the food load.
+  const moisture = clamp01(state.env.moisture + dyn.moisture);
+  const ph = clamp(
+    state.env.ph + (NEUTRAL_PH - state.env.ph) * PH_DRIFT_RATE + dyn.phPush,
+    0,
+    14,
+  );
+  const toxicity = clamp01(state.env.toxicity * (1 - TOX_DECAY_RATE) + dyn.toxicity);
+
   // Temperature: blend toward the environment target for the new hour.
   const composter = getComposter(state.composterId);
   const target =
     ambientTemperature(hour) +
     solarGain(state.wallPosition, hour) +
-    fermentationHeat(freshFoodMass(state));
+    fermentationHeat(dyn.freshHeatMass);
   const temperature = blendTemperature(state.env.temperature, target, composter);
 
   return {
@@ -150,6 +217,6 @@ export function tick(state, rng) {
     day,
     hour,
     rngState: rng.state,
-    env: { ...state.env, temperature },
+    env: { moisture, ph, toxicity, temperature },
   };
 }
