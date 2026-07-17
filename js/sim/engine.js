@@ -24,6 +24,25 @@ const PH_DRIFT_RATE = 0.02; // fraction of the gap to neutral closed per tick
 const TOX_DECAY_RATE = 0.001; // per-tick toxicity decay — deliberately very slow
 const SAWDUST_DRY_PER_LITER = 0.03; // moisture removed per liter of sawdust added
 
+// Production / consumption / overflow constants (§2.6, §2.8). First-pass; tuned
+// at T8. The eating throughput of the colony per tick is
+//   activeWorms × species.speed × composter.speed × CONSUMPTION_PER_WORM
+// so a bigger, faster colony in a faster composter processes more food, and
+// per-model humus output tracks composter.speed × composter.humusRate.
+const CONSUMPTION_PER_WORM = 0.0005; // liters of food a single active worm eats per tick
+
+// Tray-full chain (§2.8): once the humus tray is full processing halts; the
+// undrained queue then rots anaerobically, raising toxicity in proportion to the
+// stranded food volume each tick.
+const ROT_RATE = 0.0002; // toxicity added per liter of stranded queue per tick
+
+// Tank-full chain (§2.8): leachate produced past the tank's capacity re-saturates
+// the bedding — this fraction of each overflowed liter is added to moisture.
+const LEACHATE_SPILL_TO_MOISTURE = 0.05;
+
+// Numerical slack for "depleted"/"full" comparisons on floating-point volumes.
+const EPS = 1e-9;
+
 /** Clamp to [0, 1]. */
 function clamp01(x) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
@@ -171,6 +190,47 @@ export function addSawdust(state, liters) {
 }
 
 /**
+ * Result of a container-emptying action. Unlike addFood/addSawdust (which return
+ * a bare FarmState), drain/harvest also surface the volume removed so the economy
+ * layer (T7 auto-sell/scoring) can price it. Pure — no RNG.
+ * @typedef {object} DrainResult
+ * @property {FarmState} state   new state with the tank emptied
+ * @property {number} drained    liters of leachate removed
+ */
+
+/**
+ * @typedef {object} HarvestResult
+ * @property {FarmState} state   new state with the humus tray emptied
+ * @property {number} harvested  liters of humus removed
+ */
+
+/**
+ * Drain the leachate tank: empties it instantly and fully (leachate -> 0),
+ * relieving the moisture pressure of a full tank (§2.7 — "instant, empties
+ * fully"). Returns the new state plus the volume drained (for T7 auto-sell).
+ * Deterministic — no RNG.
+ * @param {FarmState} state
+ * @returns {DrainResult}
+ */
+export function drainLeachate(state) {
+  const drained = state.leachate;
+  return { state: { ...state, leachate: 0 }, drained };
+}
+
+/**
+ * Harvest the humus tray: empties it at any time (humus -> 0), which re-enables
+ * processing after a tray-full halt (§2.8). Returns the new state plus the volume
+ * harvested — T7 scoring consumes `harvested` for the age-multiplied points.
+ * Deterministic — no RNG.
+ * @param {FarmState} state
+ * @returns {HarvestResult}
+ */
+export function harvestHumus(state) {
+  const harvested = state.humus;
+  return { state: { ...state, humus: 0 }, harvested };
+}
+
+/**
  * Advance the simulation by one game hour and return a NEW FarmState. Does not
  * mutate the input. The caller must construct `rng` from `state.rngState` (so
  * the sequence resumes correctly after save/load); tick threads the RNG's
@@ -194,19 +254,80 @@ export function tick(state, rng) {
   // the still-fresh mass that drives fermentation heat (§2.5, §2.7).
   const dyn = queueDynamics(state.queue, prevTick, newTick);
 
-  // Environment dynamics: moisture accrues (sawdust removes it); pH eases back
-  // toward neutral then takes the food push; toxicity decays very slowly then
-  // takes the food load.
-  const moisture = clamp01(state.env.moisture + dyn.moisture);
+  const composter = getComposter(state.composterId);
+  const species = getSpecies(state.speciesId);
+
+  // Worm consumption, production, and the two overflow chains (§2.6, §2.8).
+  // Consumption uses the PRE-tick population (order-independent from the cohort
+  // step below) and is fully deterministic — no RNG. A dead/empty colony or a
+  // full humus tray means no processing this tick.
+  let queue = state.queue;
+  let humus = state.humus;
+  let leachate = state.leachate;
+  let spillMoisture = 0; // leachate re-saturating the bedding (tank-full chain)
+  let rotToxicity = 0; // stranded food rotting anaerobically (tray-full chain)
+
+  if (composter) {
+    const active = state.population.juveniles + state.population.adults;
+    const trayFull = humus >= composter.humusCapacity - EPS;
+
+    if (species && active > 0 && !trayFull) {
+      // Eating throughput scales with the active colony and both speed traits.
+      let toEat = active * species.speed * composter.speed * CONSUMPTION_PER_WORM;
+      let eaten = 0;
+      const nextQueue = [];
+      for (const entry of queue) {
+        if (toEat <= EPS) {
+          nextQueue.push(entry);
+          continue;
+        }
+        if (entry.liters <= toEat + EPS) {
+          // Oldest entry fully consumed -> removed from the queue.
+          eaten += entry.liters;
+          toEat -= entry.liters;
+        } else {
+          // Partially eaten -> keep the remainder in place.
+          eaten += toEat;
+          nextQueue.push({ ...entry, liters: entry.liters - toEat });
+          toEat = 0;
+        }
+      }
+      queue = nextQueue;
+      // Eaten volume converts to humus and leachate at the composter's rates.
+      humus += eaten * composter.humusRate;
+      leachate += eaten * composter.leachateRate;
+    }
+
+    // Tank-full chain: leachate past capacity re-saturates the bedding (moisture
+    // spike) and the tank clamps at capacity — the spike happens ONLY here.
+    if (leachate > composter.leachateCapacity) {
+      spillMoisture = (leachate - composter.leachateCapacity) * LEACHATE_SPILL_TO_MOISTURE;
+      leachate = composter.leachateCapacity;
+    }
+
+    // Tray-full chain: humus clamps at capacity; while the tray is full the
+    // undrained queue rots anaerobically and climbs toxicity over time.
+    if (humus > composter.humusCapacity) humus = composter.humusCapacity;
+    if (trayFull) {
+      const stranded = queue.reduce((sum, e) => sum + e.liters, 0);
+      rotToxicity = stranded * ROT_RATE;
+    }
+  }
+
+  // Environment dynamics: moisture accrues (sawdust removes it, leachate backup
+  // spikes it); pH eases back toward neutral then takes the food push; toxicity
+  // decays very slowly then takes the food load plus any rot.
+  const moisture = clamp01(state.env.moisture + dyn.moisture + spillMoisture);
   const ph = clamp(
     state.env.ph + (NEUTRAL_PH - state.env.ph) * PH_DRIFT_RATE + dyn.phPush,
     0,
     14,
   );
-  const toxicity = clamp01(state.env.toxicity * (1 - TOX_DECAY_RATE) + dyn.toxicity);
+  const toxicity = clamp01(
+    state.env.toxicity * (1 - TOX_DECAY_RATE) + dyn.toxicity + rotToxicity,
+  );
 
   // Temperature: blend toward the environment target for the new hour.
-  const composter = getComposter(state.composterId);
   const target =
     ambientTemperature(hour) +
     solarGain(state.wallPosition, hour) +
@@ -217,7 +338,6 @@ export function tick(state, rng) {
   // Population: evolve the cohort pipeline against the new environment. Skipped
   // until a species is chosen (empty farm before setup); the RNG is only drawn
   // for fractional cohort flows, so an empty colony consumes no randomness.
-  const species = getSpecies(state.speciesId);
   const population = species
     ? populationStep(state.population, env, species, carryingCapacity(composter), rng)
     : state.population;
@@ -229,5 +349,8 @@ export function tick(state, rng) {
     rngState: rng.state,
     env,
     population,
+    queue,
+    humus,
+    leachate,
   };
 }
