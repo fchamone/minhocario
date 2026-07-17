@@ -2,6 +2,7 @@
 
 > Tracks progress against `tasks/plan.md`. Check tasks only after their verify step passes.
 > Sizes: S/M. `∥` = can run in parallel with the critical path.
+> Amended with Change C-0002 (multi-language i18n) — see the section at the bottom.
 
 ## Phase 1 — Skeleton and pure sim core
 
@@ -46,3 +47,12 @@
 - [ ] **T22** UX/visual polish + audits (strings/Math.random/food labels) (S/M) — deps: T20
 - [ ] **T23** Release checklist + deploy dry run (S) — deps: T21, T22
 - [ ] **CP9** — ship gate: human sign-off vs spec acceptance criteria; scoring + save schema freeze
+
+## Change C-0002 — Multi-language (i18n): pt-BR / en / es
+
+> Interleaves with the phases above (spec `.harn/devy/changes/C-0002-multilanguage-selector/spec.md`). Land **I1 next** (∥ T6–T8) so Phase-2 UI is built i18n-native. Cross-cutting: T10–T15 and T20 must use `t()` + `catalog.*` (no hardcoded strings); the T22 audit adds catalog parity + the food-labeling guard. Language pref lives in its own `minhocario.lang` key, outside the save schema.
+
+- [ ] **I1** i18n runtime + locale catalogs + browser detection (M) — deps: T1 (∥ T6–T8; blocks all UI tasks)
+- [ ] **CP-i18n** — i18n suite green; default pt-BR unchanged; console `setLang` swaps chrome. Review: en/es copy
+- [ ] **I3** Catalog display-name namespaces + worm `latin` field (M) — deps: I1 (blocks T11/T12/T14)
+- [ ] **I2** Home-page language selector (S) — deps: I1, T10

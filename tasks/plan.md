@@ -2,6 +2,7 @@
 
 > Approved via `/devy:plan` on 2026-07-17. Source spec: `.harn/devy/changes/C-0001-worm-farm-simulator/spec.md`.
 > Progress tracking: `tasks/todo.md`.
+> **Amended 2026-07-17** with Change C-0002 (multi-language i18n) — see the "Change C-0002" section below and `.harn/devy/changes/C-0002-multilanguage-selector/spec.md`.
 
 ## Context
 
@@ -199,6 +200,34 @@ Execute spec §6 manual checklist (desktop + one mobile browser: render, day/nig
 
 ---
 
+## Change C-0002 — Multi-language (i18n): pt-BR / en / es
+
+> Source spec: `.harn/devy/changes/C-0002-multilanguage-selector/spec.md`. This **interleaves** with the tasks above rather than forming a new phase. **Land I1 next** (parallel to T6–T8) so every Phase-2 UI task is built i18n-native instead of retrofitted. Reference locale is `pt-BR`; `en`/`es` mirror its exact key shape.
+
+### I1. i18n runtime + locale catalogs + browser detection — M
+Restructure `js/strings.js` from a single pt-BR object into an i18n **runtime**: active-locale state, `t(path)`, `setLang(tag)`, `getLang()`, `SUPPORTED_LANGS`, and pure `resolveLang(storedTag, navigatorLanguages)`. Move the existing pt-BR literals **verbatim** into `js/i18n/pt-BR.js`; author `js/i18n/en.js` + `js/i18n/es.js` mirrors. `main.js` `applyStrings()` reads the active catalog with **pt-BR missing-key fallback + `console.warn`**; on init it resolves the locale (own `minhocario.lang` key → browser → pt-BR), applies it, and sets `document.documentElement.lang`. Language persists in its **own localStorage key, never the save**.
+- **AC:** the three catalogs have identical key sets (parity test green); `resolveLang` matrix passes (stored wins; `pt`/`en`/`es` primary-subtag mapping; unknown/empty → pt-BR); switching the active locale re-renders every `[data-string]` node; a missing key falls back to pt-BR and warns; default render stays pt-BR; zero UI literals added outside `js/strings.js`/`js/i18n/`.
+- **Verify:** `node --test tests/i18n.test.js` (+ full `node --test tests/` green); `npx serve .` → default unchanged, `setLang('en')`/`setLang('es')` from the console swaps chrome; no non-same-origin requests.
+- **Deps:** T1 (done). **∥** with T6–T8. **Blocks:** all Phase-2/3 UI tasks. **Files:** `js/strings.js`, `js/i18n/{pt-BR,en,es}.js`, `js/main.js`, `tests/i18n.test.js`.
+
+### I3. Catalog display-name namespaces + worm Latin field — M
+Add localized display names keyed by sim `id` — `catalog.composters[id]{name,desc}`, `catalog.worms[id]{name,desc}`, `catalog.foods[id]{name}` — across all three locales for every id in `js/sim/{composters,foods,worms}.js` (the catalog data is already built in T3/T4/T5). Add a language-neutral `latin` field to each species in `js/sim/worms.js` (data, not UI). **Foods carry `name` only** — no suitability/category/ordering signal in any locale.
+- **AC:** coverage test green — every sim id has `name` (+`desc` where applicable) in all 3 locales; food entries expose **only** `name` (food-labeling guard green); worm `latin` present and identical across locales; `js/sim/` stays free of display strings (the neutral `latin` field excepted).
+- **Verify:** `node --test tests/i18n.test.js` + `node --test tests/` green.
+- **Deps:** I1 (needs the `js/i18n/` scaffold); T3/T4/T5 (done). **Blocks:** T11, T12, T14. **Files:** `js/i18n/{pt-BR,en,es}.js`, `js/sim/worms.js`.
+
+### I2. Home-page language selector — S
+Native-name selector (`Português` / `English` / `Español`) on the home screen; selecting calls `setLang` → persists `minhocario.lang` → re-renders `[data-string]` + rebuilds the ranking + re-renders the nickname (**nickname stays pt-BR-flavored**). The selector reflects the current active locale. **Home-only:** language is fixed once a farm is running (spec fork 2).
+- **AC:** selector switches all visible home UI immediately; the choice persists across reload in its own key and **does not modify or invalidate an existing save**; a first-time visitor with an es/en browser lands in that language, unknown → pt-BR; nickname stays pt-BR regardless of language; `<html lang>` tracks the selection.
+- **Verify:** `npx serve .` → switch each language, reload, inspect localStorage (separate `minhocario.lang` key alongside the `{v:1}` save); fresh-profile detection via DevTools locale override.
+- **Deps:** I1, T10. **Files:** `js/ui/home.js`, `index.html`, `css/style.css`, `js/i18n/*`.
+
+> **CP-i18n (after I1):** i18n suite green; default pt-BR render unchanged; console `setLang` swaps all chrome. Human review: `en`/`es` copy for the already-built screens.
+
+**Cross-cutting constraint (Phase 2–3 UI tasks):** T10–T15 and T20 pull every string via `t()` and every model/species/food name via the `catalog.*` namespaces from the start — no hardcoded literals. **CP4** note: the language preference lives **outside** the save schema (its own `minhocario.lang` key), so it is exempt from the save-schema freeze. **T22** audit extends to assert catalog key-parity and the food-labeling guard across all three locales.
+
+---
+
 ## Test plan mapping (spec §6 → tasks)
 
 | Coverage | Test file | Task |
@@ -214,6 +243,7 @@ Execute spec §6 manual checklist (desktop + one mobile browser: render, day/nig
 | Economy (auto-sell, trade-in, migration) | `tests/economy.test.js` | T7 |
 | §2.8 chains end-to-end + survivability | `tests/balance.test.js` | T8, T21 |
 | Save round-trip + migration | `tests/storage.test.js` | T9 |
+| i18n catalog parity + food-labeling guard + `resolveLang` detection | `tests/i18n.test.js` | I1, I3 |
 
 ## Risks
 
@@ -227,12 +257,15 @@ Execute spec §6 manual checklist (desktop + one mobile browser: render, day/nig
 | Timer drift / 20× jank | Med | Accumulator timer (T13); cheap O(queue+cohorts) tick; render decoupled at rAF |
 | Migration edge cases (queue > new bin, dead colony mid-upgrade) | Med | Explicit cases in `tests/economy.test.js`; clamp rules reviewed at CP3 |
 | Hardcoded pt-BR creep | Low | Grep-audit ACs in T1 and T22 |
+| Locale catalogs drift out of sync (missing/blank keys) | Med | I1 parity test gates the three catalogs; runtime falls back to pt-BR + warns; T22 audit re-checks |
+| i18n retrofit cost if UI built before I1 | Med | Land I1 before Phase-2 UI (T10+); cross-cutting `t()`/`catalog.*` constraint on every UI task |
 
 ## Parallelization
 
 - **Serial critical path:** T2→T3→T4→T5→T6→T7→T8→T9→T10…T15 (sim tasks all touch `engine.js`; UI tasks share `main.js`/`index.html`).
 - **Parallel lane:** T16 any time after T1 (recommended alongside Phase 1); T17 after T16+T3 alongside Phase 2. T18–T20 serialize with each other. T1 ∥ T2.
 - Merge points for a second stream: T13 (continuous clock hook) and T14 (action dispatch for drag/x-ray).
+- **i18n lane (C-0002):** I1 ∥ T6–T8 (touches `strings.js`/`main.js`, not `engine.js`); I3 after I1; I2 with T10. I1 should precede any Phase-2 UI task.
 
 ## Verification (end-to-end)
 
