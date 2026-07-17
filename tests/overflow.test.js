@@ -63,9 +63,12 @@ test('leachate never drained spikes moisture only after the tank hits capacity',
 
 test('humus never harvested halts production, then the stranded queue rots toxicity up', () => {
   const cap = getComposter('electric').humusCapacity;
-  // vegetableScraps carry zero toxicity of their own, so any toxicity rise here
-  // is purely the anaerobic rot of the stranded, unprocessed queue.
-  let s = farm({ queue: [entry('vegetableScraps', 300, 0)] });
+  // Eggshells carry zero toxicity AND zero moisture of their own, so any toxicity
+  // rise here is purely the anaerobic rot of the stranded, unprocessed queue —
+  // and the bin never saturates, keeping the (now lethal) leachate/moisture chain
+  // from confounding the colony while it fills the tray. A moderate stranded queue
+  // (40 L) fills the 8 L tray and leaves a clear remainder to rot.
+  let s = farm({ queue: [entry('eggshells', 40, 0)] });
   const rng = createRng(s.rngState);
 
   const humus = [];

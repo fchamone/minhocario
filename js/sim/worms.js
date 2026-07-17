@@ -84,7 +84,12 @@ const PH_COMFORT = { min: 6, max: 8 };
 const TOX_THRESHOLD = 0.1; // toxicity below this is harmless
 
 const TEMP_STALL = 4; // °C outside the band that fully stalls laying
-const MOISTURE_STALL = 0.1; // moisture units outside the band
+// Moisture band is asymmetric in its lethal headroom: moisture clamps at 1.0, so
+// the wet side has only (1 - band.max) of room. A stall span of 0.06 keeps the
+// dry side graded (0.1 outside the band => stress 1.67: laying stalled, no dying)
+// while letting a fully-saturated bin (the leachate-overflow terminal, §2.8)
+// reach a lethal stress of ~2.5 — without it, over-wetness could never kill.
+const MOISTURE_STALL = 0.06; // moisture units outside the band
 const PH_STALL = 1; // pH units outside the band
 const TOX_STALL = 0.15; // toxicity above threshold
 const OVERPOP_STALL = 0.5; // crowding ratio above carrying capacity
