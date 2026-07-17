@@ -14,6 +14,7 @@ import {
   fermentationHeat,
   blendTemperature,
 } from './temperature.js';
+import { scorePoints, applyHarvestScore } from './scoring.js';
 
 /** Smallest waste portion the player may add, in liters (§2.7). */
 export const MIN_PORTION_LITERS = 0.25;
@@ -242,9 +243,11 @@ export function harvestHumus(state) {
 export function tick(state, rng) {
   let hour = state.hour + 1;
   let day = state.day;
+  let dayRolled = false;
   if (hour >= 24) {
     hour = 0;
     day += 1;
+    dayRolled = true;
   }
 
   const prevTick = absoluteTick(state);
@@ -260,7 +263,9 @@ export function tick(state, rng) {
   // Worm consumption, production, and the two overflow chains (§2.6, §2.8).
   // Consumption uses the PRE-tick population (order-independent from the cohort
   // step below) and is fully deterministic — no RNG. A dead/empty colony or a
-  // full humus tray means no processing this tick.
+  // full humus tray means no worm-driven processing this tick — but the overflow
+  // chains (leachate spill, anaerobic rot) below keep running regardless, since
+  // rot is decay, not production (§2.1 "production stops" on colony death).
   let queue = state.queue;
   let humus = state.humus;
   let leachate = state.leachate;
@@ -271,7 +276,10 @@ export function tick(state, rng) {
     const active = state.population.juveniles + state.population.adults;
     const trayFull = humus >= composter.humusCapacity - EPS;
 
-    if (species && active > 0 && !trayFull) {
+    // A dead colony (colonyAlive === false) never produces; its population is
+    // already zero so `active > 0` also gates this, but the flag makes the
+    // "colony-dead ⇒ no consumption/humus/leachate" rule (§2.1) explicit.
+    if (species && active > 0 && !trayFull && state.colonyAlive) {
       // Eating throughput scales with the active colony and both speed traits.
       let toEat = active * species.speed * composter.speed * CONSUMPTION_PER_WORM;
       let eaten = 0;
@@ -342,6 +350,20 @@ export function tick(state, rng) {
     ? populationStep(state.population, env, species, carryingCapacity(composter), rng)
     : state.population;
 
+  // Colony lifecycle (§2.1). Age advances once per game-day rollover while the
+  // colony lives; a dead colony is frozen at the age it reached. Death is a
+  // TRANSITION detected here: a colony that HAD worms (pre-tick total > 0) and
+  // now has none flips colonyAlive → false. An empty pre-setup farm (never had
+  // worms) never makes that transition, so it stays "alive" until real worms are
+  // added and only later lost. Repopulation (buyWormPack) resets the age to 0.
+  const prevTotal =
+    state.population.cocoons + state.population.juveniles + state.population.adults;
+  const newTotal = population.cocoons + population.juveniles + population.adults;
+  let colonyAlive = state.colonyAlive;
+  let colonyAgeDays = state.colonyAgeDays;
+  if (state.colonyAlive && dayRolled) colonyAgeDays += 1;
+  if (state.colonyAlive && prevTotal > 0 && newTotal === 0) colonyAlive = false;
+
   return {
     ...state,
     day,
@@ -352,5 +374,238 @@ export function tick(state, rng) {
     queue,
     humus,
     leachate,
+    colonyAgeDays,
+    colonyAlive,
   };
+}
+
+// --- Economy (§2.2, §2.11) --------------------------------------------------
+//
+// PURE and deterministic — no RNG, no DOM. The wallet lives on the player
+// PROFILE (save schema §2.11: `{ v, profile: { nickname, wallet }, farm, ... }`)
+// so it survives farm restarts; it is NOT a FarmState field. Every economy
+// function therefore takes an explicit `wallet` number and returns the updated
+// one alongside the new farm state. All prices are FIRST-PASS (CP-review / T8
+// tuning); the structural relationships are what matter and what the tests lock.
+
+/** Auto-sell price of humus, per liter (§2.2 — humus is worth much more). */
+export const HUMUS_PRICE_PER_LITER = 12;
+
+/** Auto-sell price of leachate, per liter (§2.2 — a small bonus). */
+export const LEACHATE_PRICE_PER_LITER = 2;
+
+/** Worm pack sizes the shop sells (§2.2). */
+export const WORM_PACK_SIZES = [50, 100, 200];
+
+// New profiles start able to buy the cheapest composter (tier2 = 100) + a
+// 50-worm pack of the cheapest species (californiana = 40) + bedding (FREE,
+// §2.2), with a little slack. Minimum viable start is 140; 200 leaves 60 of
+// slack. Asserted DYNAMICALLY against the catalogs in the tests, not hardcoded
+// there — so retuning a catalog price only needs this constant revisited.
+/** Coins a fresh player profile starts with (§2.2). */
+export const STARTING_WALLET = 200;
+
+// Larger packs cost proportionally more worms but earn a small, capped bulk
+// discount (cheaper per worm). species.price is defined as the price of the
+// base 50-worm pack; a pack of N worms costs price × (N/50) × discount.
+const BULK_DISCOUNT_PER_STEP = 0.03; // per extra 50-worm step above the base pack
+
+/**
+ * Price of a worm pack. species.price is the base 50-worm pack price; the pack
+ * scales by worm count (packSize/50) with a small bulk discount and is rounded
+ * to whole coins. Unknown species or an unsupported pack size returns Infinity
+ * (unaffordable), so a caller's `wallet >= price` guard rejects it.
+ * @param {string} speciesId catalog id (js/sim/worms.js)
+ * @param {number} packSize  number of worms (one of WORM_PACK_SIZES)
+ * @returns {number} price in coins, or Infinity if invalid
+ */
+export function wormPackPrice(speciesId, packSize) {
+  const species = getSpecies(speciesId);
+  if (!species || !WORM_PACK_SIZES.includes(packSize)) return Infinity;
+  const steps = packSize / 50; // 1, 2, or 4
+  const discount = Math.max(0.5, 1 - BULK_DISCOUNT_PER_STEP * (steps - 1));
+  return Math.round(species.price * steps * discount);
+}
+
+/**
+ * Coins earned auto-selling harvested humus (§2.2 — no inventory, instant sale).
+ * @param {number} liters liters of humus sold (>= 0)
+ * @returns {number} coins
+ */
+export function sellHumus(liters) {
+  return (liters > 0 ? liters : 0) * HUMUS_PRICE_PER_LITER;
+}
+
+/**
+ * Coins earned auto-selling drained leachate (§2.2 — a small bonus).
+ * @param {number} liters liters of leachate sold (>= 0)
+ * @returns {number} coins
+ */
+export function sellLeachate(liters) {
+  return (liters > 0 ? liters : 0) * LEACHATE_PRICE_PER_LITER;
+}
+
+/**
+ * Result of harvesting the humus tray and auto-selling it (§2.2, §2.10).
+ * @typedef {object} HarvestSaleResult
+ * @property {FarmState} state    tray emptied and score advanced
+ * @property {number} wallet      wallet after crediting the sale
+ * @property {number} harvested   liters of humus removed
+ * @property {number} coins       coins credited for the humus
+ * @property {number} points      score points the harvest added
+ */
+
+/**
+ * Harvest the humus tray, auto-sell it into the wallet, and bank the age-scaled
+ * score (§2.10). Combines harvestHumus + sellHumus + applyHarvestScore. The
+ * points use the colony age at harvest time. Pure — no RNG.
+ * @param {FarmState} state
+ * @param {number} wallet coins on the player profile
+ * @returns {HarvestSaleResult}
+ */
+export function harvestAndSell(state, wallet) {
+  const { state: harvested, harvested: liters } = harvestHumus(state);
+  const coins = sellHumus(liters);
+  const points = scorePoints(liters, state.colonyAgeDays);
+  const scored = applyHarvestScore(harvested, liters);
+  return { state: scored, wallet: wallet + coins, harvested: liters, coins, points };
+}
+
+/**
+ * Result of draining the leachate tank and auto-selling it (§2.2).
+ * @typedef {object} DrainSaleResult
+ * @property {FarmState} state   tank emptied
+ * @property {number} wallet     wallet after crediting the sale
+ * @property {number} drained    liters of leachate removed
+ * @property {number} coins      coins credited for the leachate
+ */
+
+/**
+ * Drain the leachate tank and auto-sell it into the wallet. Leachate earns coins
+ * but NO score — only humus harvests score (§2.10). Pure — no RNG.
+ * @param {FarmState} state
+ * @param {number} wallet coins on the player profile
+ * @returns {DrainSaleResult}
+ */
+export function drainAndSell(state, wallet) {
+  const { state: drainedState, drained } = drainLeachate(state);
+  const coins = sellLeachate(drained);
+  return { state: drainedState, wallet: wallet + coins, drained, coins };
+}
+
+/**
+ * Result of a wallet-spending action (buy / repopulate / migrate).
+ * @typedef {object} PurchaseResult
+ * @property {FarmState} state  new state (unchanged when ok === false)
+ * @property {number} wallet    new wallet (unchanged when ok === false)
+ * @property {boolean} ok       whether the purchase went through
+ */
+
+/**
+ * Buy a worm pack and add the worms to the farm as ADULTS (§2.2). Rejects
+ * (ok:false, state+wallet unchanged) on an unknown species, an unsupported pack
+ * size, or an insufficient wallet. On success the price is deducted and the
+ * worms are added; the pack's species becomes the farm's species (one species
+ * per farm). If the colony was DEAD this repopulates the SAME farm (§2.1):
+ * colonyAlive → true and colonyAgeDays → 0, while score/humus/leachate totals
+ * are kept. Adding to a LIVE colony does NOT reset the age. Pure — no RNG.
+ * @param {FarmState} state
+ * @param {number} wallet coins on the player profile
+ * @param {string} speciesId catalog id (js/sim/worms.js)
+ * @param {number} packSize  number of worms (one of WORM_PACK_SIZES)
+ * @returns {PurchaseResult}
+ */
+export function buyWormPack(state, wallet, speciesId, packSize) {
+  const species = getSpecies(speciesId);
+  if (!species || !WORM_PACK_SIZES.includes(packSize)) {
+    return { state, wallet, ok: false };
+  }
+  const price = wormPackPrice(speciesId, packSize);
+  if (!(wallet >= price)) return { state, wallet, ok: false };
+
+  const wasDead = !state.colonyAlive;
+  const next = {
+    ...state,
+    speciesId,
+    population: { ...state.population, adults: state.population.adults + packSize },
+    colonyAlive: true,
+    // A dead colony repopulates as a fresh colony: age resets. A live one keeps
+    // its accumulated age (restocking must not wipe the longevity multiplier).
+    colonyAgeDays: wasDead ? 0 : state.colonyAgeDays,
+  };
+  return { state: next, wallet: wallet - price, ok: true };
+}
+
+/**
+ * Repopulate the farm after a colony death (§2.1). Thin alias of buyWormPack —
+ * a dead colony's purchase already resets colonyAlive/colonyAgeDays.
+ * @param {FarmState} state
+ * @param {number} wallet coins on the player profile
+ * @param {string} speciesId catalog id (js/sim/worms.js)
+ * @param {number} packSize  number of worms (one of WORM_PACK_SIZES)
+ * @returns {PurchaseResult}
+ */
+export function repopulateColony(state, wallet, speciesId, packSize) {
+  return buyWormPack(state, wallet, speciesId, packSize);
+}
+
+/**
+ * Migrate the farm to a new composter model (§2.2 mid-farm upgrade). Rejects
+ * (ok:false, unchanged) on an unknown or same model, or if the wallet cannot
+ * cover the net cost `newPrice − 0.5 × oldPrice`. On success: the old bin's
+ * humus + leachate are auto-sold into the wallet, a 50% trade-in of the OLD
+ * composter is credited, the new price is deducted, and worms / food queue /
+ * bedding (env) / colonyAgeDays / score / colonyAlive all carry across. Humus
+ * and leachate start empty in the new bin (they were sold). If the new bin's
+ * capacity is smaller, the carried queue is trimmed OLDEST-FIRST up to the new
+ * capacity (truncating the straddling entry, discarding the newest overflow —
+ * the oldest food is closest to becoming humus). One composter at a time. Pure
+ * — no RNG.
+ * @param {FarmState} state
+ * @param {number} wallet coins on the player profile
+ * @param {string} newComposterId catalog id (js/sim/composters.js)
+ * @returns {PurchaseResult}
+ */
+export function migrateToComposter(state, wallet, newComposterId) {
+  const newComposter = getComposter(newComposterId);
+  if (!newComposter || newComposterId === state.composterId) {
+    return { state, wallet, ok: false };
+  }
+
+  const oldComposter = getComposter(state.composterId);
+  const tradeIn = 0.5 * (oldComposter ? oldComposter.price : 0);
+  const netCost = newComposter.price - tradeIn;
+  if (!(wallet >= netCost)) return { state, wallet, ok: false };
+
+  // Auto-sell whatever was in the old bin, then apply trade-in − new price.
+  const saleCoins = sellHumus(state.humus) + sellLeachate(state.leachate);
+  const newWallet = wallet + saleCoins + tradeIn - newComposter.price;
+
+  // Trim the carried queue oldest-first to the new capacity if it is smaller.
+  let queue = state.queue;
+  const queued = queue.reduce((sum, e) => sum + e.liters, 0);
+  if (queued > newComposter.capacity + EPS) {
+    const trimmed = [];
+    let room = newComposter.capacity;
+    for (const e of queue) {
+      if (room <= EPS) break;
+      if (e.liters <= room + EPS) {
+        trimmed.push(e);
+        room -= e.liters;
+      } else {
+        trimmed.push({ ...e, liters: room });
+        room = 0;
+      }
+    }
+    queue = trimmed;
+  }
+
+  const next = {
+    ...state,
+    composterId: newComposterId,
+    queue,
+    humus: 0,
+    leachate: 0,
+  };
+  return { state: next, wallet: newWallet, ok: true };
 }
