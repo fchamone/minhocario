@@ -7,6 +7,7 @@
 
 import { getComposter } from './composters.js';
 import { getFood, queueDynamics } from './foods.js';
+import { getSpecies, carryingCapacity, populationStep } from './worms.js';
 import {
   ambientTemperature,
   solarGain,
@@ -211,12 +212,22 @@ export function tick(state, rng) {
     solarGain(state.wallPosition, hour) +
     fermentationHeat(dyn.freshHeatMass);
   const temperature = blendTemperature(state.env.temperature, target, composter);
+  const env = { moisture, ph, toxicity, temperature };
+
+  // Population: evolve the cohort pipeline against the new environment. Skipped
+  // until a species is chosen (empty farm before setup); the RNG is only drawn
+  // for fractional cohort flows, so an empty colony consumes no randomness.
+  const species = getSpecies(state.speciesId);
+  const population = species
+    ? populationStep(state.population, env, species, carryingCapacity(composter), rng)
+    : state.population;
 
   return {
     ...state,
     day,
     hour,
     rngState: rng.state,
-    env: { moisture, ph, toxicity, temperature },
+    env,
+    population,
   };
 }
