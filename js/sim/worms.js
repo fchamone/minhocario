@@ -27,6 +27,7 @@
 /**
  * @typedef {object} Species
  * @property {string} id
+ * @property {string} latin            scientific (Latin) name — language-neutral data
  * @property {number} reproduction     base cocoons laid per adult per tick (ideal)
  * @property {number} speed            eating/processing multiplier (used in T6)
  * @property {Band}   tempComfort      comfortable temperature band (°C)
@@ -39,6 +40,7 @@ export const SPECIES = [
   {
     // Vermelha-da-Califórnia (Eisenia fetida) — forgiving all-rounder, cheap.
     id: 'californiana',
+    latin: 'Eisenia fetida',
     reproduction: 0.02,
     speed: 1.0,
     tempComfort: { min: 10, max: 30 },
@@ -49,6 +51,7 @@ export const SPECIES = [
     // Gigante-Africana (Eudrilus eugeniae) — fastest eater, heat-loving,
     // dies in cold nights (highest comfort floor).
     id: 'africana',
+    latin: 'Eudrilus eugeniae',
     reproduction: 0.022,
     speed: 1.4,
     tempComfort: { min: 20, max: 34 },
@@ -58,6 +61,7 @@ export const SPECIES = [
   {
     // Minhoca-Azul (Perionyx excavatus) — fastest reproduction, narrow moisture.
     id: 'azul',
+    latin: 'Perionyx excavatus',
     reproduction: 0.035,
     speed: 1.1,
     tempComfort: { min: 15, max: 32 },

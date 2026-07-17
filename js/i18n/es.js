@@ -81,6 +81,71 @@ export const es = {
     liters: 'L',
     coins: 'monedas',
   },
+
+  // Catalog display text, keyed by sim id (js/sim/composters.js). Descriptions
+  // paraphrase each model's traits (regulation/insulation, capacity, speed).
+  composters: {
+    electric: {
+      name: 'Compostadora eléctrica',
+      desc: 'Electrodoméstico con calefacción que mantiene la temperatura casi ideal.',
+    },
+    tier2: {
+      name: 'Compostadora de 2 bandejas',
+      desc: 'Bandejas abiertas que siguen la temperatura ambiente; capacidad modesta.',
+    },
+    tier3: {
+      name: 'Compostadora de 3 bandejas',
+      desc: 'Bandejas abiertas con más capacidad que la de 2 bandejas.',
+    },
+    tier4: {
+      name: 'Compostadora de 4 bandejas',
+      desc: 'Bandejas abiertas más grandes; más masa da más inercia térmica.',
+    },
+    buried: {
+      name: 'Compostadora enterrada',
+      desc: 'Enterrada en el suelo, muy estable térmicamente; retiene humedad.',
+    },
+    eco: {
+      name: 'Compostadora eco',
+      desc: 'La más grande y rápida del catálogo.',
+    },
+  },
+
+  // Species display text, keyed by sim id (js/sim/worms.js). Names are the
+  // localized common names; descriptions paraphrase the §2.9 archetypes.
+  worms: {
+    californiana: {
+      name: 'Roja Californiana',
+      desc: 'Versátil, tolerante y barata — la opción para empezar.',
+    },
+    africana: {
+      name: 'Gigante Africana',
+      desc: 'Come más rápido y hace el mejor humus; amante del calor, muere en noches frías.',
+    },
+    azul: {
+      name: 'Lombriz Azul',
+      desc: 'Se reproduce más rápido pero necesita una franja estrecha de humedad.',
+    },
+  },
+
+  // Food names ONLY, keyed by sim id (js/sim/foods.js). No description and no
+  // suitability hint — the mixed list is unlabeled on purpose (§2.7).
+  foods: {
+    fruitPeels: { name: 'Cáscaras de fruta' },
+    citrus: { name: 'Cítricos' },
+    coffeeGrounds: { name: 'Posos de café' },
+    meat: { name: 'Carne' },
+    vegetableScraps: { name: 'Restos de verdura' },
+    onionGarlic: { name: 'Cebolla y ajo' },
+    eggshells: { name: 'Cáscaras de huevo' },
+    dairy: { name: 'Lácteos' },
+    wetCardboard: { name: 'Cartón mojado' },
+    oilyFood: { name: 'Comida grasosa' },
+    teaLeaves: { name: 'Hojas de té' },
+    saltyLeftovers: { name: 'Sobras saladas' },
+    pumpkinGuts: { name: 'Tripas de calabaza' },
+    cookedPasta: { name: 'Pasta cocida' },
+  },
 };
 
 export default es;

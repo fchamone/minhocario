@@ -10,6 +10,9 @@ import {
   LANG_NAMES,
   CATALOGS,
 } from '../js/strings.js';
+import { COMPOSTERS } from '../js/sim/composters.js';
+import { SPECIES, getSpecies } from '../js/sim/worms.js';
+import { FOODS } from '../js/sim/foods.js';
 
 /**
  * Collect every leaf key path (dotted) of a nested plain object.
@@ -175,5 +178,75 @@ test('t() returns the key path when missing in every catalog', () => {
     assert.equal(t('does.not.exist'), 'does.not.exist');
   } finally {
     console.warn = realWarn;
+  }
+});
+
+// --- Catalog ↔ sim-id coverage --------------------------------------------
+
+/** Assert a non-empty string leaf lives at CATALOGS[tag][ns][id][field]. */
+function assertNonEmpty(tag, ns, id, field) {
+  const entry = CATALOGS[tag][ns][id];
+  assert.ok(entry, `${tag}.${ns}.${id} is missing`);
+  assert.equal(typeof entry[field], 'string', `${tag}.${ns}.${id}.${field} should be a string`);
+  assert.notEqual(entry[field].trim(), '', `${tag}.${ns}.${id}.${field} is empty`);
+}
+
+test('every composter id has name + desc in all locales', () => {
+  for (const tag of SUPPORTED_LANGS) {
+    for (const { id } of COMPOSTERS) {
+      assertNonEmpty(tag, 'composters', id, 'name');
+      assertNonEmpty(tag, 'composters', id, 'desc');
+    }
+  }
+});
+
+test('every worm species id has name + desc in all locales', () => {
+  for (const tag of SUPPORTED_LANGS) {
+    for (const { id } of SPECIES) {
+      assertNonEmpty(tag, 'worms', id, 'name');
+      assertNonEmpty(tag, 'worms', id, 'desc');
+    }
+  }
+});
+
+test('every food id has a name in all locales', () => {
+  for (const tag of SUPPORTED_LANGS) {
+    for (const { id } of FOODS) {
+      assertNonEmpty(tag, 'foods', id, 'name');
+    }
+  }
+});
+
+// --- Food labeling guard (§2.7) -------------------------------------------
+// Foods must expose a plain name ONLY — no desc/category/suitability leak.
+
+test('foods carry a name ONLY — no suitability/category hint', () => {
+  for (const tag of SUPPORTED_LANGS) {
+    for (const { id } of FOODS) {
+      const keys = Object.keys(CATALOGS[tag].foods[id]).sort();
+      assert.deepEqual(
+        keys,
+        ['name'],
+        `${tag}.foods.${id} must expose exactly {name}, got {${keys.join(', ')}}`,
+      );
+    }
+  }
+});
+
+// --- Worm latin (language-neutral sim data) -------------------------------
+
+test('every species carries a non-empty language-neutral latin name', () => {
+  for (const s of SPECIES) {
+    assert.equal(typeof s.latin, 'string', `${s.id}.latin should be a string`);
+    assert.notEqual(s.latin.trim(), '', `${s.id}.latin is empty`);
+  }
+  assert.equal(getSpecies('californiana').latin, 'Eisenia fetida');
+  assert.equal(getSpecies('africana').latin, 'Eudrilus eugeniae');
+  assert.equal(getSpecies('azul').latin, 'Perionyx excavatus');
+});
+
+test('latin is the identical string via SPECIES and getSpecies for every id', () => {
+  for (const s of SPECIES) {
+    assert.equal(getSpecies(s.id).latin, s.latin, `${s.id} latin mismatch across lookups`);
   }
 });

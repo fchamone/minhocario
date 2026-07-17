@@ -81,6 +81,71 @@ export const en = {
     liters: 'L',
     coins: 'coins',
   },
+
+  // Catalog display text, keyed by sim id (js/sim/composters.js). Descriptions
+  // paraphrase each model's traits (regulation/insulation, capacity, speed).
+  composters: {
+    electric: {
+      name: 'Electric composter',
+      desc: 'Heated appliance that holds the temperature near ideal.',
+    },
+    tier2: {
+      name: 'Two-tray composter',
+      desc: 'Open trays that track ambient temperature; modest capacity.',
+    },
+    tier3: {
+      name: 'Three-tray composter',
+      desc: 'Open trays with more capacity than the two-tray.',
+    },
+    tier4: {
+      name: 'Four-tray composter',
+      desc: 'Larger open trays; more mass means more thermal inertia.',
+    },
+    buried: {
+      name: 'Buried composter',
+      desc: 'Sunk underground, very thermally stable; retains moisture.',
+    },
+    eco: {
+      name: 'Eco composter',
+      desc: 'The largest and fastest in the catalog.',
+    },
+  },
+
+  // Species display text, keyed by sim id (js/sim/worms.js). Names are the
+  // localized common names; descriptions paraphrase the §2.9 archetypes.
+  worms: {
+    californiana: {
+      name: 'California Red Worm',
+      desc: "Versatile, tolerant, and cheap — the beginner's choice.",
+    },
+    africana: {
+      name: 'African Nightcrawler',
+      desc: 'Eats fastest and makes the best humus; heat-loving, dies on cold nights.',
+    },
+    azul: {
+      name: 'Blue Worm',
+      desc: 'Reproduces fastest but needs a narrow moisture band.',
+    },
+  },
+
+  // Food names ONLY, keyed by sim id (js/sim/foods.js). No description and no
+  // suitability hint — the mixed list is unlabeled on purpose (§2.7).
+  foods: {
+    fruitPeels: { name: 'Fruit peels' },
+    citrus: { name: 'Citrus' },
+    coffeeGrounds: { name: 'Coffee grounds' },
+    meat: { name: 'Meat' },
+    vegetableScraps: { name: 'Vegetable scraps' },
+    onionGarlic: { name: 'Onion and garlic' },
+    eggshells: { name: 'Eggshells' },
+    dairy: { name: 'Dairy' },
+    wetCardboard: { name: 'Wet cardboard' },
+    oilyFood: { name: 'Oily food' },
+    teaLeaves: { name: 'Tea leaves' },
+    saltyLeftovers: { name: 'Salty leftovers' },
+    pumpkinGuts: { name: 'Pumpkin guts' },
+    cookedPasta: { name: 'Cooked pasta' },
+  },
 };
 
 export default en;
