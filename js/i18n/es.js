@@ -78,6 +78,40 @@ export const es = {
     move: 'Mover compostadora',
     openShop: 'Tienda',
     xrayToggle: 'Vista de rayos X',
+    // Action dialogs. The food chooser lists the catalog as-is: NO suitability
+    // label, grouping, or ordering hint (§2.7 — discovery is the gameplay).
+    chooseFood: '¿Qué residuo agregar?',
+    choosePortion: '¿Qué porción?',
+    chooseWormPack: '¿Qué paquete de lombrices?',
+    // Action feedback
+    wasteAdded: 'Residuo agregado',
+    wasteRejected: 'No cupo en la compostadora',
+    sawdustAdded: 'Aserrín agregado',
+    wormsBought: 'Lombrices agregadas',
+    cannotAffordWorms: 'Saldo insuficiente',
+    noSpecies: 'No hay especie en la compostadora',
+    harvested: 'Humus cosechado',
+    nothingToHarvest: 'Todavía no hay humus para cosechar',
+    drained: 'Lixiviado drenado',
+    nothingToDrain: 'Todavía no hay lixiviado para drenar',
+    // Internals (x-ray data) panel
+    internalsTitle: 'Interior de la compostadora',
+    popTitle: 'Población',
+    popCocoons: 'Capullos',
+    popJuveniles: 'Jóvenes',
+    popAdults: 'Adultas',
+    popTotal: 'Total / capacidad',
+    envTitle: 'Ambiente',
+    envMoisture: 'Humedad',
+    envPh: 'pH',
+    envToxicity: 'Toxicidad',
+    envTemperature: 'Temperatura',
+    tanksTitle: 'Humus y lixiviado',
+    humusLabel: 'Humus',
+    leachateLabel: 'Lixiviado',
+    queueTitle: 'Residuos descomponiéndose',
+    queueEmpty: 'Nada descomponiéndose',
+    queueMore: 'más',
     // Speed control
     speedLabel: 'Velocidad',
     speedPaused: 'Pausado',
@@ -90,6 +124,7 @@ export const es = {
     close: 'Cerrar',
     liters: 'L',
     coins: 'monedas',
+    points: 'puntos',
   },
 
   // Save-slot prompts (spec §2.11 — a corrupt or newer-than-us save is shown to

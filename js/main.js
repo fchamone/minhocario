@@ -11,6 +11,7 @@ import { initHome } from './ui/home.js';
 import { initShop } from './ui/shop.js';
 import { initSetup } from './ui/setup.js';
 import { updateHud } from './ui/hud.js';
+import { initActions, updateActions, showFeedback } from './ui/actions.js';
 import { initSpeed, drainTicks, DEFAULT_SPEED } from './ui/speed.js';
 import { load, save, LOAD_STATUS } from './storage.js';
 import {
@@ -19,6 +20,9 @@ import {
   beddingEnv,
   buyWormPack,
   addFood,
+  addSawdust,
+  harvestAndSell,
+  drainAndSell,
   tick,
 } from './sim/engine.js';
 import { createRng } from './sim/rng.js';
@@ -252,6 +256,110 @@ function persistGame() {
   save({ v: 1, profile: gameProfile, farm: gameFarm, ranking: gameRanking });
 }
 
+/** Repaint everything that reads the live state: HUD + actions/internals panel. */
+function refreshGameUi() {
+  updateHud(gameFarm, gameProfile?.wallet ?? 0);
+  updateActions(gameFarm);
+}
+
+/**
+ * Commit a player action: autosave (T13 — "autosave on every action") and
+ * repaint immediately, so the effect is visible without waiting for a tick.
+ */
+function commitAction() {
+  persistGame();
+  refreshGameUi();
+}
+
+// --- Player actions (T14) ----------------------------------------------------
+//
+// Each handler applies one pure engine action to the live farm, reports the
+// outcome through the actions panel's feedback line, then commits. The engine
+// returns the SAME state object when it rejects an action, so an identity check
+// is how the UI distinguishes "rejected" from "applied" without duplicating the
+// engine's rules here.
+
+/** Add a waste portion to the queue; rejected when the bin has no room. */
+function onAddWaste(foodId, liters) {
+  if (!gameFarm) return;
+  const next = addFood(gameFarm, foodId, liters);
+  if (next === gameFarm) {
+    showFeedback(t('game.wasteRejected'), true);
+    return;
+  }
+  gameFarm = next;
+  showFeedback(t('game.wasteAdded'));
+  commitAction();
+}
+
+/** Add sawdust to dry the bedding. */
+function onAddSawdust(liters) {
+  if (!gameFarm) return;
+  gameFarm = addSawdust(gameFarm, liters);
+  showFeedback(t('game.sawdustAdded'));
+  commitAction();
+}
+
+/** Buy a worm pack for the farm's species, paying from the profile wallet. */
+function onBuyWorms(packSize) {
+  if (!gameFarm || !gameProfile) return;
+  const result = buyWormPack(gameFarm, gameProfile.wallet, gameFarm.speciesId, packSize);
+  if (!result.ok) {
+    showFeedback(t('game.cannotAffordWorms'), true);
+    return;
+  }
+  gameFarm = result.state;
+  gameProfile = { ...gameProfile, wallet: result.wallet };
+  showFeedback(t('game.wormsBought'));
+  commitAction();
+}
+
+/** Drain the leachate tank and auto-sell it (coins, no score). */
+function onDrain() {
+  if (!gameFarm || !gameProfile) return;
+  const result = drainAndSell(gameFarm, gameProfile.wallet);
+  if (result.drained <= 0) {
+    showFeedback(t('game.nothingToDrain'), true);
+    return;
+  }
+  gameFarm = result.state;
+  gameProfile = { ...gameProfile, wallet: result.wallet };
+  showFeedback(
+    `${t('game.drained')}: ${formatVolume(result.drained)} · +${Math.round(result.coins)} ${t('common.coins')}`,
+  );
+  commitAction();
+}
+
+/** Harvest the humus tray, auto-sell it, and bank the age-scaled score. */
+function onHarvest() {
+  if (!gameFarm || !gameProfile) return;
+  const result = harvestAndSell(gameFarm, gameProfile.wallet);
+  if (result.harvested <= 0) {
+    showFeedback(t('game.nothingToHarvest'), true);
+    return;
+  }
+  gameFarm = result.state;
+  gameProfile = { ...gameProfile, wallet: result.wallet };
+  showFeedback(
+    `${t('game.harvested')}: ${formatVolume(result.harvested)} · ` +
+      `+${Math.round(result.coins)} ${t('common.coins')} · ` +
+      `+${Math.round(result.points)} ${t('common.points')}`,
+  );
+  commitAction();
+}
+
+/** Move the composter along the wall (0..1) — changes its sun exposure (§2.3). */
+function onMove(position) {
+  if (!gameFarm) return;
+  gameFarm = { ...gameFarm, wallPosition: position };
+  commitAction();
+}
+
+/** Format a liter volume for a feedback line: at most two decimals. */
+function formatVolume(liters) {
+  return `${Math.round(liters * 100) / 100} ${t('common.liters')}`;
+}
+
 /** One animation frame: bank elapsed time, drain whole ticks, repaint the HUD. */
 function frame(now) {
   if (!loopRunning) return;
@@ -271,7 +379,7 @@ function frame(now) {
       const rng = createRng(gameFarm.rngState);
       gameFarm = tick(gameFarm, rng);
     }
-    updateHud(gameFarm, gameProfile?.wallet ?? 0);
+    refreshGameUi();
     if (gameFarm.day !== startDay) persistGame(); // autosave on the day boundary
   }
 
@@ -311,7 +419,7 @@ function startGame() {
   gameRanking = result.save.ranking ?? [];
   accumulatorMs = 0;
   continuousHour = gameFarm.hour;
-  updateHud(gameFarm, gameProfile.wallet);
+  refreshGameUi();
   startLoop();
 }
 
@@ -406,6 +514,20 @@ function init() {
   // visibility changes (killing the tab persists the exact game hour, no catch-up).
   initSpeed({ initialSpeed: gameSpeed, onSpeedChange });
   document.addEventListener('visibilitychange', onVisibilityChange);
+
+  // Actions panel: buttons dispatch back into the handlers above, which are the
+  // only place the live farm is mutated outside the tick loop. Wired once — the
+  // game screen's DOM is static, so re-entering it does not re-bind listeners.
+  initActions({
+    getFarm: () => gameFarm,
+    getWallet: () => gameProfile?.wallet ?? 0,
+    onAddWaste,
+    onAddSawdust,
+    onBuyWorms,
+    onDrain,
+    onHarvest,
+    onMove,
+  });
 
   // Home screen — nickname (generate/persist/reroll), local ranking, and
   // Play (new farm → shop) vs Continue (resume saved farm → game) routing — is

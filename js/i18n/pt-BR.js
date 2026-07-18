@@ -80,6 +80,40 @@ export const ptBR = {
     move: 'Mover composteira',
     openShop: 'Loja',
     xrayToggle: 'Visão raio-x',
+    // Action dialogs. The food chooser lists the catalog as-is: NO suitability
+    // label, grouping, or ordering hint (§2.7 — discovery is the gameplay).
+    chooseFood: 'Qual resíduo adicionar?',
+    choosePortion: 'Qual porção?',
+    chooseWormPack: 'Qual pacote de minhocas?',
+    // Action feedback
+    wasteAdded: 'Resíduo adicionado',
+    wasteRejected: 'Não coube na composteira',
+    sawdustAdded: 'Serragem adicionada',
+    wormsBought: 'Minhocas adicionadas',
+    cannotAffordWorms: 'Saldo insuficiente',
+    noSpecies: 'Nenhuma espécie na composteira',
+    harvested: 'Húmus colhido',
+    nothingToHarvest: 'Ainda não há húmus para colher',
+    drained: 'Chorume drenado',
+    nothingToDrain: 'Ainda não há chorume para drenar',
+    // Internals (x-ray data) panel
+    internalsTitle: 'Interior da composteira',
+    popTitle: 'População',
+    popCocoons: 'Casulos',
+    popJuveniles: 'Jovens',
+    popAdults: 'Adultas',
+    popTotal: 'Total / capacidade',
+    envTitle: 'Ambiente',
+    envMoisture: 'Umidade',
+    envPh: 'pH',
+    envToxicity: 'Toxicidade',
+    envTemperature: 'Temperatura',
+    tanksTitle: 'Húmus e chorume',
+    humusLabel: 'Húmus',
+    leachateLabel: 'Chorume',
+    queueTitle: 'Resíduos em decomposição',
+    queueEmpty: 'Nada em decomposição',
+    queueMore: 'mais',
     // Speed control
     speedLabel: 'Velocidade',
     speedPaused: 'Pausado',
@@ -92,6 +126,7 @@ export const ptBR = {
     close: 'Fechar',
     liters: 'L',
     coins: 'moedas',
+    points: 'pontos',
   },
 
   // Save-slot prompts (spec §2.11 — a corrupt or newer-than-us save is shown to

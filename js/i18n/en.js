@@ -78,6 +78,40 @@ export const en = {
     move: 'Move composter',
     openShop: 'Shop',
     xrayToggle: 'X-ray view',
+    // Action dialogs. The food chooser lists the catalog as-is: NO suitability
+    // label, grouping, or ordering hint (§2.7 — discovery is the gameplay).
+    chooseFood: 'Which waste to add?',
+    choosePortion: 'How much?',
+    chooseWormPack: 'Which worm pack?',
+    // Action feedback
+    wasteAdded: 'Waste added',
+    wasteRejected: "It didn't fit in the composter",
+    sawdustAdded: 'Sawdust added',
+    wormsBought: 'Worms added',
+    cannotAffordWorms: 'Not enough coins',
+    noSpecies: 'No species in the composter',
+    harvested: 'Humus harvested',
+    nothingToHarvest: 'No humus to harvest yet',
+    drained: 'Leachate drained',
+    nothingToDrain: 'No leachate to drain yet',
+    // Internals (x-ray data) panel
+    internalsTitle: 'Inside the composter',
+    popTitle: 'Population',
+    popCocoons: 'Cocoons',
+    popJuveniles: 'Juveniles',
+    popAdults: 'Adults',
+    popTotal: 'Total / capacity',
+    envTitle: 'Environment',
+    envMoisture: 'Moisture',
+    envPh: 'pH',
+    envToxicity: 'Toxicity',
+    envTemperature: 'Temperature',
+    tanksTitle: 'Humus and leachate',
+    humusLabel: 'Humus',
+    leachateLabel: 'Leachate',
+    queueTitle: 'Waste breaking down',
+    queueEmpty: 'Nothing breaking down',
+    queueMore: 'more',
     // Speed control
     speedLabel: 'Speed',
     speedPaused: 'Paused',
@@ -90,6 +124,7 @@ export const en = {
     close: 'Close',
     liters: 'L',
     coins: 'coins',
+    points: 'points',
   },
 
   // Save-slot prompts (spec §2.11 — a corrupt or newer-than-us save is shown to

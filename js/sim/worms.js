@@ -80,8 +80,13 @@ export const MATURE_TICKS = 72; // ~3 game days
 // Environment comfort + stress calibration. A variable's normalized stress is
 // its distance outside the comfort band divided by that variable's STALL span;
 // stress 1 => laying stalled, stress LETHAL_RATIO => mortality begins.
-const PH_COMFORT = { min: 6, max: 8 };
-const TOX_THRESHOLD = 0.1; // toxicity below this is harmless
+// Exported so the UI's internals panel (T14) gauges pH and toxicity against the
+// SAME bands the sim judges them by — a second copy in the UI layer would drift
+// the moment these are retuned. Species-specific bands live on the species.
+/** Comfortable pH band, shared by all species. @type {Band} */
+export const PH_COMFORT = { min: 6, max: 8 };
+/** Toxicity below this is harmless (the top of the "comfortable" band). */
+export const TOX_THRESHOLD = 0.1;
 
 const TEMP_STALL = 4; // °C outside the band that fully stalls laying
 // Moisture band is asymmetric in its lethal headroom: moisture clamps at 1.0, so

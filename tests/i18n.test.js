@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   t,
   setLang,
@@ -248,5 +249,26 @@ test('every species carries a non-empty language-neutral latin name', () => {
 test('latin is the identical string via SPECIES and getSpecies for every id', () => {
   for (const s of SPECIES) {
     assert.equal(getSpecies(s.id).latin, s.latin, `${s.id} latin mismatch across lookups`);
+  }
+});
+
+// --- Markup keys resolve (guards new UI against typo'd / missing keys) ------
+
+test('every data-string key in index.html resolves in every locale', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const keys = [...html.matchAll(/data-string="([^"]+)"/g)].map((m) => m[1]);
+
+  assert.ok(keys.length > 0, 'index.html should carry data-string keys');
+  for (const tag of SUPPORTED_LANGS) {
+    for (const key of keys) {
+      const value = key
+        .split('.')
+        .reduce((node, part) => (node == null ? undefined : node[part]), CATALOGS[tag]);
+      assert.equal(
+        typeof value,
+        'string',
+        `index.html uses data-string="${key}", missing in ${tag}`,
+      );
+    }
   }
 });

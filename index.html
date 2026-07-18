@@ -102,6 +102,14 @@
       <div class="stage" id="stage">
         <!-- Three.js canvas mounts here (T16+) -->
         <canvas id="scene-canvas"></canvas>
+
+        <!-- Internals ("x-ray data") panel: the numeric gauge layer, toggled by
+             the x-ray action. Populated by js/ui/actions.js on every tick while
+             visible. The 3D x-ray (T20) renders alongside it, not instead. -->
+        <aside class="internals" id="internals" hidden>
+          <h3 data-string="game.internalsTitle"></h3>
+          <div id="internals-body"></div>
+        </aside>
       </div>
 
       <aside class="actions" id="actions">
@@ -117,7 +125,12 @@
           <span data-string="game.move"></span>
           <input type="range" id="wall-position" min="0" max="1" step="0.01" value="0.5">
         </label>
+        <p class="actions__feedback" id="action-feedback"></p>
       </aside>
+
+      <!-- Modal chooser reused by the add-waste / portion / worm-pack prompts.
+           Contents are built per prompt by js/ui/actions.js. -->
+      <dialog class="chooser" id="chooser"></dialog>
 
       <footer class="speed" id="speed">
         <span data-string="game.speedLabel"></span>
