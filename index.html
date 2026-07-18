@@ -23,6 +23,14 @@
     <!-- HOME -->
     <section id="screen-home" class="screen" data-screen="home" hidden>
       <div class="home">
+        <!-- Language selector (I2 / spec C-0002). Native-name buttons are built
+             by js/ui/home.js from LANG_NAMES; selecting one switches the whole
+             UI immediately, persists to the minhocario.lang key, and rebuilds the
+             ranking + nickname. Home-only: language is fixed once a farm runs. -->
+        <div class="lang-select" role="group" aria-labelledby="lang-select-label">
+          <span id="lang-select-label" class="lang-select__label" data-string="home.languageLabel"></span>
+          <div class="lang-select__options" id="lang-options"></div>
+        </div>
         <h1 class="home__title" data-string="home.title"></h1>
         <p class="home__subtitle" data-string="home.subtitle"></p>
         <p class="home__nickname">

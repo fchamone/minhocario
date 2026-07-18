@@ -77,6 +77,24 @@ h1, h2 { margin: 0 0 0.4em; }
   margin: 0 auto;
   text-align: center;
 }
+
+/* Language selector: a native-name button group. Home-only (spec fork 2). */
+.lang-select {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+.lang-select__label { color: var(--ink-dim); }
+.lang-select__options { display: flex; gap: 6px; }
+.lang-select__btn {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  background: var(--panel-2);
+}
+.lang-select__btn.is-active { background: var(--accent); color: var(--accent-ink); }
 .home__subtitle { color: var(--ink-dim); }
 .home__actions {
   display: flex;

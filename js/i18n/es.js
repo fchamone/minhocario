@@ -31,6 +31,7 @@ export const es = {
     rankingHeaderDays: 'Días',
     nicknameLabel: 'Tu apodo',
     reroll: 'Cambiar apodo',
+    languageLabel: 'Idioma',
   },
 
   shop: {

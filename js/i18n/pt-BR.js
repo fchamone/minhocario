@@ -33,6 +33,7 @@ export const ptBR = {
     rankingHeaderDays: 'Dias',
     nicknameLabel: 'Seu apelido',
     reroll: 'Trocar apelido',
+    languageLabel: 'Idioma',
   },
 
   shop: {

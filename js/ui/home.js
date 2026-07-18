@@ -7,7 +7,14 @@
 // the DOM functions, so the module stays importable under Node and its two pure
 // helpers (buildNickname / topRanking) are unit-tested there.
 
-import { t, NICKNAME_ANIMALS, NICKNAME_ADJECTIVES } from '../strings.js';
+import {
+  t,
+  getLang,
+  SUPPORTED_LANGS,
+  LANG_NAMES,
+  NICKNAME_ANIMALS,
+  NICKNAME_ADJECTIVES,
+} from '../strings.js';
 import { load, save, LOAD_STATUS } from '../storage.js';
 import { STARTING_WALLET } from '../sim/engine.js';
 
@@ -158,8 +165,87 @@ let current = null;
 let canPersist = true;
 /** The storage backend in play, captured so once-wired handlers persist through it. */
 let activeBackend;
+/**
+ * Delegate that performs the GLOBAL half of a language switch: persist the
+ * `minhocario.lang` key (never the save), set `<html lang>`, and re-render every
+ * `[data-string]` node. Owned by `main.js` (which owns localStorage/`applyStrings`)
+ * and injected via `initHome`; home only adds the ranking + nickname repaint.
+ * @type {((tag: string) => void)|null}
+ */
+let switchLangHandler = null;
 /** Whether the DOM listeners have been attached (they are wired exactly once). */
 let wired = false;
+
+// --- Language selector (I2 / spec C-0002) ------------------------------------
+//
+// Native-name buttons (Português / English / Español), each rendered in its own
+// language. Home-only: language is fixed once a farm is running (spec fork 2),
+// so the control lives on this screen alone.
+
+/**
+ * Mark the button for the ACTIVE locale (so the selector reflects the current
+ * language on load and after each switch). A no-op before the buttons exist.
+ */
+function reflectActiveLang() {
+  const active = getLang();
+  for (const btn of document.querySelectorAll('#lang-options .lang-select__btn')) {
+    const on = btn.dataset.lang === active;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+}
+
+/**
+ * Repaint home's dynamic, imperatively-built content — the nickname and the
+ * ranking table — from the in-memory save. Called after a language switch: the
+ * global `[data-string]` re-render (in `switchLangHandler`) leaves these nodes
+ * untouched. The nickname text is unchanged on purpose (it stays pt-BR-flavored
+ * in every locale, spec fork 4); the ranking rows carry no translatable copy,
+ * but the empty-state visibility is re-evaluated here.
+ */
+function paintDynamic() {
+  const nicknameEl = document.getElementById('home-nickname');
+  const rankingBody = document.getElementById('ranking-body');
+  const rankingEmpty = document.getElementById('ranking-empty');
+  if (nicknameEl && current?.profile) nicknameEl.textContent = current.profile.nickname;
+  if (rankingBody) renderRanking(rankingBody, rankingEmpty, current);
+}
+
+/**
+ * Switch the active language from the selector: delegate the global concerns
+ * (persist the `minhocario.lang` key, set `<html lang>`, re-render every
+ * `[data-string]` node) to the injected handler, then reflect the choice on the
+ * buttons and rebuild the ranking + nickname.
+ * @param {string} tag a supported canonical tag.
+ */
+function selectLang(tag) {
+  if (switchLangHandler) switchLangHandler(tag);
+  reflectActiveLang();
+  paintDynamic();
+}
+
+/**
+ * Populate the selector with one native-name button per supported locale and
+ * wire each to {@link selectLang}. Called once — the buttons persist across home
+ * re-entries and read `switchLangHandler`/`current` from module scope, so they
+ * never bind to a stale handler or save.
+ */
+function buildLangSelector() {
+  const options = document.getElementById('lang-options');
+  if (!options) return;
+  options.replaceChildren();
+  for (const tag of SUPPORTED_LANGS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lang-select__btn';
+    btn.dataset.lang = tag;
+    btn.lang = tag; // render each native name in its own language (accents/hyphenation)
+    btn.textContent = LANG_NAMES[tag];
+    btn.addEventListener('click', () => selectLang(tag));
+    options.appendChild(btn);
+  }
+  reflectActiveLang();
+}
 
 /**
  * Load the save and repaint the screen: nickname, ranking, and Continue
@@ -203,6 +289,9 @@ function refreshHome(backend) {
   // Continue only makes sense once a farm exists (created at setup, T12).
   const hasFarm = result.status === LOAD_STATUS.OK && current.farm != null;
   if (continueBtn) continueBtn.hidden = !hasFarm;
+
+  // Keep the selector highlighting the active locale on every entry.
+  reflectActiveLang();
 }
 
 /**
@@ -217,15 +306,21 @@ function refreshHome(backend) {
  * @param {object} [deps]
  * @param {() => void} [deps.onPlay]     start a new farm (route to the shop)
  * @param {() => void} [deps.onContinue] resume the saved farm (route to game)
+ * @param {(tag: string) => void} [deps.onSwitchLang] perform the global half of
+ *   a language switch (persist the key, set `<html lang>`, re-render
+ *   `[data-string]` nodes); home adds the ranking + nickname repaint.
  * @param {import('../storage.js').StorageBackend} [deps.backend]
  *   storage backend (defaults to browser localStorage inside storage.js).
  */
-export function initHome({ onPlay, onContinue, backend } = {}) {
+export function initHome({ onPlay, onContinue, onSwitchLang, backend } = {}) {
   activeBackend = backend;
+  switchLangHandler = onSwitchLang;
   refreshHome(backend);
 
   if (wired) return;
   wired = true;
+
+  buildLangSelector();
 
   const nicknameEl = document.getElementById('home-nickname');
   const rerollBtn = document.getElementById('btn-reroll');

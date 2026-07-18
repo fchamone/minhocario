@@ -602,6 +602,7 @@ function renderHome() {
   initHome({
     onPlay: startNewGame,
     onContinue: () => showScreen('game'),
+    onSwitchLang: switchLang,
   });
 }
 

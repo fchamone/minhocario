@@ -59,4 +59,6 @@
 - [x] **I1** i18n runtime + locale catalogs + browser detection (M) — deps: T1 (∥ T6–T8; blocks all UI tasks)
 - [ ] **CP-i18n** — i18n suite green; default pt-BR unchanged; console `setLang` swaps chrome. Review: en/es copy
 - [x] **I3** Catalog display-name namespaces + worm `latin` field (M) — deps: I1 (blocks T11/T12/T14)
-- [ ] **I2** Home-page language selector (S) — deps: I1, T10
+- [x] **I2** Home-page language selector (S) — deps: I1, T10
+
+> Note: an automated en/es copy review was applied to the locale catalogs (punctuation, bedding term, upgrade phrasing); the human CP-i18n copy review is still pending.

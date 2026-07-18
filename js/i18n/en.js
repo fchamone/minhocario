@@ -31,6 +31,7 @@ export const en = {
     rankingHeaderDays: 'Days',
     nicknameLabel: 'Your nickname',
     reroll: 'Change nickname',
+    languageLabel: 'Language',
   },
 
   shop: {
