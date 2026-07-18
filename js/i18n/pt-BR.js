@@ -38,6 +38,8 @@ export const ptBR = {
     title: 'Loja de composteiras',
     subtitle: 'Escolha um modelo para começar.',
     walletLabel: 'Saldo',
+    capacityLabel: 'Capacidade',
+    priceLabel: 'Preço',
     buy: 'Comprar',
     cannotAfford: 'Saldo insuficiente',
     back: 'Voltar',

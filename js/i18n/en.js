@@ -36,6 +36,8 @@ export const en = {
     title: 'Composter shop',
     subtitle: 'Pick a model to get started.',
     walletLabel: 'Balance',
+    capacityLabel: 'Capacity',
+    priceLabel: 'Price',
     buy: 'Buy',
     cannotAfford: 'Not enough coins',
     back: 'Back',

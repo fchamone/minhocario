@@ -8,9 +8,17 @@
 
 import { t, setLang, resolveLang } from './strings.js';
 import { initHome } from './ui/home.js';
+import { initShop } from './ui/shop.js';
+import { load } from './storage.js';
+import { STARTING_WALLET } from './sim/engine.js';
 
 /** @type {readonly string[]} valid screen ids in DOM `data-screen` order */
 const SCREENS = ['home', 'shop', 'setup', 'game'];
+
+// The new-farm draft carried shop → setup. The composter choice is NOT persisted
+// until the farm is actually created and saved at setup (T12); this keeps an
+// abandoned purchase from mutating the save or the wallet.
+const newFarmDraft = { composterId: null };
 
 /** localStorage key holding the language preference — never in the game save. */
 const LANG_STORAGE_KEY = 'minhocario.lang';
@@ -67,7 +75,34 @@ function switchLang(tag) {
 }
 
 /**
- * Show one screen and hide the rest.
+ * Coins currently on the player profile, read fresh from the save. Falls back to
+ * the starting wallet if there is no save yet (initHome creates one on first
+ * visit, so this fallback is only a safety net).
+ * @returns {number}
+ */
+function currentWallet() {
+  const result = load();
+  return result.save?.profile?.wallet ?? STARTING_WALLET;
+}
+
+/** Render the shop for a first purchase and route Buy → setup with the choice. */
+function renderShop() {
+  initShop({
+    wallet: currentWallet(),
+    onBuy: (composterId) => {
+      newFarmDraft.composterId = composterId;
+      showScreen('setup');
+    },
+  });
+}
+
+/** Per-screen render hooks, run each time a screen becomes visible. */
+const SCREEN_ENTER = {
+  shop: renderShop,
+};
+
+/**
+ * Show one screen and hide the rest, running its enter hook (if any).
  * @param {string} name one of SCREENS
  */
 function showScreen(name) {
@@ -78,6 +113,7 @@ function showScreen(name) {
   for (const section of document.querySelectorAll('.screen')) {
     section.hidden = section.getAttribute('data-screen') !== name;
   }
+  SCREEN_ENTER[name]?.();
 }
 
 /** Wire click handlers for anything carrying a `data-nav` attribute. */

@@ -123,6 +123,23 @@ h1, h2 { margin: 0 0 0.4em; }
   margin: 0 auto;
 }
 .wallet { color: var(--ink-dim); }
+
+.shop-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-2);
+  border-radius: var(--radius);
+}
+.shop-card h3 { margin: 0; }
+.shop-card__desc { color: var(--ink-dim); font-size: 0.9rem; margin: 0; }
+.shop-card__stats { font-size: 0.85rem; margin: 0; }
+.shop-card__buy { margin-top: auto; background: var(--accent); color: var(--accent-ink); }
+.shop-card--disabled { opacity: 0.6; }
+.shop-card--disabled .shop-card__buy { background: var(--panel-2); color: var(--ink); }
+.shop-card__reason { color: var(--danger); font-size: 0.8rem; margin: 0; }
 .setup { max-width: 640px; margin: 0 auto; display: grid; gap: var(--gap); }
 .setup fieldset { border: 1px solid var(--panel-2); border-radius: var(--radius); }
 

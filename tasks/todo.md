@@ -22,8 +22,8 @@
 
 - [x] **T9** Storage: versioned save, migrations, round-trip (S) — deps: T7
 - [x] **T10** Home screen: nickname, ranking, Play/Continue (S/M) — deps: T1, T9
-- [ ] **CP4** — save round-trip proven + home persists. Review: save schema (freezes at v1 ship)
-- [ ] **T11** Shop screen, first purchase (S) — deps: T7, T10
+- [x] **CP4** — save round-trip proven + home persists. Review: save schema (freezes at v1 ship)
+- [x] **T11** Shop screen, first purchase (S) — deps: T7, T10
 - [ ] **T12** Setup screen → farm created and saved (M) — deps: T11
 - [ ] **T13** Game loop wiring: HUD, speed, tick timer, autosave (M) — deps: T12, T9
 - [ ] **CP5** — first end-to-end human playtest (shop→setup→running farm→persistence)

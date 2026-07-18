@@ -36,6 +36,8 @@ export const es = {
     title: 'Tienda de compostadoras',
     subtitle: 'Elige un modelo para empezar.',
     walletLabel: 'Saldo',
+    capacityLabel: 'Capacidad',
+    priceLabel: 'Precio',
     buy: 'Comprar',
     cannotAfford: 'Saldo insuficiente',
     back: 'Volver',
