@@ -51,7 +51,7 @@
       lever rejected (T21-4); balance bounds tightened + 2 locking tests. Suite 222 green.
       Decisions + measurements in `tasks/t21-balance.md`.
 - [x] **T21b** Behavior/constants/rules reference doc → `docs/game-reference.md` (S/M) — deps: T21
-- [ ] **T22** UX/visual polish + audits (strings/Math.random/food labels) (S/M) — deps: T20
+- [x] **T22** UX/visual polish + audits (strings/Math.random/food labels) (S/M) — deps: T20
 - [ ] **T23** Release checklist + deploy dry run (S) — deps: T21, T21b, T22
 - [ ] **CP9** — ship gate: human sign-off vs spec acceptance criteria; scoring + save schema freeze
 

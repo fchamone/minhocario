@@ -73,5 +73,12 @@ export function updateHud(farm, wallet) {
   set('hud-score', formatAmount(farm ? farm.score : 0));
   set('hud-day', String(farm ? farm.day : 1));
   set('hud-time', formatTime(farm ? farm.hour : 0));
-  set('hud-status', t(farmStatus(farm)));
+
+  const status = farmStatus(farm);
+  set('hud-status', t(status));
+  // Color the status when it is anything but all-good (dead colony / full tray /
+  // full tank), so the edge state is obvious at a glance. Purely presentational —
+  // the label text still comes from farmStatus/`t`.
+  const statusEl = document.getElementById('hud-status');
+  if (statusEl) statusEl.classList.toggle('hud__status--alert', status !== 'game.statusOk');
 }

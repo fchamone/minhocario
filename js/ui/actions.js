@@ -398,6 +398,12 @@ export function showFeedback(message, isError = false) {
   if (!el) return;
   el.textContent = message;
   el.classList.toggle('actions__feedback--error', isError);
+  // Re-trigger the entrance animation on every message so a repeated outcome
+  // (two rejected clicks in a row) is still visibly acknowledged. Removing then
+  // re-adding the class with a forced reflow in between restarts the animation.
+  el.classList.remove('actions__feedback--flash');
+  void el.offsetWidth;
+  el.classList.add('actions__feedback--flash');
 }
 
 /**
@@ -620,6 +626,28 @@ function syncWallSlider(farm) {
 }
 
 /**
+ * Point the player at the action that clears a full tray/tank (§2.8 edge state):
+ * a full humus tray halts processing, a full leachate tank re-saturates the
+ * bedding, and the fix is Harvest / Drain respectively. Highlight the button
+ * only while the colony is alive — a dead colony's own banner takes precedence,
+ * and its levels are frozen anyway. Uses the same capacities/`EPS` the internals
+ * "full" readout does, so button and gauge agree.
+ * @param {import('../sim/engine.js').FarmState|null} farm
+ */
+function markActionUrgency(farm) {
+  const composter = farm ? getComposter(farm.composterId) : null;
+  const alive = !!farm && farm.colonyAlive !== false;
+  const trayFull = !!composter && alive && farm.humus >= composter.humusCapacity - EPS;
+  const tankFull = !!composter && alive && farm.leachate >= composter.leachateCapacity - EPS;
+  const flag = (action, on) => {
+    const el = document.querySelector(`[data-action="${action}"]`);
+    if (el) el.classList.toggle('actions__btn--urgent', on);
+  };
+  flag('harvest', trayFull);
+  flag('drain', tankFull);
+}
+
+/**
  * Reflect current state in the actions panel: sync the slider (e.g. after a
  * load, or from a 3D drag) and repaint the internals panel if it is open.
  * @param {import('../sim/engine.js').FarmState|null} farm
@@ -633,5 +661,6 @@ export function updateActions(farm) {
   const banner = document.getElementById('colony-dead');
   if (banner) banner.hidden = !farm || farm.colonyAlive !== false;
 
+  markActionUrgency(farm);
   updateInternals(farm);
 }
