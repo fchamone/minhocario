@@ -6,8 +6,8 @@
 // scoring). As of T3 tick advances the clock and updates bin temperature.
 
 import { getComposter } from './composters.js';
-import { getFood, queueDynamics } from './foods.js';
-import { getSpecies, carryingCapacity, populationStep } from './worms.js';
+import { getFood, queueDynamics, decompositionFraction, DECOMP_TICKS } from './foods.js';
+import { getSpecies, carryingCapacity, populationStep, RATION_TICKS } from './worms.js';
 import {
   ambientTemperature,
   solarGain,
@@ -53,6 +53,14 @@ const ROT_RATE = 0.0002; // toxicity added per liter of stranded queue per tick
 // Tank-full chain (§2.8): leachate produced past the tank's capacity re-saturates
 // the bedding — this fraction of each overflowed liter is added to moisture.
 const LEACHATE_SPILL_TO_MOISTURE = 0.05;
+
+// Percolation (§2.5/§2.8): gravity drains bedding water into the leachate tank
+// whenever the bedding is wetter than it can hold, and only while the tank has
+// room. This is the bin's main water OUT-path (evaporation only matters when
+// hot), so draining the tank is what keeps a well-fed bin in its moisture band.
+const FIELD_CAPACITY = 0.75; // moisture the bedding holds against gravity
+const PERCOLATION_RATE = 0.3; // fraction of the excess that drains per tick
+const MOISTURE_TO_LEACHATE_LITERS = 8; // liters of leachate per 1.0 moisture unit
 
 // Numerical slack for "depleted"/"full" comparisons on floating-point volumes.
 const EPS = 1e-9;
@@ -334,10 +342,23 @@ export function tick(state, rng) {
   let leachate = state.leachate;
   let spillMoisture = 0; // leachate re-saturating the bedding (tank-full chain)
   let rotToxicity = 0; // stranded food rotting anaerobically (tray-full chain)
+  let eatenMoisture = 0; // water in consumed food, released into the bedding
+  // Fraction of the colony's food requirement standing in the bin this tick; it
+  // brakes laying in populationStep (see worms.js RATION_TICKS). A farm with no
+  // composter or no species has no colony to feed, so it stays fully fed (1).
+  let ration = 1;
 
   if (composter) {
     const active = state.population.juveniles + state.population.adults;
     const trayFull = humus >= composter.humusCapacity - EPS;
+
+    // Measured BEFORE this tick's eating, against the same throughput formula
+    // used to consume: how many ticks of demand the standing queue covers.
+    if (species && active > 0) {
+      const demand = active * species.speed * composter.speed * CONSUMPTION_PER_WORM;
+      const standing = queue.reduce((sum, e) => sum + e.liters, 0);
+      ration = demand > 0 ? clamp01(standing / (demand * RATION_TICKS)) : 1;
+    }
 
     // A dead colony (colonyAlive === false) never produces; its population is
     // already zero so `active > 0` also gates this, but the flag makes the
@@ -352,18 +373,47 @@ export function tick(state, rng) {
           nextQueue.push(entry);
           continue;
         }
+        let eatenHere;
         if (entry.liters <= toEat + EPS) {
           // Oldest entry fully consumed -> removed from the queue.
-          eaten += entry.liters;
+          eatenHere = entry.liters;
           toEat -= entry.liters;
         } else {
           // Partially eaten -> keep the remainder in place.
-          eaten += toEat;
+          eatenHere = toEat;
           nextQueue.push({ ...entry, liters: entry.liters - toEat });
           toEat = 0;
         }
+        eaten += eatenHere;
+        // Water in EATEN food still enters the bin — worms process it into moist
+        // castings, they do not evaporate it. Only the share that had not already
+        // seeped out through decomposition is credited, so each liter of food
+        // releases its moisture exactly once whether it rots in place or is eaten.
+        // Without this the bin leaked water: a hungry colony consumed food within
+        // a tick or two of it landing, so almost none of that moisture ever
+        // reached the bedding, and evaporation dried a well-fed farm to death
+        // (the CP3 crash). The bin's real water sink is draining the leachate.
+        const food = getFood(entry.foodId);
+        if (food) {
+          const undecomposed = 1 - decompositionFraction(newTick - entry.addedAtTick);
+          eatenMoisture += food.moisture * eatenHere * Math.max(0, undecomposed);
+        }
       }
-      queue = nextQueue;
+      // Fully decomposed food leaves the queue — an active colony works it into
+      // the bedding, so it stops occupying bin capacity. It yields no humus:
+      // humus is what worms MAKE (§2.6), and crediting un-eaten matter would pay
+      // the player for neglect. Gated on the same condition as consumption, so
+      // when processing halts (tray full) or the colony is gone the matter
+      // strands and rots instead — the §2.8 tray chain is driven by exactly that
+      // stranded volume.
+      //
+      // Without this, decomposed matter sat in the queue forever once there were
+      // too few worms left to eat it: it permanently blocked bin capacity (so no
+      // fresh waste could be added), released no more moisture, and produced no
+      // more fermentation heat. A crashed colony could then always rebound, which
+      // turned the leachate and overfeeding chains into endless limit cycles
+      // instead of reaching the terminal state §2.8 requires.
+      queue = nextQueue.filter((e) => newTick - e.addedAtTick < DECOMP_TICKS);
       // Eaten volume converts to humus and leachate at the composter's rates.
       humus += eaten * composter.humusRate;
       leachate += eaten * composter.leachateRate;
@@ -391,9 +441,27 @@ export function tick(state, rng) {
   // slowly then takes the food load plus any rot. Evaporation uses the pre-tick
   // temperature (the warmth the bin carried into this hour).
   const evaporation = EVAP_COEF * Math.max(0, state.env.temperature - EVAP_THRESHOLD);
-  const moisture = clamp01(
-    state.env.moisture + dyn.moisture + spillMoisture - evaporation,
+  let moisture = clamp01(
+    state.env.moisture + dyn.moisture + eatenMoisture + spillMoisture - evaporation,
   );
+
+  // Percolation (§2.8, the leachate chain): bedding water above field capacity
+  // drains down into the leachate tank — this is what the tank and its tap are
+  // FOR, and it is the ONLY path water has out of a cool bin. It makes the
+  // never-drain chain work as the spec describes it: keep draining and the
+  // bedding is held at field capacity, let the tank fill and percolation backs up
+  // with nowhere to go, so the bedding saturates to lethal. Before this the tank
+  // was decorative — it never even reached capacity, and "saturation" deaths were
+  // really just food water piling up with no drainage anywhere in the model.
+  if (composter) {
+    const room = composter.leachateCapacity - leachate;
+    if (moisture > FIELD_CAPACITY && room > EPS) {
+      const excess = (moisture - FIELD_CAPACITY) * PERCOLATION_RATE;
+      const drained = Math.min(excess, room / MOISTURE_TO_LEACHATE_LITERS);
+      moisture -= drained;
+      leachate += drained * MOISTURE_TO_LEACHATE_LITERS;
+    }
+  }
   const ph = clamp(
     state.env.ph + (NEUTRAL_PH - state.env.ph) * PH_DRIFT_RATE + dyn.phPush,
     0,
@@ -415,7 +483,7 @@ export function tick(state, rng) {
   // until a species is chosen (empty farm before setup); the RNG is only drawn
   // for fractional cohort flows, so an empty colony consumes no randomness.
   const population = species
-    ? populationStep(state.population, env, species, carryingCapacity(composter), rng)
+    ? populationStep(state.population, env, species, carryingCapacity(composter), rng, ration)
     : state.population;
 
   // Colony lifecycle (§2.1). Age advances once per game-day rollover while the

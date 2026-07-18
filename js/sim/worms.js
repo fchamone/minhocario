@@ -99,6 +99,23 @@ const MORT_SLOPE = 0.08; // per-tick mortality gained per unit stress past letha
 
 const DENSITY = 50; // worms per liter of composter capacity (carrying capacity)
 
+// Nutrition (§2.4). Laying is gated by the standing food supply as well as by the
+// environment. Without this, reproduction ignores food entirely and a colony
+// breeds far past what its keeper feeds — then dies of a SIDE EFFECT (the empty
+// queue stops releasing moisture, so evaporation dries the bedding into lethal
+// territory). That boom-bust wiped a well-tended colony from 2700 worms to 1 at
+// CP3 while every test stayed green. Hunger now brakes laying directly, so the
+// colony settles at a food-supported size instead of overshooting and crashing.
+//
+// `ration` is the fraction of the colony's full food requirement that the
+// standing queue covers (1 = well fed, 0 = empty bin); the engine computes it
+// from the same throughput formula it uses for consumption. Hunger is a
+// REPRODUCTION brake only: its stress is capped at the stall distance (1) and so
+// can never reach the lethal distance (LETHAL_RATIO), keeping §2.5's "laying
+// slows before dying" true — a starving colony stops growing and slowly ages
+// out, it is never struck down outright.
+export const RATION_TICKS = 24; // ticks of eating a "full larder" holds (1 game day)
+
 /**
  * Look up a species by id.
  * @param {string|null} id
@@ -137,14 +154,17 @@ function outsideBand(value, band) {
  * LETHAL_RATIO = mortality onset) for each bin variable + crowding.
  * @returns {number[]}
  */
-function stresses(env, species, active, cap) {
+function stresses(env, species, active, cap, ration) {
   const overpop = cap > 0 ? Math.max(0, active / cap - 1) / OVERPOP_STALL : 0;
+  // Capped at 1 (the stall distance) by construction — hunger never turns lethal.
+  const hunger = clamp01(1 - ration);
   return [
     outsideBand(env.temperature, species.tempComfort) / TEMP_STALL,
     outsideBand(env.moisture, species.moistureComfort) / MOISTURE_STALL,
     outsideBand(env.ph, PH_COMFORT) / PH_STALL,
     Math.max(0, env.toxicity - TOX_THRESHOLD) / TOX_STALL,
     overpop,
+    hunger,
   ];
 }
 
@@ -160,11 +180,12 @@ function clamp01(x) {
  * @param {Species} species
  * @param {number} active juveniles + adults (crowding)
  * @param {number} cap carrying capacity
+ * @param {number} [ration=1] fraction of the colony's food requirement on hand
  * @returns {number}
  */
-export function reproductionFactor(env, species, active, cap) {
+export function reproductionFactor(env, species, active, cap, ration = 1) {
   let factor = 1;
-  for (const s of stresses(env, species, active, cap)) {
+  for (const s of stresses(env, species, active, cap, ration)) {
     factor = Math.min(factor, clamp01(1 - s));
   }
   return factor;
@@ -177,11 +198,13 @@ export function reproductionFactor(env, species, active, cap) {
  * @param {Species} species
  * @param {number} active juveniles + adults (crowding)
  * @param {number} cap carrying capacity
+ * @param {number} [ration=1] fraction of the colony's food requirement on hand
+ *   (never contributes: hunger stress is capped below the lethal distance)
  * @returns {number}
  */
-export function mortalityRate(env, species, active, cap) {
+export function mortalityRate(env, species, active, cap, ration = 1) {
   let rate = 0;
-  for (const s of stresses(env, species, active, cap)) {
+  for (const s of stresses(env, species, active, cap, ration)) {
     rate += Math.max(0, s - LETHAL_RATIO) * MORT_SLOPE;
   }
   return clamp01(rate);
@@ -211,13 +234,14 @@ function stochasticRound(value, rng) {
  * @param {Species} species
  * @param {number} cap carrying capacity
  * @param {import('./rng.js').Rng} rng
+ * @param {number} [ration=1] fraction of the colony's food requirement on hand
  * @returns {import('./engine.js').Population}
  */
-export function populationStep(population, env, species, cap, rng) {
+export function populationStep(population, env, species, cap, rng, ration = 1) {
   const { cocoons, juveniles, adults } = population;
   const active = juveniles + adults;
-  const rFactor = reproductionFactor(env, species, active, cap);
-  const mRate = mortalityRate(env, species, active, cap);
+  const rFactor = reproductionFactor(env, species, active, cap, ration);
+  const mRate = mortalityRate(env, species, active, cap, ration);
 
   const laid = stochasticRound(adults * species.reproduction * rFactor, rng);
   const hatched = stochasticRound(cocoons / HATCH_TICKS, rng);

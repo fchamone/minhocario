@@ -36,8 +36,17 @@ const MOIST_DRY_LETHAL = 0.4 - 2 * 0.06; // moistureComfort.min - LETHAL_RATIO *
 test('GOOD CARE: californiana survives >= 60 game days with net population growth', () => {
   // The natural beginner setup: the cheapest open tray (tier2), the forgiving
   // Vermelha-da-Califórnia, and a lightly-shaded wall position (0.3) that dodges
-  // the midday sun patch. The keeper feeds suitable scraps in moderation, dries
-  // the bin with sawdust when it climbs, and harvests + drains once a day.
+  // the midday sun patch. The keeper keeps food in the bin, dries it with sawdust
+  // when moisture climbs, and harvests + drains once a day.
+  //
+  // Feeding is RESPONSIVE (top the queue up when it runs low), not a flat ration:
+  // a real keeper feeds a growing colony more, and a fixed 1 L/day was actually
+  // modelling slow starvation — at CP3 it let the colony breed to 2700 worms on
+  // food for ~100, then crash to a single survivor. The old end-state assertion
+  // (`endPop > startPop * 2`) passed anyway by catching the rebound tail, so the
+  // run is now checked at EVERY step: `minPop` below asserts the colony never
+  // dips beneath where it started. That floor is the real claim of this test —
+  // "survives and grows" must mean the whole season, not just its last day.
   let s = createInitialFarmState({
     seed: 42,
     composterId: 'tier2',
@@ -51,14 +60,23 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
 
   const rng = createRng(s.rngState);
   const DAYS = 65;
+  const binCapacity = getComposter('tier2').capacity;
   let maxMoisture = 0;
+  let minMoisture = 1;
   let maxTemp = 0;
+  let minPop = startPop;
   for (let d = 0; d < DAYS; d++) {
     for (let h = 0; h < 24; h++) {
-      if (h === 8 || h === 18) s = addFood(s, 'vegetableScraps', 0.5); // moderate feeding
+      // Top up twice a day toward a quarter-full bin — enough standing food to
+      // keep the colony fed as it grows, well short of an overfeeding dump.
+      if ((h === 8 || h === 18) && queueVolume(s) < binCapacity * 0.25) {
+        s = addFood(s, 'vegetableScraps', 1.5);
+      }
       s = tick(s, rng);
       maxMoisture = Math.max(maxMoisture, s.env.moisture);
+      minMoisture = Math.min(minMoisture, s.env.moisture);
       maxTemp = Math.max(maxTemp, s.env.temperature);
+      minPop = Math.min(minPop, total(s.population));
       if (s.env.moisture > 0.7) s = addSawdust(s, (s.env.moisture - 0.55) / 0.03); // keep it in band
       if (h === 20) {
         ({ state: s, wallet } = harvestAndSell(s, wallet)); // score + coins
@@ -73,9 +91,15 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
   const endPop = total(s.population);
   assert.ok(endPop > startPop, `net population GROWTH: ${startPop} -> ${endPop}`);
   assert.ok(endPop > startPop * 2, `growth is substantial, not marginal: ${endPop}`);
+  // The colony never crashed on the way: no boom-bust hidden by the end state.
+  assert.ok(
+    minPop >= startPop,
+    `population never dipped below its starting size: min ${minPop} vs start ${startPop}`,
+  );
   // Good care never let the environment run into lethal territory.
   assert.ok(maxMoisture < MOIST_LETHAL, `moisture stayed sub-lethal: max ${maxMoisture.toFixed(3)}`);
   assert.ok(maxTemp < TEMP_LETHAL, `temperature stayed sub-lethal: max ${maxTemp.toFixed(2)}`);
+  assert.ok(minMoisture > MOIST_DRY_LETHAL, `bedding never dried into lethal territory: min ${minMoisture.toFixed(3)}`);
   // Tending the bin (harvesting humus) earned score — idling would have earned none.
   assert.ok(s.score > 0, `harvesting humus accrued score: ${s.score.toFixed(1)}`);
 });
@@ -83,15 +107,20 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
 // --- §2.8 neglect chain 1: leachate overflow -> saturation -> mortality ------
 
 test('NEGLECT (leachate): never draining saturates the bedding and kills the colony', () => {
-  // Feed a normal, non-toxic wet food (vegetable scraps) and NEVER drain: the
-  // leachate backs up out of the tank and the food's own moisture has nowhere to
-  // go, so the bedding saturates to a lethal moisture level. Harvest every tick
-  // and keep the wall shaded so neither the humus/rot chain nor fermentation heat
+  // Ordinary use of the bin — modest portions of a normal, non-toxic wet food,
+  // topped up as they are worked through — with the ONE act of neglect being that
+  // the tap is never opened. The tank fills, percolation has nowhere to drain to,
+  // and the bedding saturates to a lethal moisture level. Harvest every tick and
+  // keep the wall shaded so neither the humus/rot chain nor fermentation heat
   // confounds it — saturation is the only lethal factor (asserted: temperature
-  // and toxicity both stay sub-lethal throughout). (An earlier version fed
-  // moisture-neutral eggshells to isolate the tank, but with passive evaporation
-  // in play a zero-moisture bin now just dries out instead — so the faithful way
-  // to reach saturation is to over-wet a normally-fed bin that is never drained.)
+  // and toxicity both stay sub-lethal throughout).
+  //
+  // The portions are deliberately SMALL and continuous rather than large dumps: a
+  // bin stuffed to capacity in a few sittings ends up holding mostly inert,
+  // fully-decomposed matter that releases no more water, so the bedding dries
+  // back into the survivable band and a remnant colony rides out the flood
+  // forever. Steady feeding keeps genuinely fresh food in the bin, which is both
+  // what a real keeper does and what keeps the chain terminal.
   const BOUND_DAYS = 30;
   let s = createInitialFarmState({
     seed: 7,
@@ -108,7 +137,7 @@ test('NEGLECT (leachate): never draining saturates the bedding and kills the col
   let maxTox = 0;
   for (let d = 0; d < BOUND_DAYS && dieDay < 0; d++) {
     for (let h = 0; h < 24; h++) {
-      if (queueVolume(s) < 12 && h % 2 === 0) s = addFood(s, 'vegetableScraps', 3);
+      if (queueVolume(s) < 6 && h % 2 === 0) s = addFood(s, 'vegetableScraps', 1);
       s = tick(s, rng);
       s = harvestHumus(s).state; // keep the tray clear; NEVER drain the tank
       if (s.env.moisture >= MOIST_LETHAL) sawSpike = true;
@@ -130,10 +159,15 @@ test('NEGLECT (leachate): never draining saturates the bedding and kills the col
 // --- §2.8 neglect chain 2: humus overflow -> tray full -> rot -> mortality ---
 
 test('NEGLECT (humus): never harvesting fills the tray, halts processing, and rots the queue toxic', () => {
-  // Feed eggshells (zero moisture, zero own-toxicity) and DRAIN each tick, so the
-  // moisture/leachate chain cannot confound this: the only lethal factor is the
-  // toxicity of the stranded queue rotting anaerobically once the never-harvested
-  // tray fills and processing halts.
+  // Feed a normal, non-toxic food and DRAIN each tick. Draining keeps room in the
+  // tank, so percolation holds the bedding at field capacity — moisture sits
+  // steady in the comfort band (asserted below at BOTH edges) and neither
+  // moisture chain can confound this. The only lethal factor left is the toxicity
+  // of the stranded queue rotting anaerobically once the never-harvested tray
+  // fills and processing halts. (This used to feed zero-moisture eggshells to
+  // isolate the tank; with nothing replenishing the bedding that bin now just
+  // dries out and dies of the §2.8 drying chain before the tray ever fills — so
+  // the faithful isolation is a moist food plus a drained tank.)
   const BOUND_DAYS = 35;
   const trayCap = getComposter('tier2').humusCapacity;
   let s = createInitialFarmState({
@@ -147,19 +181,29 @@ test('NEGLECT (humus): never harvesting fills the tray, halts processing, and ro
 
   let dieDay = -1;
   let halted = false;
+  let minMoisture = 1;
+  let maxMoisture = 0;
+  let maxTox = 0;
   for (let d = 0; d < BOUND_DAYS && dieDay < 0; d++) {
     for (let h = 0; h < 24; h++) {
       // Keep the tray fed until it fills with a stranded remainder, then stop.
-      if (s.humus < trayCap - 0.5 && queueVolume(s) < 22 && h % 2 === 0) s = addFood(s, 'eggshells', 3);
+      if (s.humus < trayCap - 0.5 && queueVolume(s) < 22 && h % 2 === 0) s = addFood(s, 'vegetableScraps', 3);
       s = tick(s, rng);
       s = drainLeachate(s).state; // isolate from the leachate chain; NEVER harvest
       if (s.humus >= trayCap - 1e-6) halted = true;
+      minMoisture = Math.min(minMoisture, s.env.moisture);
+      maxMoisture = Math.max(maxMoisture, s.env.moisture);
+      maxTox = Math.max(maxTox, s.env.toxicity);
     }
     if (isDead(s)) dieDay = s.day;
   }
 
   assert.ok(halted, 'the never-harvested tray filled and processing halted');
-  assert.ok(s.env.moisture < MOIST_LETHAL, 'moisture stayed sub-lethal — this death is the rot chain, not saturation');
+  assert.ok(maxTox > 0.4, `stranded queue rotted toxic: max ${maxTox.toFixed(3)}`);
+  // Moisture stayed inside the band at BOTH edges: neither saturation nor drying
+  // contributed — this death is the rot chain alone.
+  assert.ok(maxMoisture < MOIST_LETHAL, `moisture stayed sub-lethal wet: max ${maxMoisture.toFixed(3)}`);
+  assert.ok(minMoisture > MOIST_DRY_LETHAL, `moisture stayed sub-lethal dry: min ${minMoisture.toFixed(3)}`);
   assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
   assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
   assert.equal(s.colonyAlive, false, 'colonyAlive flipped to false');
@@ -319,18 +363,28 @@ test('RECOVERY LAG: a drained pipeline refills only after the hatch + maturation
   ({ state: s } = buyWormPack(s, 1000, 'californiana', 50));
   const rng = createRng(s.rngState);
 
-  const hold = (st, moisture) => ({ ...st, env: { ...st.env, moisture } });
+  // Moisture AND temperature are pinned each tick so weather (and the
+  // fermentation heat of the standing larder below) cannot perturb the pipeline
+  // measurement; the larder keeps the colony fed so that HUNGER is never the
+  // limiter either — this test isolates the cocoon->adult delay, and every other
+  // brake on laying has to be held flat for that reading to mean anything.
+  const hold = (st, moisture) => ({
+    ...st,
+    env: { ...st.env, moisture, temperature: 22 },
+  });
+  const feed = (st) => (queueVolume(st) < 8 ? addFood(st, 'vegetableScraps', 4) : st);
+  const step = (st, moisture, r) => tick(hold(feed(st), moisture), r);
   const COMFORT = 0.6; // inside the moisture band
   const STALL = 0.3; // ~0.1 below the band: stress ~1.67 -> laying stalled, no dying
 
   // 1) Grow a full pipeline: cocoons, juveniles, and adults all present.
-  for (let i = 0; i < 180; i++) { s = hold(s, COMFORT); s = tick(s, rng); }
+  for (let i = 0; i < 180; i++) { s = step(s, COMFORT, rng); }
   const grown = s.population;
   assert.ok(grown.cocoons > 0 && grown.juveniles > 0 && grown.adults > 0, 'a full pipeline grew');
   assert.ok(total(grown) < cap, 'colony stays well under carrying capacity (crowding is not the limiter)');
 
   // 2) Stall laying long enough to drain the pipeline into the adult stage.
-  for (let i = 0; i < 260; i++) { s = hold(s, STALL); s = tick(s, rng); }
+  for (let i = 0; i < 260; i++) { s = step(s, STALL, rng); }
   assert.ok(s.population.cocoons <= 3 && s.population.juveniles <= 12, `pipeline drained: c=${s.population.cocoons} j=${s.population.juveniles}`);
   const adultsAtRestore = s.population.adults;
   const stalled = s;
@@ -340,7 +394,7 @@ test('RECOVERY LAG: a drained pipeline refills only after the hatch + maturation
   const recover = (ticks) => {
     let t = stalled;
     const r = createRng(stalled.rngState);
-    for (let i = 0; i < ticks; i++) { t = hold(t, COMFORT); t = tick(t, r); }
+    for (let i = 0; i < ticks; i++) { t = step(t, COMFORT, r); }
     return t;
   };
 

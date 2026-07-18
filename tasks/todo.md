@@ -16,7 +16,7 @@
 - [x] **CP2** — all sim suites green. Review: env dynamics + queue semantics
 - [x] **T7** Scoring + economy + colony death/repopulate + migration (M) — deps: T6
 - [x] **T8** Balance harness + first tuning pass (M) — deps: T7
-- [ ] **CP3** — full suite green. **Human review of balance numbers (most important review)**
+- [x] **CP3** — full suite green. **Human review of balance numbers (most important review)**
 
 ## Phase 2 — Persistence and DOM-playable game
 
