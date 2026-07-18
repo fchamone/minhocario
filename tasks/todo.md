@@ -41,7 +41,7 @@
 - [x] **T18** Day/night lighting + sun patch via solarGain (M) — deps: T16, T3, T13
 - [ ] **CP7** — 3D + meshes + day/night + sun patch. Review: placement-mechanic readability
 - [x] **T19** Drag-move via raycast + slider sync (M) — deps: T17, T14
-- [ ] **T20** 3D x-ray view (M) — deps: T17, T14
+- [x] **T20** 3D x-ray view (M) — deps: T17, T14
 - [ ] **CP8** — full feature set; manual playtest of spec §6 checklist on desktop
 
 ## Phase 4 — Tuning, polish, release

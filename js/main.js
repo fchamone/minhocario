@@ -20,7 +20,7 @@ import {
   DEFAULT_SPEED,
 } from './ui/speed.js';
 import { load, save, LOAD_STATUS } from './storage.js';
-import { initScene, renderState, resizeScene, enableDragMove } from './render/scene.js';
+import { initScene, renderState, resizeScene, enableDragMove, setXrayView } from './render/scene.js';
 import {
   STARTING_WALLET,
   createInitialFarmState,
@@ -709,6 +709,10 @@ function init() {
     onHarvest,
     onMove,
     onRestart: restartRun,
+    // X-ray toggle also drives the 3D view: swap the composter shell to
+    // translucent and reveal the internals overlay (render-only, never touches
+    // the sim). A no-op when WebGL is unavailable, so the DOM panel still works.
+    onToggleXray: (active) => setXrayView(active),
   });
 
   // Home screen — nickname (generate/persist/reroll), local ranking, and

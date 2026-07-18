@@ -253,6 +253,63 @@ export function buildComposterMesh(composterId) {
 }
 
 /**
+ * Interior fill region for the 3D x-ray overlay (T20), expressed in the composter
+ * group's LOCAL frame: an upright box the stylized internals (leachate, humus,
+ * worm hints, food chunks) are laid out inside. Derived from the SAME catalog
+ * dims as the mesh, so the cavity always nests within the model's body and grows
+ * with a larger bin — the "sim/catalog is the single source of truth" discipline
+ * the rest of the render layer follows. Returns null for an unknown id.
+ *
+ * The box is centred on x=0 and z=`z`, spans [`yMin`, `yMax`] vertically, and is
+ * `width` (x) by `depth` (z). The buried model is the deliberate exception: its
+ * cavity sits mostly below y=0, matching the sunken drum (the opaque floor plane
+ * then occludes the underground portion, just as it does the drum itself).
+ * @param {string|null} composterId catalog id (js/sim/composters.js)
+ * @returns {{yMin: number, yMax: number, width: number, depth: number, z: number}|null}
+ */
+export function composterCavity(composterId) {
+  const composter = composterId ? getComposter(composterId) : null;
+  const spec = composterId ? MODEL_SPEC[composterId] : null;
+  if (!composter || !spec) return null;
+
+  const dims = baseDims(composter.capacity);
+  const w = dims.width;
+  const d = dims.depth;
+
+  switch (spec.kind) {
+    case 'electric': {
+      // Body: footH..footH+bodyH (see buildElectric).
+      const footH = 0.1;
+      const bodyH = 1.5;
+      return { yMin: footH + 0.12, yMax: footH + bodyH - 0.12, width: w * 0.82, depth: d * 0.82, z: d / 2 };
+    }
+    case 'tray': {
+      // Collector base up through the last tray (see buildTrayStack).
+      const legH = 0.34;
+      const baseH = 0.42;
+      const trayH = 0.42;
+      const top = legH + baseH + spec.trays * trayH;
+      return { yMin: legH + 0.04, yMax: top - 0.05, width: w * 0.82, depth: d * 0.82, z: d / 2 };
+    }
+    case 'buried': {
+      // Sunken drum, mostly below y=0 (see buildBuried).
+      const r = w * 0.45;
+      const underH = 1.5;
+      return { yMin: 0.06 - underH + 0.12, yMax: 0.04, width: r * 1.7, depth: r * 1.7, z: r };
+    }
+    case 'eco': {
+      // Drum on short feet (see buildEco).
+      const r = w * 0.5;
+      const legH = 0.16;
+      const bodyH = 1.7;
+      return { yMin: legH + 0.12, yMax: legH + bodyH - 0.12, width: r * 1.7, depth: r * 1.7, z: r };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
  * Free every geometry + material under a composter group and detach it from its
  * parent. Called on upgrade (T17) before building the replacement mesh so
  * swapping models does not leak GPU resources.

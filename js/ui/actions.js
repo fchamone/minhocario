@@ -539,6 +539,9 @@ async function confirmAction(messageKey) {
  * @param {() => void} deps.onHarvest
  * @param {(position: number) => void} deps.onMove wall position 0..1.
  * @param {() => void} deps.onRestart end this run and start a new one.
+ * @param {(active: boolean) => void} [deps.onToggleXray] mirror the x-ray toggle
+ *   into the 3D scene (translucent shell + internals overlay). Optional so the
+ *   DOM internals panel works even without a render layer.
  */
 export function initActions(deps) {
   const {
@@ -551,6 +554,7 @@ export function initActions(deps) {
     onHarvest,
     onMove,
     onRestart,
+    onToggleXray,
   } = deps;
 
   const on = (action, handler) => {
@@ -574,14 +578,18 @@ export function initActions(deps) {
     if (await confirmAction('game.restartConfirm')) onRestart();
   });
 
-  // X-ray toggle: reveals the internals panel. Purely a view switch — it must
-  // never pause or perturb the sim (spec §2.7 / T20 acceptance criterion), so it
-  // only flips `hidden` and repaints.
+  // X-ray toggle: reveals BOTH the numeric internals panel (T14) and the 3D x-ray
+  // view (T20) in lockstep — one control, two layers. Purely a view switch: it
+  // must never pause or perturb the sim (spec §2.7 / T20 acceptance criterion),
+  // so it only flips `hidden`, repaints the panel, and asks main.js to mirror the
+  // state into the render layer (which is itself read-only over the sim).
   on('xray', () => {
     const panel = document.getElementById('internals');
     if (!panel) return;
     panel.hidden = !panel.hidden;
+    const active = !panel.hidden;
     updateInternals(getFarm());
+    onToggleXray?.(active);
   });
 
   const slider = document.getElementById('wall-position');

@@ -39,6 +39,7 @@ import {
   Plane,
 } from '../../vendor/three.module.min.js';
 import { buildComposterMesh, disposeComposterMesh } from './composter3d.js';
+import { buildXrayInternals, updateXrayInternals, setShellTransparency } from './xray.js';
 // The ONE sim import the plan sanctions for the render layer: the SAME pure
 // function the temperature model uses for heat (§2.6). Sampling it here to draw
 // the sun patch means the visible bright region and the simulated warm spot are
@@ -168,6 +169,22 @@ let onWindowResize = null;
 let composterGroup = null;
 /** @type {string|null} */
 let composterModelId = null;
+
+// --- X-ray view (T20) --------------------------------------------------------
+// A render-only toggle: it makes the composter shell translucent and reveals a
+// stylized internals overlay (js/render/xray.js) that tracks the live levels. It
+// NEVER touches the sim — the clock keeps advancing while it is on. State lives
+// module-side so renderState can refresh the overlay every frame and a mid-farm
+// upgrade re-applies it to the new mesh.
+
+/** Whether the x-ray view is currently on. */
+let xrayActive = false;
+/**
+ * The internals overlay, added as a CHILD of composterGroup so it inherits the
+ * wall-position transform (and is disposed with the group on upgrade/teardown).
+ * @type {import('three').Group|null}
+ */
+let xrayOverlay = null;
 
 // Animated lights + sun patch, retained so applyDayNight() can drive them each
 // frame without re-walking the scene graph.
@@ -392,12 +409,16 @@ function syncComposter(state) {
     if (composterGroup) {
       disposeComposterMesh(composterGroup);
       composterGroup = null;
+      // The overlay was a child of the old group, so it was just disposed too.
+      xrayOverlay = null;
     }
     composterModelId = desiredId;
     if (desiredId) {
       composterGroup = buildComposterMesh(desiredId);
       if (composterGroup) scene.add(composterGroup);
     }
+    // Re-apply the x-ray to the freshly built mesh so an upgrade stays x-rayed.
+    if (xrayActive) applyXray();
   }
 
   if (composterGroup) {
@@ -508,8 +529,47 @@ function applyDayNight(hour) {
 export function renderState(state, continuousHour = 0) {
   if (!ready || !renderer || !scene || !camera) return;
   syncComposter(state);
+  // Refresh the x-ray internals from the live state every frame while it is on,
+  // so fill volumes track drain/harvest and worm/queue hints stay current — a
+  // read-only view, so this never perturbs the sim.
+  if (xrayActive && xrayOverlay) updateXrayInternals(xrayOverlay, state);
   applyDayNight(continuousHour);
   renderer.render(scene, camera);
+}
+
+/**
+ * Reconcile the current composter mesh with the x-ray state: translucent shell +
+ * a visible internals overlay (built lazily on first use) when on; opaque shell +
+ * hidden overlay when off. Safe to call with no composter yet.
+ */
+function applyXray() {
+  if (!composterGroup) return;
+  setShellTransparency(composterGroup, xrayActive);
+  if (xrayActive) {
+    if (!xrayOverlay) {
+      xrayOverlay = buildXrayInternals(composterModelId);
+      if (xrayOverlay) composterGroup.add(xrayOverlay);
+    }
+    if (xrayOverlay) xrayOverlay.visible = true;
+  } else if (xrayOverlay) {
+    xrayOverlay.visible = false;
+  }
+}
+
+/**
+ * Toggle the 3D x-ray view (T20). main.js wires this to the SAME action-panel
+ * toggle that shows the DOM internals panel, so the numeric and visual layers
+ * move together. Purely a render switch — it never pauses or perturbs the sim. A
+ * no-op (returns false) when the scene is not ready, so the DOM-only game and its
+ * internals panel keep working without WebGL.
+ * @param {boolean} active
+ * @returns {boolean} whether the x-ray is now on
+ */
+export function setXrayView(active) {
+  if (!ready) return false;
+  xrayActive = Boolean(active);
+  applyXray();
+  return xrayActive;
 }
 
 // --- Drag-move (T19) ---------------------------------------------------------
@@ -692,6 +752,9 @@ export function disposeScene() {
   if (composterGroup) disposeComposterMesh(composterGroup);
   composterGroup = null;
   composterModelId = null;
+  // The overlay was a child of composterGroup, so it was freed above; just reset.
+  xrayOverlay = null;
+  xrayActive = false;
   sunLight = null;
   hemiLight = null;
   ambientLight = null;
