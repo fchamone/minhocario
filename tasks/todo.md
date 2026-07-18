@@ -47,8 +47,9 @@
 ## Phase 4 — Tuning, polish, release
 
 - [ ] **T21** Second balance pass (playfeel) + constant lock-in (M) — deps: T15, T18 (ideally T20)
+- [ ] **T21b** Behavior/constants/rules reference doc → `docs/game-reference.md` (S/M) — deps: T21
 - [ ] **T22** UX/visual polish + audits (strings/Math.random/food labels) (S/M) — deps: T20
-- [ ] **T23** Release checklist + deploy dry run (S) — deps: T21, T22
+- [ ] **T23** Release checklist + deploy dry run (S) — deps: T21, T21b, T22
 - [ ] **CP9** — ship gate: human sign-off vs spec acceptance criteria; scoring + save schema freeze
 
 ## Change C-0002 — Multi-language (i18n): pt-BR / en / es

@@ -184,6 +184,12 @@ Play at all speeds; adjust pacing constants (decomposition, heat spikes, cocoon 
 - **Verify:** `node --test tests/` + timed manual sessions.
 - **Deps:** T15, T18 (ideally T20). **Files:** sim constants + `tests/balance.test.js`.
 
+### T21b. Behavior/constants/rules reference doc — S/M
+Write `docs/game-reference.md`: a single reference describing what the shipped version actually does — the tick/clock model and speed multipliers; the full catalogs (6 composters, 3 species, ~14 foods) with their numbers; the environment dynamics (temperature/`solarGain`, moisture, pH, toxicity) and their comfort bands; the population pipeline stages and every mortality trigger; production/overflow rules and the §2.8 failure chains; scoring formula and economy rules (prices, auto-sell, 50% trade-in, repopulate); the save schema `{v:1,...}` and the language key. Numbers are transcribed from `js/sim/*` **after T21 locks them** — the doc cites the owning module/constant for each value so it can be re-verified, and states the version/commit it describes.
+- **AC:** every constant in the doc matches its source module (spot-check audit); all six composters, three species and every food are covered; each §2.8 chain is documented with its trigger and terminal state; doc is written **after** T21 tuning so no stale numbers ship; **no food suitability verdicts** — the doc describes the mechanics (moisture/pH/toxicity per item) without ranking foods as good/bad, so it never becomes a spoiler table.
+- **Verify:** manual cross-read of `docs/game-reference.md` against `js/sim/{composters,worms,foods,temperature,engine,scoring}.js` and `js/storage.js`; `node --test tests/` still green (doc-only change).
+- **Deps:** T21. **Files:** `docs/game-reference.md` (new).
+
 ### T22. UX/visual polish + audits — S/M
 CSS polish (gauges, dialogs, transitions), consistent status messaging, edge states (dead colony, full tanks). Audits: grep for UI literals outside `strings.js`; verify food list has zero suitability signal; grep `Math.random` under `js/sim/` (must be absent).
 - **AC:** both grep audits clean; a first-time player completes shop→setup unaided.
@@ -194,7 +200,7 @@ CSS polish (gauges, dialogs, transitions), consistent status messaging, edge sta
 Execute spec §6 manual checklist (desktop + one mobile browser: render, day/night + patch, x-ray, every action incl. drag, speeds, restart persistence, each failure chain, offline). Deploy dry run: serve a copy minus `tests/`, `.harn/`, `.claude/` and confirm identical behavior (upload = deploy).
 - **AC:** every checklist item checked on desktop + one mobile browser; pruned folder runs cold with no 404s and offline after first load.
 - **Verify:** `npx serve <deploy-copy>` + checklist; final `node --test tests/`.
-- **Deps:** T21, T22. **Files:** none new (fixes route to owning modules).
+- **Deps:** T21, T21b, T22. **Files:** none new (fixes route to owning modules). Exclude `docs/` from the deploy copy alongside `tests/`, `.harn/`, `.claude/` (or keep it — it is static and harmless; decide at the dry run).
 
 > **CP9 (after T23):** ship gate — human sign-off vs spec acceptance criteria; scoring formula + save schema freeze ("ask first" from here).
 
