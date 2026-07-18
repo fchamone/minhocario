@@ -30,6 +30,7 @@ import {
   PlaneGeometry,
   MeshStandardMaterial,
 } from '../../vendor/three.module.min.js';
+import { buildComposterMesh, disposeComposterMesh } from './composter3d.js';
 
 // --- Scene geometry contract -------------------------------------------------
 // The garage wall runs along the world X axis; the composter's continuous
@@ -85,6 +86,22 @@ let sceneCanvas = null;
 let ready = false;
 /** Bound resize handler, retained so it can be removed on dispose. */
 let onWindowResize = null;
+/**
+ * The live composter mesh group (T17) and the catalog id it was built from. The
+ * mesh is rebuilt only when the id changes, so a mid-farm upgrade swaps the model
+ * live while plain re-renders just reposition it.
+ * @type {import('three').Group|null}
+ */
+let composterGroup = null;
+/** @type {string|null} */
+let composterModelId = null;
+
+/**
+ * Gap (world units) between the garage wall (z=0) and the composter's back face,
+ * so the bin stands a little in front of the wall on the floor. The mesh is built
+ * with its back at local z=0, so this is applied as the group's z position.
+ */
+const BIN_WALL_GAP = 0.5;
 
 /**
  * Build the wall + floor + lights into the scene. Pure scene-graph assembly, no
@@ -201,15 +218,46 @@ export function resizeScene() {
 }
 
 /**
+ * Reconcile the composter mesh with the current sim state (T17): build/swap the
+ * model when `composterId` changes, dispose the old one, and place the group at
+ * `wallPosition` along the wall. Called every frame from renderState; cheap when
+ * nothing changed (a Vector3 write).
+ * @param {import('../sim/engine.js').FarmState|null} state
+ */
+function syncComposter(state) {
+  if (!scene) return;
+  const desiredId = state && typeof state.composterId === 'string' ? state.composterId : null;
+
+  if (desiredId !== composterModelId) {
+    if (composterGroup) {
+      disposeComposterMesh(composterGroup);
+      composterGroup = null;
+    }
+    composterModelId = desiredId;
+    if (desiredId) {
+      composterGroup = buildComposterMesh(desiredId);
+      if (composterGroup) scene.add(composterGroup);
+    }
+  }
+
+  if (composterGroup) {
+    const wallPosition =
+      state && typeof state.wallPosition === 'number' ? state.wallPosition : 0.5;
+    composterGroup.position.set(wallPositionToWorldX(wallPosition), 0, BIN_WALL_GAP);
+  }
+}
+
+/**
  * Render one frame for the given sim state. Called from the main.js rAF loop.
- * For T16 the scene is static (wall + floor); `state` and `continuousHour` are
- * accepted now so later tasks (composter placement, day/night, sun patch) read
- * them without changing the call site. No-op if the scene is not ready.
- * @param {import('../sim/engine.js').FarmState|null} _state current farm state
+ * Draws the wall + floor, plus the composter mesh placed at `state.wallPosition`
+ * (rebuilt live on upgrade). `continuousHour` is accepted for the day/night pass
+ * (T18). No-op if the scene is not ready.
+ * @param {import('../sim/engine.js').FarmState|null} state current farm state
  * @param {number} [_continuousHour] fractional game hour (0..24) for day/night
  */
-export function renderState(_state, _continuousHour = 0) {
+export function renderState(state, _continuousHour = 0) {
   if (!ready || !renderer || !scene || !camera) return;
+  syncComposter(state);
   renderer.render(scene, camera);
 }
 
@@ -221,6 +269,9 @@ export function renderState(_state, _continuousHour = 0) {
 export function disposeScene() {
   if (onWindowResize) globalThis.removeEventListener?.('resize', onWindowResize);
   onWindowResize = null;
+  if (composterGroup) disposeComposterMesh(composterGroup);
+  composterGroup = null;
+  composterModelId = null;
   renderer?.dispose?.();
   renderer = null;
   scene = null;

@@ -37,7 +37,7 @@
 ## Phase 3 — Three.js render layer
 
 - [x] **T16** Vendor Three.js + minimal scene (S/M) — deps: T1 (∥ early spike, run alongside Phase 1/2)
-- [ ] **T17** Procedural composter meshes, all 6 models (M) — deps: T16, T3 (∥ Phase 2)
+- [x] **T17** Procedural composter meshes, all 6 models (M) — deps: T16, T3 (∥ Phase 2)
 - [ ] **T18** Day/night lighting + sun patch via solarGain (M) — deps: T16, T3, T13
 - [ ] **CP7** — 3D + meshes + day/night + sun patch. Review: placement-mechanic readability
 - [ ] **T19** Drag-move via raycast + slider sync (M) — deps: T17, T14
