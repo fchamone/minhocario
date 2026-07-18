@@ -80,33 +80,39 @@ function freshProfileSave(nickname) {
   };
 }
 
+// --- Screen state ------------------------------------------------------------
+//
+// Home is re-entered every time the router shows it (not just at page load), so
+// the working save lives at module scope: the listeners below are wired ONCE and
+// read `current` from here. Keeping the state in a closure instead would leave
+// already-attached handlers bound to a stale save after a re-entry.
+
+/** @type {object|null} the working save, refreshed on every screen entry. */
+let current = null;
 /**
- * Initialize the home screen against the persisted save. First visit generates
- * and persists a nickname; a returning visit restores it. A corrupt or
- * newer-than-us save is never overwritten — it surfaces a localized notice and
- * the screen runs on an in-memory (unpersisted) nickname instead.
- * @param {object} [deps]
- * @param {() => void} [deps.onPlay]     start a new farm (route to the shop)
- * @param {() => void} [deps.onContinue] resume the saved farm (route to game)
- * @param {import('../storage.js').StorageBackend} [deps.backend]
- *   storage backend (defaults to browser localStorage inside storage.js).
+ * Whether reroll/updates may be persisted. False for corrupt/future saves, which
+ * we must not clobber (spec §2.11 — never silently discard).
  */
-export function initHome({ onPlay, onContinue, backend } = {}) {
+let canPersist = true;
+/** The storage backend in play, captured so once-wired handlers persist through it. */
+let activeBackend;
+/** Whether the DOM listeners have been attached (they are wired exactly once). */
+let wired = false;
+
+/**
+ * Load the save and repaint the screen: nickname, ranking, and Continue
+ * visibility. Safe to call on every screen entry — it only reads and paints.
+ * @param {import('../storage.js').StorageBackend} [backend]
+ */
+function refreshHome(backend) {
   const nicknameEl = document.getElementById('home-nickname');
-  const rerollBtn = document.getElementById('btn-reroll');
-  const playBtn = document.getElementById('btn-play');
   const continueBtn = document.getElementById('btn-continue');
   const noticeEl = document.getElementById('home-notice');
   const rankingBody = document.getElementById('ranking-body');
   const rankingEmpty = document.getElementById('ranking-empty');
 
   const result = load(backend);
-
-  /** @type {object} the working save. */
-  let current;
-  // When true, reroll/updates may be persisted. False for corrupt/future saves,
-  // which we must not clobber (spec §2.11 — never silently discard).
-  let canPersist = true;
+  canPersist = true;
 
   if (result.status === LOAD_STATUS.OK) {
     current = result.save;
@@ -129,21 +135,46 @@ export function initHome({ onPlay, onContinue, backend } = {}) {
     }
   }
 
-  const paintNickname = () => {
-    if (nicknameEl) nicknameEl.textContent = current.profile.nickname;
-  };
-  paintNickname();
+  if (nicknameEl) nicknameEl.textContent = current.profile.nickname;
   if (rankingBody) renderRanking(rankingBody, rankingEmpty, current.ranking);
 
   // Continue only makes sense once a farm exists (created at setup, T12).
   const hasFarm = result.status === LOAD_STATUS.OK && current.farm != null;
   if (continueBtn) continueBtn.hidden = !hasFarm;
+}
+
+/**
+ * Initialize/refresh the home screen against the persisted save. First visit
+ * generates and persists a nickname; a returning visit restores it. A corrupt or
+ * newer-than-us save is never overwritten — it surfaces a localized notice and
+ * the screen runs on an in-memory (unpersisted) nickname instead.
+ *
+ * Called on EVERY entry to the home screen: the save is re-read and repainted
+ * each time (so Continue reflects a farm created since page load), while the DOM
+ * listeners are attached only on the first call.
+ * @param {object} [deps]
+ * @param {() => void} [deps.onPlay]     start a new farm (route to the shop)
+ * @param {() => void} [deps.onContinue] resume the saved farm (route to game)
+ * @param {import('../storage.js').StorageBackend} [deps.backend]
+ *   storage backend (defaults to browser localStorage inside storage.js).
+ */
+export function initHome({ onPlay, onContinue, backend } = {}) {
+  activeBackend = backend;
+  refreshHome(backend);
+
+  if (wired) return;
+  wired = true;
+
+  const nicknameEl = document.getElementById('home-nickname');
+  const rerollBtn = document.getElementById('btn-reroll');
+  const playBtn = document.getElementById('btn-play');
+  const continueBtn = document.getElementById('btn-continue');
 
   if (rerollBtn) {
     rerollBtn.addEventListener('click', () => {
       current = { ...current, profile: { ...current.profile, nickname: buildNickname() } };
-      paintNickname();
-      if (canPersist) save(current, backend);
+      if (nicknameEl) nicknameEl.textContent = current.profile.nickname;
+      if (canPersist) save(current, activeBackend);
     });
   }
   if (playBtn && onPlay) playBtn.addEventListener('click', () => onPlay());

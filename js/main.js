@@ -97,6 +97,45 @@ function currentWallet() {
   return result.save?.profile?.wallet ?? STARTING_WALLET;
 }
 
+/**
+ * Start a NEW game: reset the run while keeping the player's identity and
+ * history. The wallet returns to STARTING_WALLET and the farm is cleared, but
+ * the nickname and ranking survive — otherwise a second playthrough inherits the
+ * previous run's depleted wallet and no composter is affordable.
+ *
+ * A corrupt/future save is never overwritten (spec §2.11) — we just route to the
+ * shop and leave the stored bytes alone, mirroring `js/ui/home.js`.
+ *
+ * The confirmation prompt and freezing the finished run into the ranking are
+ * T15; this is the minimal reset that makes a new game playable.
+ */
+function startNewGame() {
+  const loaded = load();
+  const resettable = loaded.status === LOAD_STATUS.OK || loaded.status === LOAD_STATUS.EMPTY;
+
+  if (resettable) {
+    const prior = loaded.status === LOAD_STATUS.OK ? loaded.save : null;
+    save({
+      v: 1,
+      profile: {
+        nickname: prior?.profile?.nickname ?? '',
+        wallet: STARTING_WALLET,
+      },
+      farm: null,
+      ranking: prior?.ranking ?? [],
+    });
+  }
+
+  // Drop the live farm BEFORE routing: showScreen runs the game screen's exit
+  // hook (stopGame → persistGame) after this point, which would otherwise write
+  // the old farm straight back over the fresh save. persistGame no-ops on null.
+  gameFarm = null;
+  gameProfile = null;
+  newFarmDraft.composterId = null;
+
+  showScreen('shop');
+}
+
 /** Render the shop for a first purchase and route Buy → setup with the choice. */
 function renderShop() {
   initShop({
@@ -123,15 +162,23 @@ function randomSeed() {
  *   firstWasteId: string, firstWasteLiters: number, wallPosition: number}} values
  */
 function createFarmFromSetup(values) {
+  const composterId = newFarmDraft.composterId;
+  const composter = getComposter(composterId);
+  // No composter chosen (setup reached without a purchase) — a farm without a
+  // bin is not a valid game state, so send the player back to the shop rather
+  // than persisting one. Guards the dev-nav shortcut into setup.
+  if (!composter) {
+    showScreen('shop');
+    return;
+  }
+
   const loaded = load();
   const prior = loaded.status === LOAD_STATUS.OK ? loaded.save : null;
   const nickname = prior?.profile?.nickname ?? '';
   const ranking = prior?.ranking ?? [];
 
-  const composterId = newFarmDraft.composterId;
-  const composter = getComposter(composterId);
   let wallet = prior?.profile?.wallet ?? STARTING_WALLET;
-  if (composter) wallet -= composter.price; // pay for the composter (deferred from the shop)
+  wallet -= composter.price; // pay for the composter (deferred from the shop)
 
   let farm = createInitialFarmState({
     seed: randomSeed(),
@@ -291,8 +338,20 @@ function onVisibilityChange() {
   }
 }
 
+/**
+ * Render the home screen: re-reads the save on every entry, so Continue reflects
+ * a farm created since page load and the ranking/nickname stay current.
+ */
+function renderHome() {
+  initHome({
+    onPlay: startNewGame,
+    onContinue: () => showScreen('game'),
+  });
+}
+
 /** Per-screen render hooks, run each time a screen becomes visible. */
 const SCREEN_ENTER = {
+  home: renderHome,
   shop: renderShop,
   setup: renderSetup,
   game: startGame,
@@ -348,13 +407,9 @@ function init() {
   initSpeed({ initialSpeed: gameSpeed, onSpeedChange });
   document.addEventListener('visibilitychange', onVisibilityChange);
 
-  // Home screen: nickname (generate/persist/reroll), local ranking, and
-  // Play (new farm → shop) vs Continue (resume saved farm → game) routing.
-  initHome({
-    onPlay: () => showScreen('shop'),
-    onContinue: () => showScreen('game'),
-  });
-
+  // Home screen — nickname (generate/persist/reroll), local ranking, and
+  // Play (new farm → shop) vs Continue (resume saved farm → game) routing — is
+  // rendered by its SCREEN_ENTER hook, which showScreen fires here.
   showScreen('home');
 }
 
