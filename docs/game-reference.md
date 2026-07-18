@@ -7,9 +7,14 @@
 > module and named constant it is transcribed from, so it can be re-verified
 > against source.
 >
-> **Version described:** commit `8207a4e` (branch `master`). The balance
-> constants were locked at T21; this doc was written afterward (T21b) to match
-> the locked numbers.
+> **Version described:** branch `master`, after **T25**. The balance constants
+> were locked at T21; this doc was written afterward (T21b) to match the locked
+> numbers, and has been kept current through T24 (feed-rate pacing) and T25
+> (volume-normalised environment + sublinear big-bin throughput).
+>
+> **Portuguese counterpart:** `docs/game-reference-pt.md` is the same document in
+> pt-BR. The two are a **matched pair** — same structure, same numbers, different
+> prose language. Update both together or neither.
 >
 > **Scope note.** This document describes *mechanics* only. The add-waste food
 > list deliberately mixes items whose behavior the player must discover through
@@ -76,6 +81,18 @@ largest). Field meanings are documented in that module's header.
   drive the two overflow chains (§8).
 - **speed** multiplies eating throughput; **humusRate / leachateRate** are the
   fractions of eaten food converted to humus / leachate.
+- **capacity also sets two capacity-relative factors** (T25), both anchored on
+  `BIN_REFERENCE_CAPACITY = 30` — the `tier2` tray — so both are exactly **1.0**
+  there and only the other models move:
+
+  | id | capacity | env dilution (§6) | throughput falloff (§8) |
+  |----|-----:|-----:|-----:|
+  | `electric` | 20  | 1.000 (clamped) | 1.063 |
+  | `tier2`    | 30  | 1.000 | 1.000 |
+  | `tier3`    | 45  | 0.667 | 0.941 |
+  | `tier4`    | 60  | 0.500 | 0.901 |
+  | `buried`   | 80  | 0.375 | 0.863 |
+  | `eco`      | 100 | 0.300 | 0.835 |
 - **tempResponse** (0..1) is the fraction of the temperature gap closed per tick
   — high = tracks ambient closely, low = thermally stable. **regulation** (0..1)
   is the active pull of the blend target toward `IDEAL_TEMP`; only `electric`
@@ -238,10 +255,24 @@ newTemp = blendTemperature(prevTemp, target, composter)
 ### 6.2 Moisture (0..1)
 
 ```
-moisture = clamp01(prev + released + eatenMoisture + spillMoisture − evaporation)
+moisture = clamp01(prev + (released + eatenMoisture + spillMoisture) × dilution
+                        − evaporation)
            then percolation drains excess into the leachate tank
 ```
 
+- **dilution** (`envDilution`, `js/sim/engine.js`, T25) —
+  `min(1, BIN_REFERENCE_CAPACITY / capacity)`, i.e. **1.0 at or below the 30 L
+  anchor and smaller for bigger bins** (table in §2). `moisture`, `ph` and
+  `toxicity` are *concentrations* in the bedding, but the food queue contributes
+  *amounts* (liters × per-liter strength); dividing by the bin volume is the
+  missing unit conversion. Without it a bigger bin did not dilute a feeding, so
+  the same UI portion click meant very different things per model — measured on a
+  mid-life colony, one top-rung click moved moisture **+0.284 on `tier2` but
+  +0.425 on `eco`** (landing 0.925, past californiana's 0.85 comfort max). With
+  it the same click is **+0.284 … +0.302 across the whole catalog**.
+  It is **clamped at 1** so it only ever dilutes large bins and never concentrates
+  small ones: the unclamped 1.5 on `electric` saturated that bin to moisture 1.0
+  and cost it the §10 pricing invariant.
 - **Released** from decomposing food (`queueDynamics`, §4).
 - **eatenMoisture:** water in *eaten* food still enters the bedding — only the
   share not already released via decomposition is credited
@@ -253,8 +284,15 @@ moisture = clamp01(prev + released + eatenMoisture + spillMoisture − evaporati
   reaches moisture as well as temperature: a bin parked at the wall's warm end
   (§6.1) sits closer to the evaporation threshold around the clock.
 - **Sawdust** (`addSawdust`): removes `SAWDUST_DRY_PER_LITER = 0.04` moisture per
-  liter added (a direct action, not a queue entry — it applies immediately and in
-  full, with no decomposition ramp). The same action also scrubs toxicity (§6.4).
+  liter added, **× the same dilution factor** — a dose is liters against a
+  per-liter strength, exactly like food, so it carries the identical unit. (A
+  direct action, not a queue entry: it applies immediately and in full, with no
+  decomposition ramp.) The UI already scales the click with capacity (0.5 L on
+  `tier2`, 1.75 L on `eco`), so diluting keeps one click worth roughly the same
+  everywhere — measured **−0.019 … −0.021** across `tier2`–`eco`. Undiluted it
+  would have dried a big bin in about a third of the clicks the anchor needs, and
+  discounted the toxicity scrub by the same factor. The same action also scrubs
+  toxicity (§6.4).
 - **spillMoisture** comes from the leachate-overflow chain (§8).
 - **Percolation** (the water OUT-path of a cool bin): when
   `moisture > FIELD_CAPACITY = 0.75` **and** the leachate tank has room,
@@ -269,20 +307,27 @@ moisture = clamp01(prev + released + eatenMoisture + spillMoisture − evaporati
 ### 6.3 pH (0..14)
 
 ```
-ph = clamp(prev + (NEUTRAL_PH − prev) × PH_DRIFT_RATE + phPush, 0, 14)
+ph = clamp(prev + (NEUTRAL_PH − prev) × PH_DRIFT_RATE + phPush × dilution, 0, 14)
 ```
 
 `NEUTRAL_PH = 7`, `PH_DRIFT_RATE = 0.02` (`js/sim/engine.js`): the bin eases 2%
 of the way back to neutral each tick, then takes the signed food push
-(`phPush` from `queueDynamics`). **pH comfort band = `PH_COMFORT` 6–8**
-(`js/sim/worms.js`), shared by all species.
+(`phPush` from `queueDynamics`), volume-normalised by the same `dilution` as
+moisture (§6.2). **pH comfort band = `PH_COMFORT` 6–8** (`js/sim/worms.js`),
+shared by all species.
 
 ### 6.4 Toxicity (0..1)
 
 ```
-per tick:    toxicity = clamp01(prev × (1 − TOX_DECAY_RATE) + released + rotToxicity)
-addSawdust:  toxicity = clamp01(prev − SAWDUST_TOX_PER_LITER × liters)
+per tick:    toxicity = clamp01(prev × (1 − TOX_DECAY_RATE)
+                                + (released + rotToxicity) × dilution)
+addSawdust:  toxicity = clamp01(prev − SAWDUST_TOX_PER_LITER × liters × dilution)
 ```
+
+Both sides carry the same `dilution` as moisture (§6.2), so the **ratio** between
+a toxic load and its remedy is bin-independent even though the magnitudes are
+not — which is what keeps remediation a usable lever after an upgrade (locked by
+`tests/foods.test.js`).
 
 `TOX_DECAY_RATE = 0.001` (`js/sim/engine.js`) — deliberately very slow decay, so
 toxicity is the long-term punishment. Left to decay alone, a lethal 0.4 takes
@@ -404,9 +449,15 @@ is fully deterministic (no RNG).
   ceiling)`, where
   `linear = active × species.speed × composter.speed × CONSUMPTION_PER_WORM`,
   `CONSUMPTION_PER_WORM = 0.0005` L/worm/tick.
-- **Throughput ceiling:** `ceiling = composter.capacity × composter.speed ×
-  species.speed × THROUGHPUT_CAP_PER_LITER`, `THROUGHPUT_CAP_PER_LITER = 0.014`
-  L/tick per liter of bin capacity (`js/sim/engine.js`). Worms eat at the
+- **Throughput ceiling** (`binThroughputCeiling`, exported from
+  `js/sim/engine.js` — ask it rather than re-deriving the formula; a hand-copied
+  mirror of `THROUGHPUT_CAP_PER_LITER` in `tests/actions.test.js` went stale and
+  silently inverted the invariant it guarded):
+  `ceiling = capacity × falloff × composter.speed × species.speed ×
+  THROUGHPUT_CAP_PER_LITER`, with `THROUGHPUT_CAP_PER_LITER = 0.014` L/tick per
+  liter of bin capacity and
+  `falloff = (BIN_REFERENCE_CAPACITY / capacity) ** CAPACITY_THROUGHPUT_FALLOFF`,
+  `CAPACITY_THROUGHPUT_FALLOFF = 0.15` (`js/sim/engine.js`, T25). Worms eat at the
   food/bedding **interface**, and that interface is a property of the box, not of
   how many worms are stacked inside it — so the ceiling scales on capacity, while
   **both** speed traits stay on it because the species and the model still set
@@ -418,6 +469,18 @@ is fully deterministic (no RNG).
   `DENSITY = 50` — **56 % of carrying capacity** — so small and mid colonies stay
   purely linear and feeding still visibly matters. Measured and bracketed on both
   sides at T24; see `tasks/t21-balance.md` before moving it.
+- **Sublinear in capacity** (`CAPACITY_THROUGHPUT_FALLOFF = 0.15`, T25): the
+  working face grows more slowly than the box, so a bin twice the volume does not
+  get twice the usable interface. Before this, larger models were better on every
+  axis at once — higher `speed`, higher `humusRate`, and a carrying capacity
+  linear in volume — and a mature `eco` out-produced `tier2` by ~2.1× *per liter
+  of capacity* on top of being 3.3× larger. The falloff applies to the **ceiling
+  only**, never the linear branch, so it bites only on mature colonies (past the
+  56 % engagement point) and leaves "more worms process more food" intact;
+  `carryingCapacity` also stays linear in capacity, since this is about production
+  rate rather than colony size. Measured effect on steady-state humus per liter of
+  capacity: `eco` −16.5 %, `buried` −13.7 %, `tier4` −9.9 %, `tier3` −5.9 %,
+  `electric` +6.3 %, `tier2` unchanged (it is the anchor).
 - **Oldest-first:** the queue is eaten from the front; a fully consumed entry is
   removed, a partially eaten one keeps its remainder in place.
 - **Output:** `humus += eaten × composter.humusRate`;
@@ -435,15 +498,31 @@ is fully deterministic (no RNG).
   earlier "half capacity … 1.33× slowdown against the ~2× the 48-tick window
   allows" claim here was **unsupported and is withdrawn** — that probe was
   structurally blind, see `tasks/t21-balance.md`). An entry can only age out when
-  the 48-tick eating budget fails to cover the standing stock, which reduces to a
-  capacity-independent fill threshold:
-  `fill > 48 × THROUGHPUT_CAP_PER_LITER × composter.speed × species.speed`.
-  At `K = 0.014` with californiana that is 53.8 % fill for tier2, 67.2 % for
-  tier3/buried, 80.6 % for tier4, 94.1 % for eco, and **never** for electric.
-  Below the threshold the cap costs nothing; above it the loss is large. Bin held
-  **full**, population pinned at carrying capacity, 30 days: tier2 drops **44.7 %**
-  of the liters fed (3.8 % uncapped), tier3 and buried 31.4 % (0 %), tier4 18.4 %,
-  eco 5.6 %; at 75 % fill tier2 27.1 %, tier3/buried 9.8 %. Realistic play is
+  the 48-tick eating budget fails to cover the standing stock:
+
+  ```
+  fill > DECOMP_TICKS × binThroughputCeiling(composter, species) / capacity
+  ```
+
+  This *used* to reduce to `48 × K × composter.speed × species.speed`, with
+  capacity cancelling out entirely. Since T25 the ceiling is sublinear in
+  capacity, so **capacity no longer cancels** and bigger bins cross into unpaid
+  rot at a slightly *lower* fill than before. Re-measured with californiana
+  (population pinned at carrying capacity, bin held at a fixed fill, 30 days) —
+  the closed form predicts the leak boundary exactly in all 18 model × fill cases:
+
+  | model | threshold | dropped @100 % | dropped @75 % | dropped @50 % |
+  |---|---:|---:|---:|---:|
+  | `electric` | >1 (never) | 0.0 % | 0.0 % | 0.0 % |
+  | `tier2`    | 0.538 | 44.7 % | 27.1 % | 0.0 % |
+  | `tier3`    | 0.632 | 35.3 % | 14.9 % | 0.0 % |
+  | `tier4`    | 0.727 | 26.1 % |  2.9 % | 0.0 % |
+  | `buried`   | 0.580 | 40.5 % | 21.6 % | 0.0 % |
+  | `eco`      | 0.785 | 20.4 % |  0.0 % | 0.0 % |
+
+  `tier2` is identical to the T24 measurement, as it must be — it is the anchor,
+  where both T25 factors are exactly 1. Below its threshold a bin wastes nothing;
+  above it the loss is large. Realistic play is
   unaffected — the good-care season tops the bin toward a **quarter** full, and
   capped vs uncapped food accounting is identical (195.0 fed / 183.8 eaten /
   11.3 dropped L) with humus 91.6 vs 91.9 L. This is **intended** behaviour, not a
@@ -461,8 +540,8 @@ stops once `colonyAlive → false`):
 
 | # | Chain | Trigger → mechanism | Terminal state |
 |---|-------|---------------------|----------------|
-| 1 | **Leachate overflow** | Never draining: percolation fills the tank (`leachateCapacity`); once full, percolation backs up and leachate past capacity re-saturates the bedding — `spillMoisture = (leachate − leachateCapacity) × LEACHATE_SPILL_TO_MOISTURE (0.05)`, tank clamps at capacity. Moisture climbs ≥ 0.12 past the band. | Over-wetness mortality → colony death |
-| 2 | **Humus overflow** | Never harvesting: `humus ≥ humusCapacity` sets `trayFull`, halting all processing. The stranded queue rots anaerobically: `rotToxicity = strandedLiters × ROT_RATE (0.0002)` per tick. Toxicity climbs ≥ 0.4. | Toxicity mortality → colony death |
+| 1 | **Leachate overflow** | Never draining: percolation fills the tank (`leachateCapacity`); once full, percolation backs up and leachate past capacity re-saturates the bedding — `spillMoisture = (leachate − leachateCapacity) × LEACHATE_SPILL_TO_MOISTURE (0.05)`, then × `dilution` (§6.2); tank clamps at capacity. Moisture climbs ≥ 0.12 past the band. | Over-wetness mortality → colony death |
+| 2 | **Humus overflow** | Never harvesting: `humus ≥ humusCapacity` sets `trayFull`, halting all processing. The stranded queue rots anaerobically: `rotToxicity = strandedLiters × ROT_RATE (0.0002)` per tick, × `dilution` (§6.2). Toxicity climbs ≥ 0.4. | Toxicity mortality → colony death |
 | 3 | **Overfeeding** | A large fresh-food mass drives `fermentationHeat = FERMENT_COEF (0.35) × freshHeatMass`, spiking the temperature target — worse in the sun patch, at the wall's warm end (§6.1), or in a low-insulation model. Temperature passes 8 °C beyond the species band. | Overheat mortality → colony death |
 | 4 | **Only unsuitable food** | Feeding only high-toxicity items accrues toxicity faster than the removal paths clear it. Reproduction stalls first (toxicity stress ≥ 1 at 0.25), then mortality begins (toxicity ≥ 0.4). | Reproduction stall → toxicity mortality → colony death |
 

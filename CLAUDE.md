@@ -44,8 +44,10 @@ Cross-cutting modules: `js/strings.js` (ALL pt-BR user-facing strings — single
 - Version the save format and migrate old saves on load; never silently discard a player's save.
 - Fully static and self-contained: no CDN, no external network calls, works offline after first load.
 - `localStorage` only for game state — never cookies. No login/accounts in v1.
-- The add-waste food list deliberately mixes suitable and unsuitable foods **without labeling which is which** — discovery is gameplay; never label them.
+- The add-waste food list deliberately mixes suitable and unsuitable foods **without labeling which is which** — discovery is gameplay; never label them. This applies to `docs/` too — the reference docs describe each food's raw numbers in catalog order and never rank or judge them.
 - No tracking/analytics.
+- `docs/game-reference.md` (English) and `docs/game-reference-pt.md` (pt-BR) are a **matched pair** — same structure, same numbers, different prose language. Update both in the same commit or neither. Constants are transcribed from `js/sim/*` **after** a balance retune settles, never edited in one file alone.
+- Never re-derive a sim formula outside `js/sim/` — import it. A hand-copied `THROUGHPUT_CAP_PER_LITER` in a test went stale against the engine and silently inverted the invariant it was written to guard (see T25). Export a function and call it.
 
 **Ask the user first before:** adding any runtime dependency beyond vendored Three.js, introducing a backend or third-party service, changing the scoring formula or save schema after v1 ships, or adding a build step/toolchain.
 

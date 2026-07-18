@@ -20,6 +20,77 @@ import { scorePoints, applyHarvestScore } from './scoring.js';
 /** Smallest waste portion the player may add, in liters (§2.7). */
 export const MIN_PORTION_LITERS = 0.25;
 
+// Bin volume the whole model is calibrated against: `tier2`, the beginner tray
+// (js/sim/composters.js). Both capacity-relative expressions below — the
+// environment dilution and the throughput falloff — are anchored here, which is
+// what makes them affordable: `tier2` carries four of the five locked §2.8 chain
+// scenarios and the entire good-care envelope (tests/balance.test.js), and at the
+// anchor both factors are exactly 1, so every one of those runs is bit-identical.
+// Anchoring against raw capacity instead would rewrite every balance bound in the
+// project. The UI portion ladder shares this constant (js/ui/actions.js) so the
+// sim and the ladder can never drift onto two different anchors.
+export const BIN_REFERENCE_CAPACITY = 30;
+
+// --- Volume normalisation (T25) ---------------------------------------------
+// moisture/pH/toxicity are INTENSIVE state: concentrations in the bedding, not
+// totals. The food queue, though, contributes EXTENSIVE amounts — queueDynamics
+// (js/sim/foods.js) multiplies each food's per-liter numbers by its liters, which
+// is correct for "what this queue releases" but is not yet a concentration.
+// Dividing by the bin volume is the missing unit conversion.
+//
+// It became load-bearing when the UI portion ladder started scaling with capacity
+// (clicks-to-fill is a constant 8 on every bin, js/ui/actions.js). That made the
+// INPUT scale linearly with capacity while the state variable did not scale at
+// all, so the same "top rung" click meant very different things per bin: measured
+// on a mid-life colony, one click moved moisture +0.284 on tier2 (landing 0.784,
+// inside californiana's band) but +0.425 on eco (landing 0.925 — past the 0.85
+// comfort max and close to the 0.97 lethal line). Same action, same species, one
+// upgrade apart. Feeding a big bin now reads like feeding a small one.
+//
+// The balance suite could not catch this: its scenarios feed a FLAT 1.5 L
+// regardless of composter, so they never exercise the ladder that creates the
+// asymmetry. Same blind spot as T24 (pacing) — the harness locks outcomes on the
+// bins it scripts, not the ones the player actually upgrades into.
+//
+// APPLIED to everything dosed in liters against a per-liter strength — the food
+// queue AND `addSawdust`. Sawdust has the identical unit problem, and exempting
+// it would have made the drying/scrubbing lever stronger with every upgrade.
+//
+// NOT applied to fermentation heat (`dyn.freshHeatMass`): heat is genuinely a
+// property of the fermenting MASS rather than its concentration, and diluting it
+// would weaken the eco overfeeding-heat chain that §2.8 requires to stay lethal
+// (tests/balance.test.js locks it at 2-8 days). Nor to EVAP_COEF, which is a rate
+// on the concentration itself rather than a dose, so it is already intensive.
+// Nor to the setup bedding mix (`beddingEnv`), which is a volume-weighted average
+// and therefore intensive by construction.
+//
+// CLAMPED AT 1 — it dilutes large bins and never concentrates small ones. The
+// unclamped ratio would multiply the 20 L electric bin by 1.5, which is tempting
+// (less bedding to absorb the same spill, and it flatters the bin's "small and
+// unforgiving" identity) but was MEASURED as a real defect, not added character:
+// in the electric-vs-tier2 economic scenario (tests/production.test.js), which
+// deliberately never doses sawdust, electric saturated to moisture 1.0 and spent
+// 44% of a 30-day run outside the comfort band, collapsing its colony to 262
+// worms against tier2's 2736 and losing the T21-3 invariant that electric must
+// out-earn the cheaper tray at its 200-coin price.
+//
+// The asymmetry is principled rather than a fudge. Bins LARGER than the anchor
+// were over-concentrated by the old absolute formula — that is the bug being
+// fixed. Bins at or below the anchor were never the problem: the absolute model
+// was tuned around them, so pushing them further concentrated introduces a NEW
+// defect instead of correcting an old one. Clamping keeps this change a strict
+// relaxation for large bins, with exactly zero effect at or below the reference.
+/**
+ * The bin's volume-normalisation factor: how strongly a liter of food registers
+ * on the intensive env variables, relative to the calibrated `tier2` tray.
+ * @param {import('./composters.js').Composter|null} composter
+ * @returns {number} 1 at or below the reference capacity, < 1 for larger bins
+ */
+function envDilution(composter) {
+  if (!composter) return 1;
+  return Math.min(1, BIN_REFERENCE_CAPACITY / composter.capacity);
+}
+
 // Bin-environment dynamics constants (§2.5). First-pass; tuned at T8/T21.
 const NEUTRAL_PH = 7; // pH the bin eases back toward when nothing pushes it
 const PH_DRIFT_RATE = 0.02; // fraction of the gap to neutral closed per tick
@@ -113,11 +184,29 @@ const CONSUMPTION_PER_WORM = 0.0005; // liters of food a single active worm eats
 // closed form: an entry only ages out when the 48-tick eating budget cannot cover
 // the standing stock, i.e. when
 //
-//     fill > 48 × K × composter.speed × species.speed      (capacity cancels out)
+//     fill > DECOMP_TICKS × binThroughputCeiling(composter, species) / capacity
 //
-// At K = 0.014 with californiana that leak threshold is 0.538 of capacity for
-// tier2, 0.672 for tier3 and buried, 0.806 for tier4, 0.941 for eco, and above
-// 1 for electric — which therefore never wastes a drop at any fill.
+// This USED to reduce to `48 × K × composter.speed × species.speed`, with capacity
+// cancelling out entirely. T25 made the ceiling sublinear in capacity
+// (CAPACITY_THROUGHPUT_FALLOFF), so capacity no longer cancels and the threshold
+// carries a `(BIN_REFERENCE_CAPACITY / capacity) ** ALPHA` factor — bigger bins
+// now cross into unpaid rot at a slightly LOWER fill than they used to. Ask
+// `binThroughputCeiling` rather than re-deriving the reduced form; it is stale.
+//
+// Re-measured at T25 with californiana (pop pinned at carrying capacity, bin held
+// at a fixed fill, 30 days). The closed form predicts the leak/no-leak boundary
+// exactly in all 18 model x fill cases:
+//
+//   model     threshold   dropped @100%   dropped @75%   dropped @50%
+//   electric  >1 (never)       0.0%           0.0%           0.0%
+//   tier2       0.538         44.7%          27.1%           0.0%
+//   tier3       0.632         35.3%          14.9%           0.0%
+//   tier4       0.727         26.1%           2.9%           0.0%
+//   buried      0.580         40.5%          21.6%           0.0%
+//   eco         0.785         20.4%           0.0%           0.0%
+//
+// tier2 is unchanged from the T24 measurement (0.538 / 44.7% / 27.1%), as it must
+// be — it is the anchor, where both T25 factors are exactly 1.
 //
 // So the cost is FILL-DEPENDENT, negligible low down and substantial at the top:
 //
@@ -128,12 +217,12 @@ const CONSUMPTION_PER_WORM = 0.0005; // liters of food a single active worm eats
 //     moves (1962.8 -> 1957.6). That scenario is supply-limited, not throughput-
 //     limited: the cap changes the PACE of eating, not the total eaten.
 //
-//   - High fill: a large share of fed waste now rots unpaid. Population pinned at
-//     carryingCapacity, tray harvested and tank drained every tick, 30 game days,
-//     bin topped back to FULL every tick — tier2 drops 208.1 L of the 465.8 L fed
-//     (44.7%, against 3.8% uncapped); tier3 and buried 31.4% (0% uncapped); tier4
-//     18.4% (0%); eco 5.6% (0%). At 75% fill: tier2 27.1%, tier3/buried 9.8%,
-//     the rest still 0%.
+//   - High fill: a large share of fed waste rots unpaid — the table above. The
+//     T25 falloff moved the non-anchor models: at full fill tier3 went 31.4% ->
+//     35.3%, buried 31.4% -> 40.5%, tier4 18.4% -> 26.1% and eco 5.6% -> 20.4%,
+//     because a lower ceiling clears the standing stock more slowly. tier2 is
+//     unchanged at 44.7%. Bigger bins are no longer near-immune to this, which is
+//     the intended shape: their size advantage now carries a real upkeep cost.
 //
 // WHY THE ORIGINAL HALF-FILL PROBE COULD NOT SEE THIS — do not re-run it and
 // conclude the cap is cheap. It held the bin at HALF capacity, which is below the
@@ -158,7 +247,37 @@ const CONSUMPTION_PER_WORM = 0.0005; // liters of food a single active worm eats
 // fed waste is expiring uneaten, so a bin held near full quietly pays less per
 // liter fed with nothing in the UI to say so. (b) is an open follow-up recorded
 // in tasks/t21-balance.md (T24) — it is a UI gap, not a constant to retune.
-const THROUGHPUT_CAP_PER_LITER = 0.014; // liters/tick eaten per liter of bin capacity
+export const THROUGHPUT_CAP_PER_LITER = 0.014; // liters/tick eaten per liter of bin capacity
+
+// --- Diminishing returns on bin size (T25) ----------------------------------
+// The ceiling above is per-liter-of-capacity, so a bigger bin turned over
+// proportionally more food — and since the catalog ALSO gives larger models a
+// higher `speed` and `humusRate`, and carryingCapacity is linear in capacity,
+// upgrading improved every axis at once. A mature `eco` out-produced `tier2` by
+// ~2.1x per liter of capacity and ~7x in absolute terms. Upgrading should pay,
+// but not compound like that.
+//
+// This bends the ceiling sublinear in capacity: the working face grows more
+// slowly than the box does, which is the same "only so many worms fit at the
+// interface" reading the ceiling already has — a bin twice the volume does not
+// get twice the usable surface. Anchored at BIN_REFERENCE_CAPACITY, so `tier2` is
+// exactly unchanged and only the models around it move:
+//
+//   electric 1.063 | tier2 1.000 | tier3 0.941 | tier4 0.901 | buried 0.863 | eco 0.835
+//
+// Deliberately gentle (the ask was "a little smaller"), and it touches the
+// CEILING only, never the linear branch — so the early game, and the rule that
+// more worms process more food, are untouched. carryingCapacity stays linear in
+// capacity too: this is about production rate, not colony size.
+//
+// COST, accepted knowingly: the DECOMP_TICKS wastage threshold documented above
+// is no longer closed-form in the way it was. It used to be
+//     fill > 48 × K × composter.speed × species.speed        (capacity CANCELS)
+// and with the falloff the capacity no longer cancels:
+//     fill > 48 × K × speed × species.speed × (30/capacity) ** ALPHA
+// so bigger bins now cross into unpaid rot at a slightly LOWER fill. The
+// per-model thresholds quoted above are re-measured against this form.
+const CAPACITY_THROUGHPUT_FALLOFF = 0.15;
 
 // Tray-full chain (§2.8): once the humus tray is full processing halts; the
 // undrained queue then rots anaerobically, raising toxicity in proportion to the
@@ -211,9 +330,32 @@ function clamp(x, lo, hi) {
  */
 function eatingThroughput(active, species, composter) {
   const linear = active * species.speed * composter.speed * CONSUMPTION_PER_WORM;
-  const ceiling =
-    composter.capacity * composter.speed * species.speed * THROUGHPUT_CAP_PER_LITER;
-  return Math.min(linear, ceiling);
+  return Math.min(linear, binThroughputCeiling(composter, species));
+}
+
+/**
+ * The most food a full bin can turn over in one tick, however many worms are in
+ * it — the ceiling term of `eatingThroughput`, exported so the UI and the tests
+ * can ask the engine instead of re-deriving the formula. That re-derivation is
+ * not hypothetical: `tests/actions.test.js` carried a hand-copied
+ * `THROUGHPUT_CAP_PER_LITER = 0.02` against the engine's 0.014 from the moment
+ * the constant was tuned, and the stale copy silently inverted the invariant it
+ * was written to guard. One exported function, no mirrors.
+ * @param {import('./composters.js').Composter} composter
+ * @param {import('./worms.js').Species} species
+ * @returns {number} liters per tick
+ */
+export function binThroughputCeiling(composter, species) {
+  // Sublinear in capacity: the working face grows more slowly than the box.
+  const falloff =
+    (BIN_REFERENCE_CAPACITY / composter.capacity) ** CAPACITY_THROUGHPUT_FALLOFF;
+  return (
+    composter.capacity *
+    falloff *
+    composter.speed *
+    species.speed *
+    THROUGHPUT_CAP_PER_LITER
+  );
 }
 
 /**
@@ -468,14 +610,24 @@ export function addFood(state, foodId, liters) {
  * toxicity clamp, sawdust on an already-clean bin would drive `env.toxicity`
  * negative and that would surface in the UI's internals gauge, which is drawn on
  * a 0..1 domain.
+ *
+ * VOLUME-NORMALISED like the food queue (`envDilution`), and for the same reason:
+ * a dose is given in LITERS against per-liter strengths, so it is an extensive
+ * amount landing on an intensive variable. Exempting it would have quietly made
+ * sawdust a stronger lever with every upgrade — the UI already scales the click
+ * with capacity (0.5 L on tier2, 1.75 L on eco), so an undiluted dose would dry a
+ * big bin in roughly a third of the clicks the anchor bin needs, and hand over
+ * the toxicity scrub at the same discount. Diluting both keeps the food/sawdust
+ * ratio the calibration was tuned around identical on every model.
  * @param {FarmState} state
  * @param {number} liters sawdust volume added
  * @returns {FarmState}
  */
 export function addSawdust(state, liters) {
   if (!(liters > 0)) return state;
-  const moisture = clamp01(state.env.moisture - SAWDUST_DRY_PER_LITER * liters);
-  const toxicity = clamp01(state.env.toxicity - SAWDUST_TOX_PER_LITER * liters);
+  const dilution = envDilution(getComposter(state.composterId));
+  const moisture = clamp01(state.env.moisture - SAWDUST_DRY_PER_LITER * liters * dilution);
+  const toxicity = clamp01(state.env.toxicity - SAWDUST_TOX_PER_LITER * liters * dilution);
   return { ...state, env: { ...state.env, moisture, toxicity } };
 }
 
@@ -548,6 +700,11 @@ export function tick(state, rng) {
 
   const composter = getComposter(state.composterId);
   const species = getSpecies(state.speciesId);
+  // Converts the queue's EXTENSIVE contributions (liters x per-liter numbers)
+  // into the INTENSIVE concentrations the env variables actually are. Applied in
+  // one place, at the env computation below, so no contributing term can be
+  // silently left on the wrong unit.
+  const dilution = envDilution(composter);
 
   // Worm consumption, production, and the two overflow chains (§2.6, §2.8).
   // Consumption uses the PRE-tick population (order-independent from the cohort
@@ -663,9 +820,13 @@ export function tick(state, rng) {
   // negative per-liter toxicity, so a queue full of them subtracts here. That
   // plus `addSawdust` are the only paths that remove toxicity faster than
   // TOX_DECAY_RATE; the clamp below is what keeps a clean bin pinned at zero.
+  // Every queue-sourced term is volume-normalised (see envDilution); evaporation
+  // is not, because it already acts on the concentration scale.
   const evaporation = EVAP_COEF * Math.max(0, state.env.temperature - EVAP_THRESHOLD);
   let moisture = clamp01(
-    state.env.moisture + dyn.moisture + eatenMoisture + spillMoisture - evaporation,
+    state.env.moisture +
+      (dyn.moisture + eatenMoisture + spillMoisture) * dilution -
+      evaporation,
   );
 
   // Percolation (§2.8, the leachate chain): bedding water above field capacity
@@ -686,12 +847,12 @@ export function tick(state, rng) {
     }
   }
   const ph = clamp(
-    state.env.ph + (NEUTRAL_PH - state.env.ph) * PH_DRIFT_RATE + dyn.phPush,
+    state.env.ph + (NEUTRAL_PH - state.env.ph) * PH_DRIFT_RATE + dyn.phPush * dilution,
     0,
     14,
   );
   const toxicity = clamp01(
-    state.env.toxicity * (1 - TOX_DECAY_RATE) + dyn.toxicity + rotToxicity,
+    state.env.toxicity * (1 - TOX_DECAY_RATE) + (dyn.toxicity + rotToxicity) * dilution,
   );
 
   // Temperature: blend toward the environment target for the new hour. The two

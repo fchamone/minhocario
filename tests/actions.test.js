@@ -12,9 +12,17 @@ import {
   WARN_FILL,
 } from '../js/ui/actions.js';
 import { FOODS } from '../js/sim/foods.js';
-import { MIN_PORTION_LITERS, createInitialFarmState, addFood } from '../js/sim/engine.js';
+import {
+  MIN_PORTION_LITERS,
+  createInitialFarmState,
+  addFood,
+  tick,
+  buyWormPack,
+  binThroughputCeiling,
+} from '../js/sim/engine.js';
 import { getComposter, listComposters } from '../js/sim/composters.js';
 import { getSpecies, carryingCapacity } from '../js/sim/worms.js';
+import { createRng } from '../js/sim/rng.js';
 import { setLang } from '../js/strings.js';
 
 // --- The add-waste list carries ZERO suitability signal (spec §2.7) ----------
@@ -92,20 +100,55 @@ test('the smallest rung stays at the engine minimum on the anchor bin', () => {
 test('the largest rung is a meaningful fraction of a full bin appetite', () => {
   // The gap this ladder corrects: food DEMAND scales with capacity x DENSITY
   // (50 worms/L) and is bounded by the engine's per-tick throughput ceiling, so
-  // a full bin eats roughly `capacity * speed * THROUGHPUT_CAP_PER_LITER * 24`
-  // liters per game day. A rung that scales with capacity ALONE falls behind
-  // that, which is what made the old 4-unit top rung ~19% of an `eco` day.
-  const THROUGHPUT_CAP_PER_LITER = 0.02; // mirrors js/sim/engine.js
+  // a full bin eats `binThroughputCeiling(...) * 24` liters per game day. A rung
+  // that scales with capacity ALONE falls behind that, which is what made the old
+  // 4-unit top rung ~19% of an `eco` day.
+  //
+  // The ceiling comes from the ENGINE, never a local copy. This test used to
+  // hand-mirror `THROUGHPUT_CAP_PER_LITER = 0.02` while the engine held 0.014 —
+  // stale from the commit that tuned it — and the wrong copy inverted the result:
+  // it reported every model under a full day when two were over it.
   const TICKS_PER_DAY = 24;
+  const species = getSpecies('californiana'); // the beginner default pairing
   for (const composter of listComposters()) {
-    const dailyDemand =
-      composter.capacity * composter.speed * THROUGHPUT_CAP_PER_LITER * TICKS_PER_DAY;
+    const dailyDemand = binThroughputCeiling(composter, species) * TICKS_PER_DAY;
     const top = portionOptions(composter.capacity).at(-1);
     const share = top / dailyDemand;
     assert.ok(share >= 0.35, `${composter.id}: top rung is only ${(share * 100).toFixed(0)}% of a day`);
-    // Still under a full day on every model: walking into the §2.8 overfeeding
-    // chain must stay a choice, not something one mis-click delivers.
-    assert.ok(share < 1, `${composter.id}: one click covers a whole game day`);
+    // NOT asserted: `share < 1`. The top rung deliberately exceeds a full-bin
+    // game-day for californiana on the slower bins (measured tier2 1.24, buried
+    // 1.16, tier3 1.05) — see the ladder rationale in js/ui/actions.js, which
+    // measured that before raising the rung. A single click outrunning a mature
+    // colony's daily appetite is the intended "one click is a real meal", and
+    // what actually keeps a mis-click safe is the CAPACITY bound (next test) plus
+    // the survivability check below, neither of which the speed traits touch.
+    assert.ok(share < 2, `${composter.id}: top rung is an absurd ${share.toFixed(2)} days`);
+  }
+});
+
+test('one top-rung click cannot by itself kill a farm (§2.8 stays a sustained choice)', () => {
+  // The real form of the invariant the stale-mirror test was reaching for. The
+  // overfeeding chain must be something a player walks into by repeated choice,
+  // never something one press delivers — so assert the BEHAVIOUR by simulation
+  // rather than a ratio proxy that never matched the shipped ladder.
+  for (const composter of listComposters()) {
+    for (const seed of [1, 7, 42]) {
+      let s = createInitialFarmState({
+        seed,
+        composterId: composter.id,
+        speciesId: 'californiana',
+        wallPosition: 0.3,
+        hotSide: 0,
+      });
+      ({ state: s } = buyWormPack(s, 100000, 'californiana', 50));
+      s = addFood(s, 'vegetableScraps', portionOptions(composter.capacity).at(-1));
+      const rng = createRng(s.rngState);
+      for (let t = 0; t < 10 * 24; t++) s = tick(s, rng);
+      assert.ok(
+        s.colonyAlive,
+        `${composter.id} seed ${seed}: one top-rung click killed the colony`,
+      );
+    }
   }
 });
 

@@ -553,3 +553,209 @@ and locked by a 300-tick regression test that mangles `rngState` on purpose.
 
 No save-version bump: the field is additive and optional, and pre-gradient saves
 resolve through `hotSideOf` rather than being refused. Scoring formula untouched.
+
+---
+
+# T25 — Volume-normalised environment + sublinear big-bin throughput
+
+> Method as above: headless scenarios through `tick()` with a seeded RNG. Suite
+> after this pass: **282 green** (`node --test tests/*.test.js`). No scoring
+> formula and no save-schema change — the CP9 freeze is unaffected.
+
+## The problem — created by a UI fix, invisible to the whole suite
+
+`cdfa5d5` scaled the waste/sawdust ladder with bin capacity so upkeep effort
+stays constant across upgrades (clicks-to-fill is a constant 8 on every bin).
+That was right for the UI, and its own commit message named the consequence
+exactly:
+
+> `queueDynamics` multiplies each food's moisture/pH/toxicity by its liters and
+> never divides by capacity, so the sim environment is absolute and a bigger bin
+> does **NOT** dilute a feeding.
+
+So the INPUT side began scaling linearly with capacity while the state variable
+did not scale at all. `moisture`, `ph` and `toxicity` are intensive —
+concentrations in the bedding — but the queue contributes extensive amounts
+(liters × per-liter strength). The missing unit conversion is a division by bin
+volume.
+
+Measured on a mid-life colony (half carrying capacity), one top-rung click:
+
+| bin | capacity | top rung | moisture delta | lands at |
+|---|---:|---:|---:|---:|
+| electric | 20 | 7 L | +0.294 | 0.794 |
+| tier2 | 30 | 10 L | +0.284 | 0.784 |
+| tier3 | 45 | 15 L | +0.329 | 0.829 |
+| tier4 | 60 | 20 L | +0.380 | 0.880 |
+| buried | 80 | 27 L | +0.411 | 0.911 |
+| **eco** | 100 | 33 L | **+0.425** | **0.925** |
+
+Same action, same species, a few upgrades apart: on `tier2` it lands inside
+californiana's 0.40–0.85 band, on `eco` it lands at 0.925 — past the comfort max
+and close to the 0.97 lethal line.
+
+**The balance suite could not catch this, and that is the reusable lesson.**
+Every scenario feeds a FLAT 1.5 L regardless of composter, so none of them ever
+exercises the ladder that creates the asymmetry. T24's blind spot was pacing;
+this one is the same shape — the harness locks outcomes on the bins it scripts,
+not on the ones the player actually upgrades into. Both defects were found in
+play with the suite fully green.
+
+## Lever chosen: anchor both capacity-relative factors on `tier2`
+
+```
+BIN_REFERENCE_CAPACITY = 30                       // js/sim/engine.js
+envDilution(c)  = min(1, 30 / c.capacity)         // §6 env inputs
+falloff(c)      = (30 / c.capacity) ** 0.15       // §8 throughput ceiling
+```
+
+Anchoring is what made this affordable rather than a project-wide re-tune.
+`tier2` carries four of the five locked §2.8 chain scenarios and the entire
+good-care envelope; at the anchor both factors are exactly 1, so every one of
+those runs is **bit-identical**. Verified by diffing a full 65-day per-model
+fingerprint before and after: `tier2` matches on all twelve tracked fields
+(endPop 1964, crowd 1.261, maxMoist 0.7166, minMoist 0.4958, maxTemp 32.964,
+score 1955.11, wallet 1322.681776) and on the high-fill table (fed 465.8, humus
+121.0, leachate 242.9).
+
+Dividing by raw capacity instead — the obvious implementation — hard-fails the
+leachate chain, the overfeeding-shade chain, the humus chain's drying floor and
+the whole good-care envelope. That is not a tuning wobble, it is a rewrite of
+every balance bound in the project.
+
+### Why the clamp at 1 (and why it is not a fudge)
+
+The unclamped ratio CONCENTRATES the 20 L `electric` bin by 1.5×. That is
+physically coherent and flattering to the bin's identity, and it was **measured
+as a real defect**: in the electric-vs-tier2 economic scenario
+(`tests/production.test.js`), which deliberately never doses sawdust, electric
+saturated to moisture **1.0** and spent **44.2 %** of a 30-day run outside the
+comfort band, collapsing its colony to 262 worms against tier2's 2736 and losing
+the T21-3 invariant that electric must out-earn the cheaper tray at its 200-coin
+price.
+
+The asymmetry is principled. Bins LARGER than the anchor were over-concentrated
+by the old absolute formula — that is the bug. Bins at or below it were never the
+problem: the absolute model was tuned around them, so pushing them further
+concentrated introduces a NEW defect instead of correcting an old one. Clamping
+keeps the change a strict relaxation for large bins, with exactly zero effect at
+or below the reference.
+
+### Sawdust is diluted too — the plan said otherwise and the plan was wrong
+
+The approved plan exempted `addSawdust`, reasoning that sawdust "already acts on
+the concentration scale". It does not: a dose is `liters × SAWDUST_DRY_PER_LITER`,
+an extensive amount landing on an intensive variable — the identical unit error.
+Left exempt, and with the UI already scaling the click with capacity (0.5 L on
+tier2, 1.75 L on eco), a wet `eco` bin would dry in roughly a THIRD of the clicks
+the anchor bin needs, and the toxicity scrub would come at the same discount.
+Diluting both keeps the food/sawdust ratio the calibration was tuned around.
+
+`freshHeatMass` is NOT diluted: heat is a property of the fermenting mass rather
+than its concentration, and diluting it would weaken the `eco` overfeeding-heat
+chain §2.8 requires to stay lethal. `EVAP_COEF` is a rate on the concentration
+itself, and the setup bedding mix is a volume-weighted average — both already
+intensive.
+
+## Measured: the fix
+
+Food, one top-rung click — spread collapses from **1.50× to 1.06×**:
+
+| bin | before | after |
+|---|---:|---:|
+| electric | +0.294 | +0.294 |
+| tier2 | +0.284 | +0.284 |
+| tier3 | +0.329 | +0.290 |
+| tier4 | +0.380 | +0.299 |
+| buried | +0.411 | +0.294 |
+| eco | +0.425 | +0.302 |
+
+Sawdust, one click: −0.019 … −0.021 across tier2–eco (electric −0.010, its click
+rounds down to 0.25 L on the snap grid — pre-existing UI behaviour).
+
+## Measured: diminishing returns on size
+
+`CAPACITY_THROUGHPUT_FALLOFF = 0.15`, deliberately gentle ("a little smaller").
+Applied to the CEILING only, never the linear branch, so it bites only past the
+56 % engagement point and leaves "more worms process more food" intact.
+`carryingCapacity` stays linear in capacity — this is about production rate, not
+colony size. Steady-state humus per liter of capacity, population pinned:
+
+| model | before | after | change |
+|---|---:|---:|---:|
+| electric | 13.366 | 14.204 | +6.3 % |
+| tier2 | 4.032 | 4.032 | — (anchor) |
+| tier3 | 5.242 | 4.932 | −5.9 % |
+| tier4 | 6.653 | 5.996 | −9.9 % |
+| buried | 5.846 | 5.047 | −13.7 % |
+| eco | 8.467 | 7.068 | −16.5 % |
+
+Each lands exactly on its `(30/capacity) ** 0.15` factor, as it must.
+
+### The cost, accepted knowingly and re-derived
+
+The `DECOMP_TICKS` wastage threshold was closed-form BECAUSE capacity cancelled:
+`fill > 48 × K × composter.speed × species.speed`. With the falloff it does not
+cancel, so the reduced form is stale and the general form must be used:
+
+```
+fill > DECOMP_TICKS × binThroughputCeiling(composter, species) / capacity
+```
+
+Re-measured with the T24-corrected methodology (population pinned at carrying
+capacity, bin held at a fixed fill, 30 days — NOT the half-fill probe, which is
+structurally blind). The closed form predicts the leak boundary exactly in all
+**18** model × fill cases:
+
+| model | threshold | @100 % | @75 % | @50 % |
+|---|---:|---:|---:|---:|
+| electric | >1 (never) | 0.0 % | 0.0 % | 0.0 % |
+| tier2 | 0.538 | 44.7 % | 27.1 % | 0.0 % |
+| tier3 | 0.632 | 35.3 % | 14.9 % | 0.0 % |
+| tier4 | 0.727 | 26.1 % | 2.9 % | 0.0 % |
+| buried | 0.580 | 40.5 % | 21.6 % | 0.0 % |
+| eco | 0.785 | 20.4 % | 0.0 % | 0.0 % |
+
+`tier2` reproduces the T24 figures (0.538 / 44.7 % / 27.1 %) exactly — the anchor
+holding, and an independent check on the probe. Bigger bins are no longer
+near-immune to unpaid rot (eco 5.6 % → 20.4 % at full fill), which is the intended
+shape: their size advantage now carries a real upkeep cost.
+
+## A stale mirrored constant, found on the way
+
+`tests/actions.test.js` declared `const THROUGHPUT_CAP_PER_LITER = 0.02` "mirrors
+js/sim/engine.js" while the engine held **0.014** — stale from the very commit
+(`a0579a6`) that tuned it. The wrong copy inverted the invariant it guarded: at
+the real value the top rung is **124 %** of a full-bin game-day on `tier2` and
+100 % on `buried`, so `assert.ok(share < 1)` was passing only because the number
+was wrong. `js/ui/actions.js` had measured and documented this correctly all
+along, so source and test openly contradicted each other.
+
+Resolution — the ladder is RIGHT and the test was wrong. The T24 author measured
+a single top-rung click across seeds 1/7/42 before widening the rung and recorded
+that it stays survivable; "one click is a real meal" is the intent. So:
+
+- `binThroughputCeiling(composter, species)` is now **exported from the engine**
+  and the test calls it. A mirror is no longer possible — which matters more than
+  this one fix, since the falloff means any hand-copied formula is now wrong in
+  two ways at once.
+- `share < 1` is replaced by the honest bound `share < 2` plus a **behavioural**
+  test that asserts the actual design rule by simulation: one top-rung click, on
+  every model, across seeds 1/7/42, never kills the colony. §2.8 stays a sustained
+  choice rather than a mis-click.
+- A new rule in `CLAUDE.md`: never re-derive a sim formula outside `js/sim/`.
+
+## Summary of changes
+
+| file | change |
+|---|---|
+| `js/sim/engine.js` | `BIN_REFERENCE_CAPACITY = 30`, `envDilution` (clamped), `CAPACITY_THROUGHPUT_FALLOFF = 0.15`, `binThroughputCeiling` exported; dilution applied to moisture/pH/toxicity inputs and to `addSawdust`; wastage block re-derived |
+| `js/ui/actions.js` | anchor imported from the engine instead of a second `30`; ladder rationale corrected (the "environment is ABSOLUTE" note is now the opposite) |
+| `tests/actions.test.js` | stale `0.02` mirror replaced by `binThroughputCeiling`; `share < 1` → `share < 2` + new one-click survivability test |
+| `tests/foods.test.js` | remediator test pinned to the reference bin; new assertion that the toxic/remediator RATIO holds in a large bin too |
+| `docs/game-reference.md` | §2 factor table, §6.2/6.3/6.4 dilution, §8 falloff + re-derived wastage table, chain rows 1–2 |
+| `docs/game-reference-pt.md` | **new** — pt-BR counterpart, matched pair |
+| `CLAUDE.md` | doc-pair rule; no-re-derived-formulas rule |
+
+Scoring formula and save schema untouched. Score values move as a second-order
+effect of throughput on non-anchor bins, which is not a formula change.

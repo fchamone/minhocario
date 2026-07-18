@@ -202,6 +202,18 @@ Execute spec §6 manual checklist (desktop + one mobile browser: render, day/nig
 - **Verify:** `npx serve <deploy-copy>` + checklist; final `node --test tests/`.
 - **Deps:** T21, T21b, T22. **Files:** none new (fixes route to owning modules). Exclude `docs/` from the deploy copy alongside `tests/`, `.harn/`, `.claude/` (or keep it — it is static and harmless; decide at the dry run).
 
+### T25. Volume-normalised environment + sublinear big-bin throughput — M
+The capacity-scaled portion ladder (`cdfa5d5`) made the food INPUT scale with capacity while `moisture`/`ph`/`toxicity` — which are *concentrations* — did not scale at all, so a bigger bin did not dilute a feeding: one top-rung click moved moisture +0.284 on `tier2` but +0.425 on `eco`. `envDilution` (clamped at 1, anchored on `BIN_REFERENCE_CAPACITY = 30`) divides every liters-dosed input by bin volume — the food queue **and** `addSawdust`, which has the identical unit error. Separately, `CAPACITY_THROUGHPUT_FALLOFF = 0.15` bends the throughput ceiling sublinear in capacity so larger models earn a little less per liter, since they were previously better on every axis at once.
+- **AC:** one top-rung click moves moisture within a narrow band on every model (measured 1.06× spread, was 1.50×); larger bins produce measurably less humus per liter of capacity; `tier2` runs are **bit-identical** so all five §2.8 windows and the good-care envelope hold unchanged; the `DECOMP_TICKS` wastage thresholds are re-derived (capacity no longer cancels); no scoring-formula or save-schema change.
+- **Verify:** `node --test tests/*.test.js`; per-model 65-day fingerprint diffed before/after for `tier2` bit-identity; high-fill wastage probe (population pinned, T24-corrected methodology) across 18 model × fill cases.
+- **Deps:** T24. **Files:** `js/sim/engine.js`, `js/ui/actions.js`, `tests/{actions,foods}.test.js`, `docs/game-reference.md`, `CLAUDE.md`.
+
+### T25b. Portuguese reference doc — S/M
+`docs/game-reference-pt.md`: full pt-BR counterpart of `docs/game-reference.md`, same structure/numbers/citations, identifiers left in code form, and the §4 anti-spoiler rule preserved in both languages. Written **after** T25 settles the constants so no stale numbers ship (same discipline as T21b).
+- **AC:** structural parity (same sections, tables, formula blocks); every number matches its source module; no food suitability verdicts in either language; `CLAUDE.md` carries the matched-pair rule.
+- **Verify:** cross-read against the English original and against `js/sim/*`.
+- **Deps:** T25. **Files:** `docs/game-reference-pt.md` (new), `CLAUDE.md`.
+
 > **CP9 (after T23):** ship gate — human sign-off vs spec acceptance criteria; scoring formula + save schema freeze ("ask first" from here).
 
 ---

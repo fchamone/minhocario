@@ -261,7 +261,13 @@ test('a remediator is inert in a clean bin — it cannot bank negative headroom'
 test('a remediator roughly offsets a toxic feeding at its catalog ratio', () => {
   // meat +0.15/L against eggshells -0.05/L => ~3 L of eggshells per liter of
   // meat. Fed together, the pair should very nearly cancel.
-  const base = createInitialFarmState({ seed: 1, composterId: 'tier4' });
+  //
+  // Pinned to `tier2`, the bin the environment model is calibrated against
+  // (BIN_REFERENCE_CAPACITY, js/sim/engine.js). Since T25 the env variables are
+  // CONCENTRATIONS — a food's load is divided by the bin volume — so the absolute
+  // magnitude assertion below is only meaningful against a known capacity. It ran
+  // on `tier4` before, where a liter of meat now registers at half strength.
+  const base = createInitialFarmState({ seed: 1, composterId: 'tier2' });
   const dirty = { ...base, env: { ...base.env, toxicity: 0.3 } };
 
   let s = addFood(dirty, 'meat', 2);
@@ -273,6 +279,20 @@ test('a remediator roughly offsets a toxic feeding at its catalog ratio', () => 
   assert.ok(
     Math.abs(together.env.toxicity - 0.3) < 0.05,
     `the pair roughly cancels near the starting 0.3: ${together.env.toxicity}`,
+  );
+
+  // The RATIO is bin-independent even though the magnitudes are not: dilution
+  // scales the toxic load and the remediating load by the same factor, so the
+  // cancellation has to hold in the largest bin too. This is the property that
+  // keeps remediation a usable lever after an upgrade.
+  const bigBase = createInitialFarmState({ seed: 1, composterId: 'eco' });
+  const bigDirty = { ...bigBase, env: { ...bigBase.env, toxicity: 0.3 } };
+  let big = addFood(bigDirty, 'meat', 2);
+  big = addFood(big, 'eggshells', 6);
+  const bigTogether = run(big, DECOMP_TICKS);
+  assert.ok(
+    Math.abs(bigTogether.env.toxicity - 0.3) < 0.05,
+    `the pair cancels in a large bin as well: ${bigTogether.env.toxicity}`,
   );
 });
 

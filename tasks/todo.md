@@ -70,6 +70,23 @@
       season score 1962.8 → 1957.6, all five §2.8 chain days unchanged. Scoring formula and
       save schema untouched (CP9 freeze unaffected). Suite 256 green. Measurements in
       `tasks/t21-balance.md` (T24 section).
+- [x] **T25** Volume-normalised environment + sublinear big-bin throughput (M) — deps: T24
+      Found IN PLAY again, suite fully green: the capacity-scaled portion ladder (cdfa5d5)
+      made the INPUT scale with capacity while `moisture`/`ph`/`toxicity` — concentrations —
+      did not scale at all, so one top-rung click moved moisture +0.284 on `tier2` but
+      +0.425 on `eco` (landing 0.925, past the comfort max). `envDilution` divides every
+      liters-dosed input (food queue AND sawdust) by bin volume; `CAPACITY_THROUGHPUT_FALLOFF`
+      bends the throughput ceiling sublinear so bigger bins earn a little less per liter
+      (eco −16.5 %, buried −13.7 %, tier4 −9.9 %). Both anchored on `BIN_REFERENCE_CAPACITY`
+      = 30 (`tier2`), so all five §2.8 windows and the good-care envelope are **bit-identical**
+      — verified by diff. Click spread 1.50× → 1.06×. Also fixed a stale
+      `THROUGHPUT_CAP_PER_LITER = 0.02` mirror in `tests/actions.test.js` (engine: 0.014) that
+      was inverting the invariant it guarded; the ceiling is now an exported function so a
+      mirror is impossible. Scoring formula and save schema untouched (CP9 freeze unaffected).
+      Suite 282 green. Measurements in `tasks/t21-balance.md` (T25 section).
+- [x] **T25b** `docs/game-reference-pt.md` — pt-BR counterpart of the reference doc (S/M) — deps: T25
+      Matched pair with the English original: same structure, same numbers, different prose.
+      Sync is convention-enforced via a rule in `CLAUDE.md` (update both or neither).
 - [ ] **CP9** — ship gate: human sign-off vs spec acceptance criteria; scoring + save schema freeze
 
 ## Change C-0002 — Multi-language (i18n): pt-BR / en / es

@@ -33,6 +33,7 @@ import {
   WORM_PACK_SIZES,
   wormPackPrice,
   absoluteTick,
+  BIN_REFERENCE_CAPACITY,
 } from '../sim/engine.js';
 
 /** How many queue entries the panel previews; the rest are counted, not hidden. */
@@ -55,30 +56,30 @@ export const QUEUE_PREVIEW_LIMIT = 6;
 //
 // The TOP of the ladder is a different problem, and scaling with capacity alone
 // did not solve it. Food DEMAND scales with capacity × DENSITY (50 worms/L,
-// worms.js) and is then bounded by the engine's per-tick throughput ceiling
-// (`capacity × composter.speed × species.speed × THROUGHPUT_CAP_PER_LITER`) — so
-// a FULL bin's appetite is `capacity × composter.speed × species.speed × 0.336`
-// liters per game day (THROUGHPUT_CAP_PER_LITER 0.014 × 24 ticks), while a
-// portion rung is only `capacity × step / 30`. Capacity cancels out of that
-// ratio entirely, so what a rung is WORTH depends only on the two speed traits.
-// At the old 4-unit top rung it was ~20-28% of a full `eco` game-day (13 L
-// against 47-66 L, species-dependent) and ~16-22% on `electric` — four to six
-// clicks to cover one day of a mature colony. Raising the top rung to 10 units
-// puts it at 44-124% of a full-bin game-day across the catalog: the floor is
-// africana (fastest eater, speed 1.4) in `electric` (fastest bin, speed 1.7) at
-// 44%, the ceiling is californiana (speed 1.0) in `tier2` (speed 0.8) at 124%.
-// One click is now a real meal, not a garnish.
+// worms.js) and is then bounded by the engine's per-tick throughput ceiling, so a
+// FULL bin's appetite is `binThroughputCeiling(composter, species) × 24` liters
+// per game day, while a portion rung is only `capacity × step / 30`. At the old
+// 4-unit top rung the rung was ~20-28% of a full `eco` game-day and ~16-22% on
+// `electric` — four to six clicks to cover one day of a mature colony. At 10
+// units it is a real meal, not a garnish.
 //
-// Where that actually lands, without varnish: only for africana does the whole
-// catalog stay under one full-bin day (44-89%). For californiana — the BEGINNER
-// DEFAULT, and the pairing a new player has on the 100-coin `tier2` — the rung is
-// 61% (`electric`) to 124% (`tier2`) of a full-bin day, and it exceeds a full day
-// on `tier2` (124%) and `buried` (100%). So a single top-rung click CAN outrun a
-// mature default colony's daily appetite. That is measured, not assumed, and it
-// was checked before the rung was raised: a fresh tier2/californiana farm given
-// one top-rung click across seeds 1/7/42 stays survivable and comes out net
-// beneficial, so the ladder stands as-is. The §2.8 overfeeding chain remains a
-// designed failure the player walks into by sustained choice, not by one press.
+// Ask the ENGINE for that ceiling (`binThroughputCeiling`), never re-derive it
+// here or in a test. The ratio used to be capacity-free — capacity cancelled, so
+// a rung's worth depended only on the two speed traits — but T25 made the ceiling
+// sublinear in capacity (CAPACITY_THROUGHPUT_FALLOFF), so capacity no longer
+// cancels and any hand-copied formula is now wrong in two ways at once.
+//
+// Where that actually lands, without varnish (californiana, the BEGINNER DEFAULT
+// and the pairing a new player has on the 100-coin `tier2`): the top rung runs
+// 58% (`electric`) to 124% (`tier2`) of a full-bin game-day, and it EXCEEDS a
+// full day on `tier2` (1.24), `buried` (1.16) and `tier3` (1.05). So a single
+// top-rung click can outrun a mature default colony's daily appetite. That is
+// measured, not assumed, and it was checked before the rung was raised: a fresh
+// farm given one top-rung click across seeds 1/7/42 stays survivable on every
+// model, which `tests/actions.test.js` now asserts by simulation rather than by
+// the ratio proxy it used to mirror (and mirror wrongly). The §2.8 overfeeding
+// chain remains a designed failure the player walks into by sustained choice,
+// not by one press.
 //
 // What still bounds a mis-click is the CAPACITY side, which the speed traits do
 // not touch: the rung lands at 33-35% of capacity on every model, so no single
@@ -87,14 +88,24 @@ export const QUEUE_PREVIEW_LIMIT = 6;
 // the remaining space and still reported as a plain success, so a rung near a
 // whole bin would read as a surprise).
 //
-// SAWDUST STEP stays at 0.5 units, and that is a decision, not an oversight. The
-// sim environment is ABSOLUTE, not volume-normalised: `queueDynamics` multiplies
-// each food's moisture/pH/toxicity by its liters and never divides by capacity,
-// so a bigger bin does NOT dilute a feeding — which is why sawdust must keep
-// scaling on the capacity unit, and it still does. What it does NOT need to
-// track is the top rung's widening, because a wider ladder changes clicks per
-// day, not LITERS fed per day: the daily moisture load is unchanged, so there is
-// nothing new to offset. Sawdust is not a per-feeding moisture neutraliser
+// SAWDUST STEP stays at 0.5 units, and that is a decision, not an oversight.
+//
+// NOTE this rationale was rewritten at T25. It used to read "the sim environment
+// is ABSOLUTE, not volume-normalised ... a bigger bin does NOT dilute a feeding",
+// and that was true when written — it is exactly the asymmetry T25 fixed. Env
+// variables are now CONCENTRATIONS: the engine divides a queue's moisture/pH/
+// toxicity load by the bin volume (`envDilution`, js/sim/engine.js), because this
+// very ladder made the input scale with capacity while the state variable did
+// not, so one top-rung click moved moisture +0.28 on tier2 but +0.43 on eco.
+//
+// Sawdust still scales on the capacity unit, and the conclusion is unchanged, but
+// the REASON is now the opposite one: a bigger bin dilutes food and sawdust
+// ALIKE, so the two keep pace only if both are sized in capacity units. Freezing
+// sawdust at 0.5 L would now under-dose a large bin just as badly as before.
+// What it does NOT need to track is the top rung's widening, because a wider
+// ladder changes clicks per day, not LITERS fed per day: the daily moisture load
+// is unchanged, so there is nothing new to offset. Sawdust is not a per-feeding
+// moisture neutraliser
 // either — it removes SAWDUST_DRY_PER_LITER (0.04) moisture/L against food's
 // ~0.05 moisture/L released, so cancelling a feeding 1:1 would take ~1.25 L of
 // sawdust per liter of food, past any ratio this ladder offers. Percolation plus
@@ -112,8 +123,12 @@ export const QUEUE_PREVIEW_LIMIT = 6;
 // azul's entire band in a single press and handing over a consequence-free
 // toxicity scrub along with it.
 
-/** Bin capacity the portion ladder is anchored on (liters). */
-const PORTION_ANCHOR_CAPACITY = 30;
+/**
+ * Bin capacity the portion ladder is anchored on (liters). Taken from the engine
+ * rather than re-declared: the sim's volume normalisation and throughput falloff
+ * are anchored on the same bin, and two independent 30s would be free to drift.
+ */
+const PORTION_ANCHOR_CAPACITY = BIN_REFERENCE_CAPACITY;
 
 /** Multipliers on the capacity unit, ascending — the four offered rungs. */
 const PORTION_STEPS = [0.25, 1, 4, 10];
