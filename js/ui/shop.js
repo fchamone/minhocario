@@ -13,7 +13,7 @@
 // the two pure helpers below are unit-tested under Node.
 
 import { t } from '../strings.js';
-import { listComposters } from '../sim/composters.js';
+import { listComposters, getComposter } from '../sim/composters.js';
 import { listSpecies } from '../sim/worms.js';
 import { wormPackPrice } from '../sim/engine.js';
 
@@ -44,16 +44,66 @@ export function affordability(wallet, composters = listComposters(), reserve = s
 }
 
 /**
+ * Trade-in credit for the model currently in use: half its catalog price.
+ *
+ * This MUST stay equal to the engine's own trade-in in `migrateToComposter`, or
+ * the shop would quote a price the engine then refuses. A test cross-checks the
+ * two on every model at a range of wallets rather than trusting this comment.
+ * Pure.
+ * @param {string|null} composterId the model currently in use
+ * @returns {number} coins credited (0 when there is no current model)
+ */
+export function tradeInValue(composterId) {
+  const current = getComposter(composterId);
+  return current ? current.price * 0.5 : 0;
+}
+
+/**
+ * The mid-farm upgrade menu: every model annotated with its trade-in credit, the
+ * net cost after that credit, whether it is the model already in use, and
+ * whether the wallet covers it.
+ *
+ * Unlike a first purchase there is NO worm reserve — the colony already exists
+ * and migrates with the farm (§2.2), so the whole wallet is available. Pure.
+ * @param {string|null} currentComposterId
+ * @param {number} wallet
+ * @param {readonly import('../sim/composters.js').Composter[]} [composters]
+ * @returns {{composter: object, tradeIn: number, netCost: number,
+ *   isCurrent: boolean, affordable: boolean}[]}
+ */
+export function upgradeOffers(currentComposterId, wallet, composters = listComposters()) {
+  const tradeIn = tradeInValue(currentComposterId);
+  return composters.map((composter) => {
+    const isCurrent = composter.id === currentComposterId;
+    const netCost = composter.price - tradeIn;
+    return {
+      composter,
+      tradeIn,
+      netCost,
+      isCurrent,
+      // Migrating to the model you are already on is rejected by the engine, so
+      // it is never offered as affordable however rich the player is.
+      affordable: !isCurrent && wallet >= netCost,
+    };
+  });
+}
+
+/**
  * Build one shop card for a composter.
- * @param {import('../sim/composters.js').Composter} composter
- * @param {boolean} affordable
+ * @param {object} row
+ * @param {import('../sim/composters.js').Composter} row.composter
+ * @param {boolean} row.affordable
+ * @param {number} row.cost          coins actually charged (price, or net cost)
+ * @param {number} [row.tradeIn]     trade-in credit applied (upgrade mode)
+ * @param {boolean} [row.isCurrent]  the model already in use (upgrade mode)
  * @param {(id: string) => void} onBuy
  * @returns {HTMLElement}
  */
-function buildCard(composter, affordable, onBuy) {
+function buildCard({ composter, affordable, cost, tradeIn = 0, isCurrent = false }, onBuy) {
   const card = document.createElement('article');
   card.className = 'shop-card';
   if (!affordable) card.classList.add('shop-card--disabled');
+  if (isCurrent) card.classList.add('shop-card--current');
 
   const name = document.createElement('h3');
   name.textContent = t(`composters.${composter.id}.name`);
@@ -66,7 +116,7 @@ function buildCard(composter, affordable, onBuy) {
   stats.className = 'shop-card__stats';
   stats.textContent =
     `${t('shop.capacityLabel')}: ${composter.capacity} ${t('common.liters')} · ` +
-    `${t('shop.priceLabel')}: ${composter.price} ${t('common.coins')}`;
+    `${t('shop.priceLabel')}: ${Math.round(cost)} ${t('common.coins')}`;
 
   const buy = document.createElement('button');
   buy.type = 'button';
@@ -77,9 +127,27 @@ function buildCard(composter, affordable, onBuy) {
     buy.addEventListener('click', () => onBuy(composter.id));
   }
 
-  card.append(name, desc, stats, buy);
+  card.append(name, desc, stats);
 
-  if (!affordable) {
+  // In upgrade mode, show what the trade-in knocks off so the price the player
+  // is charged is never a surprise.
+  if (tradeIn > 0 && !isCurrent) {
+    const credit = document.createElement('p');
+    credit.className = 'shop-card__tradein';
+    credit.textContent =
+      `${t('shop.tradeInLabel')}: −${Math.round(tradeIn)} ${t('common.coins')} ` +
+      `(${t('shop.listPriceLabel')} ${composter.price})`;
+    card.appendChild(credit);
+  }
+
+  card.appendChild(buy);
+
+  if (isCurrent) {
+    const badge = document.createElement('p');
+    badge.className = 'shop-card__reason';
+    badge.textContent = t('shop.currentModel');
+    card.appendChild(badge);
+  } else if (!affordable) {
     const reason = document.createElement('p');
     reason.className = 'shop-card__reason';
     reason.textContent = t('shop.cannotAfford');
@@ -89,19 +157,35 @@ function buildCard(composter, affordable, onBuy) {
 }
 
 /**
- * Render the shop for a first purchase: wallet display + a card per model.
+ * Render the shop. Two modes:
+ *
+ * - **first purchase** (no `currentComposterId`): full price, and a model is only
+ *   startable if it leaves the worm reserve for the first colony.
+ * - **mid-farm upgrade** (`currentComposterId` set): net cost after the 50%
+ *   trade-in, the model in use flagged and unbuyable, no worm reserve — the
+ *   colony migrates with the farm.
+ *
  * @param {object} deps
  * @param {number} deps.wallet   the player's coins.
  * @param {(composterId: string) => void} deps.onBuy invoked with the chosen id.
+ * @param {string|null} [deps.currentComposterId] the model in use, if mid-farm.
  */
-export function initShop({ wallet, onBuy }) {
+export function initShop({ wallet, onBuy, currentComposterId = null }) {
   const walletEl = document.getElementById('shop-wallet');
   const listEl = document.getElementById('shop-list');
-  if (walletEl) walletEl.textContent = `${wallet} ${t('common.coins')}`;
+  const subtitleEl = document.getElementById('shop-subtitle');
+  if (walletEl) walletEl.textContent = `${Math.round(wallet)} ${t('common.coins')}`;
+  if (subtitleEl) {
+    subtitleEl.textContent = currentComposterId ? t('shop.upgradeSubtitle') : t('shop.subtitle');
+  }
   if (!listEl) return;
 
+  const rows = currentComposterId
+    ? upgradeOffers(currentComposterId, wallet).map((offer) => ({ ...offer, cost: offer.netCost }))
+    : affordability(wallet).map((row) => ({ ...row, cost: row.composter.price }));
+
   listEl.replaceChildren();
-  for (const { composter, affordable } of affordability(wallet)) {
-    listEl.appendChild(buildCard(composter, affordable, onBuy));
+  for (const row of rows) {
+    listEl.appendChild(buildCard(row, onBuy));
   }
 }

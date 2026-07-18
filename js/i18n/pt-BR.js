@@ -42,6 +42,10 @@ export const ptBR = {
     priceLabel: 'Preço',
     buy: 'Comprar',
     cannotAfford: 'Saldo insuficiente',
+    upgradeSubtitle: 'Troque de composteira — a colônia, a fila e a idade vão junto.',
+    tradeInLabel: 'Troca do modelo atual',
+    listPriceLabel: 'preço cheio',
+    currentModel: 'Modelo atual',
     back: 'Voltar',
   },
 
@@ -114,6 +118,14 @@ export const ptBR = {
     queueTitle: 'Resíduos em decomposição',
     queueEmpty: 'Nada em decomposição',
     queueMore: 'mais',
+    // Run lifecycle (T15): colony death, restart, upgrade feedback
+    colonyDeadTitle: 'A colônia morreu',
+    colonyDeadBody: 'A produção parou. Compre minhocas para repovoar a composteira.',
+    repopulate: 'Repovoar colônia',
+    restart: 'Recomeçar',
+    restartConfirm: 'Recomeçar? A fazenda atual será encerrada e entrará no ranking.',
+    upgraded: 'Composteira trocada',
+    upgradeRejected: 'Saldo insuficiente para a troca',
     // Speed control
     speedPause: 'Pausar',
     speedLabel: 'Velocidade',

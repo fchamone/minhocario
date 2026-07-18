@@ -40,6 +40,10 @@ export const en = {
     priceLabel: 'Price',
     buy: 'Buy',
     cannotAfford: 'Not enough coins',
+    upgradeSubtitle: 'Swap composter — the colony, queue, and age all come along.',
+    tradeInLabel: 'Trade-in on your current model',
+    listPriceLabel: 'list price',
+    currentModel: 'Current model',
     back: 'Back',
   },
 
@@ -112,6 +116,14 @@ export const en = {
     queueTitle: 'Waste breaking down',
     queueEmpty: 'Nothing breaking down',
     queueMore: 'more',
+    // Run lifecycle (T15): colony death, restart, upgrade feedback
+    colonyDeadTitle: 'The colony died',
+    colonyDeadBody: 'Production has stopped. Buy worms to repopulate the composter.',
+    repopulate: 'Repopulate colony',
+    restart: 'Restart',
+    restartConfirm: 'Restart? The current farm ends and enters the ranking.',
+    upgraded: 'Composter swapped',
+    upgradeRejected: 'Not enough coins for the swap',
     // Speed control
     speedPause: 'Pause',
     speedLabel: 'Speed',

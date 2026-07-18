@@ -41,14 +41,67 @@ export function topRanking(entries, limit = RANKING_LIMIT) {
 }
 
 /**
+ * Summarize a farm as a ranking row. Pure.
+ * @param {{score?: number, day?: number}|null} farm
+ * @param {string|null|undefined} nickname
+ * @returns {{nickname: string, score: number, daysSurvived: number}}
+ */
+export function rankingEntry(farm, nickname) {
+  return {
+    nickname: nickname ?? '',
+    score: Math.round(farm?.score ?? 0),
+    daysSurvived: farm?.day ?? 0,
+  };
+}
+
+/**
+ * The ranking rows to display for a save: the FROZEN runs plus the run that is
+ * currently live.
+ *
+ * The stored `ranking` holds finished runs only; the live run is derived from
+ * `save.farm` here, at render time. That keeps the ranking honest with no
+ * per-tick bookkeeping and no farm-identity field in the save schema — the live
+ * row simply *is* the current farm, and `freezeRun` is what makes it permanent.
+ * Because the sim's score is monotonic (§2.10), the derived row is already a
+ * high-water mark. Pure.
+ * @param {object|null|undefined} save a v1 save payload
+ * @param {number} [limit=RANKING_LIMIT]
+ * @returns {Array<object>}
+ */
+export function displayRanking(save, limit = RANKING_LIMIT) {
+  const frozen = Array.isArray(save?.ranking) ? save.ranking : [];
+  const live = save?.farm ? [rankingEntry(save.farm, save.profile?.nickname)] : [];
+  return topRanking([...frozen, ...live], limit);
+}
+
+/**
+ * End the current run: freeze its live row into the persisted ranking and clear
+ * the farm. The player's identity, wallet, and past rows survive — only the run
+ * ends (spec §2.1: restarting freezes the finished farm's entry and starts a new
+ * one). Pure and non-mutating; a no-op when no run is in progress.
+ * @param {object|null} save a v1 save payload
+ * @returns {object|null} a new save with the run frozen
+ */
+export function freezeRun(save) {
+  if (!save || !save.farm) return save;
+  return {
+    ...save,
+    ranking: [...(save.ranking ?? []), rankingEntry(save.farm, save.profile?.nickname)],
+    farm: null,
+  };
+}
+
+/**
  * Paint the ranking table body from a save's ranking list, toggling the pt-BR
  * empty-state message when there are no farms yet.
+ * Takes the whole save (not just its ranking list) so the LIVE run is listed
+ * alongside the frozen ones — the ranking updates as the current farm scores.
  * @param {HTMLElement} tbody   the <tbody> to fill
  * @param {HTMLElement} emptyEl the empty-state paragraph
- * @param {Array<object>} ranking
+ * @param {object|null} save    a v1 save payload
  */
-function renderRanking(tbody, emptyEl, ranking) {
-  const rows = topRanking(ranking);
+function renderRanking(tbody, emptyEl, save) {
+  const rows = displayRanking(save);
   tbody.replaceChildren();
   for (const entry of rows) {
     const tr = document.createElement('tr');
@@ -136,7 +189,7 @@ function refreshHome(backend) {
   }
 
   if (nicknameEl) nicknameEl.textContent = current.profile.nickname;
-  if (rankingBody) renderRanking(rankingBody, rankingEmpty, current.ranking);
+  if (rankingBody) renderRanking(rankingBody, rankingEmpty, current);
 
   // Continue only makes sense once a farm exists (created at setup, T12).
   const hasFarm = result.status === LOAD_STATUS.OK && current.farm != null;

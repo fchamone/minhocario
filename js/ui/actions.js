@@ -500,6 +500,17 @@ async function promptBuyWorms(speciesId, wallet, onBuyWorms) {
 }
 
 /**
+ * Ask the player to confirm a destructive action. Reuses the modal chooser, so
+ * Escape and the backdrop both read as "no".
+ * @param {string} messageKey i18n key for the question
+ * @returns {Promise<boolean>}
+ */
+async function confirmAction(messageKey) {
+  const answer = await chooseFrom(messageKey, [{ value: true, label: t('common.confirm') }]);
+  return answer === true;
+}
+
+/**
  * Wire the actions panel. Every button dispatches through a callback — this
  * module never mutates the sim or the save itself, so `main.js` remains the
  * single orchestrator (and the single autosave point).
@@ -513,10 +524,20 @@ async function promptBuyWorms(speciesId, wallet, onBuyWorms) {
  * @param {() => void} deps.onDrain
  * @param {() => void} deps.onHarvest
  * @param {(position: number) => void} deps.onMove wall position 0..1.
+ * @param {() => void} deps.onRestart end this run and start a new one.
  */
 export function initActions(deps) {
-  const { getFarm, getWallet, onAddWaste, onAddSawdust, onBuyWorms, onDrain, onHarvest, onMove } =
-    deps;
+  const {
+    getFarm,
+    getWallet,
+    onAddWaste,
+    onAddSawdust,
+    onBuyWorms,
+    onDrain,
+    onHarvest,
+    onMove,
+    onRestart,
+  } = deps;
 
   const on = (action, handler) => {
     const el = document.querySelector(`[data-action="${action}"]`);
@@ -528,6 +549,16 @@ export function initActions(deps) {
   on('addWorms', () => promptBuyWorms(getFarm()?.speciesId ?? null, getWallet(), onBuyWorms));
   on('drain', onDrain);
   on('harvest', onHarvest);
+
+  // The dead-colony banner's CTA is the same worm purchase as the panel button;
+  // buying into a dead colony is what repopulates it (§2.1 — the engine resets
+  // colonyAlive and the age multiplier).
+  on('repopulate', () => promptBuyWorms(getFarm()?.speciesId ?? null, getWallet(), onBuyWorms));
+
+  // Restarting discards the running farm, so it always asks first (§2.1).
+  on('restart', async () => {
+    if (await confirmAction('game.restartConfirm')) onRestart();
+  });
 
   // X-ray toggle: reveals the internals panel. Purely a view switch — it must
   // never pause or perturb the sim (spec §2.7 / T20 acceptance criterion), so it
@@ -559,5 +590,12 @@ export function updateActions(farm) {
   if (slider && farm && document.activeElement !== slider) {
     slider.value = String(farm.wallPosition);
   }
+
+  // Dead-colony banner: production has stopped and repopulating is the only way
+  // forward (§2.1). Driven purely by state, so it clears itself the moment a
+  // worm pack revives the colony.
+  const banner = document.getElementById('colony-dead');
+  if (banner) banner.hidden = !farm || farm.colonyAlive !== false;
+
   updateInternals(farm);
 }

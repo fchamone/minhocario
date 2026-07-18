@@ -55,7 +55,8 @@
     <section id="screen-shop" class="screen" data-screen="shop" hidden>
       <header class="screen__header">
         <h1 data-string="shop.title"></h1>
-        <p data-string="shop.subtitle"></p>
+        <!-- Swapped to the upgrade copy by initShop when reached mid-farm. -->
+        <p id="shop-subtitle" data-string="shop.subtitle"></p>
         <p class="wallet"><span data-string="shop.walletLabel"></span>: <span id="shop-wallet">—</span></p>
       </header>
       <div id="shop-list" class="shop__list"></div>
@@ -103,6 +104,14 @@
         <!-- Three.js canvas mounts here (T16+) -->
         <canvas id="scene-canvas"></canvas>
 
+        <!-- Colony-dead banner (§2.1): production has stopped and the only way
+             forward is to repopulate. Shown/hidden by js/ui/actions.js. -->
+        <div class="banner" id="colony-dead" hidden>
+          <strong data-string="game.colonyDeadTitle"></strong>
+          <p data-string="game.colonyDeadBody"></p>
+          <button type="button" data-action="repopulate" data-string="game.repopulate"></button>
+        </div>
+
         <!-- Internals ("x-ray data") panel: the numeric gauge layer, toggled by
              the x-ray action. Populated by js/ui/actions.js on every tick while
              visible. The 3D x-ray (T20) renders alongside it, not instead. -->
@@ -121,6 +130,7 @@
         <button type="button" data-action="harvest" data-string="game.harvest"></button>
         <button type="button" data-action="openShop" data-nav="shop" data-string="game.openShop"></button>
         <button type="button" data-action="xray" data-string="game.xrayToggle"></button>
+        <button type="button" data-action="restart" data-string="game.restart"></button>
         <label class="actions__slider">
           <span data-string="game.move"></span>
           <input type="range" id="wall-position" min="0" max="1" step="0.01" value="0.5">

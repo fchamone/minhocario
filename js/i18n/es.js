@@ -40,6 +40,10 @@ export const es = {
     priceLabel: 'Precio',
     buy: 'Comprar',
     cannotAfford: 'Saldo insuficiente',
+    upgradeSubtitle: 'Cambia de compostadora — la colonia, la cola y la edad se mudan contigo.',
+    tradeInLabel: 'Cambio por tu modelo actual',
+    listPriceLabel: 'precio de lista',
+    currentModel: 'Modelo actual',
     back: 'Volver',
   },
 
@@ -112,6 +116,14 @@ export const es = {
     queueTitle: 'Residuos descomponiéndose',
     queueEmpty: 'Nada descomponiéndose',
     queueMore: 'más',
+    // Run lifecycle (T15): colony death, restart, upgrade feedback
+    colonyDeadTitle: 'La colonia murió',
+    colonyDeadBody: 'La producción se detuvo. Compra lombrices para repoblar la compostadora.',
+    repopulate: 'Repoblar colonia',
+    restart: 'Reiniciar',
+    restartConfirm: '¿Reiniciar? La granja actual termina y entra en el ranking.',
+    upgraded: 'Compostadora cambiada',
+    upgradeRejected: 'Saldo insuficiente para el cambio',
     // Speed control
     speedPause: 'Pausar',
     speedLabel: 'Velocidad',

@@ -7,7 +7,7 @@
 // All user-facing text still flows through the i18n runtime (js/strings.js).
 
 import { t, setLang, resolveLang } from './strings.js';
-import { initHome } from './ui/home.js';
+import { initHome, freezeRun } from './ui/home.js';
 import { initShop } from './ui/shop.js';
 import { initSetup } from './ui/setup.js';
 import { updateHud } from './ui/hud.js';
@@ -23,6 +23,7 @@ import {
   addSawdust,
   harvestAndSell,
   drainAndSell,
+  migrateToComposter,
   tick,
 } from './sim/engine.js';
 import { createRng } from './sim/rng.js';
@@ -140,15 +141,75 @@ function startNewGame() {
   showScreen('shop');
 }
 
-/** Render the shop for a first purchase and route Buy → setup with the choice. */
+/**
+ * Render the shop in whichever mode applies: a FIRST purchase (no live farm →
+ * pick a model, then setup) or a MID-FARM upgrade (a farm is running → migrate
+ * it to the chosen model at the trade-in price, §2.2).
+ */
 function renderShop() {
+  const upgrading = gameFarm != null;
   initShop({
-    wallet: currentWallet(),
+    wallet: upgrading ? gameProfile?.wallet ?? 0 : currentWallet(),
+    currentComposterId: upgrading ? gameFarm.composterId : null,
     onBuy: (composterId) => {
-      newFarmDraft.composterId = composterId;
-      showScreen('setup');
+      if (upgrading) {
+        upgradeComposter(composterId);
+      } else {
+        newFarmDraft.composterId = composterId;
+        showScreen('setup');
+      }
     },
   });
+}
+
+/**
+ * Migrate the live farm into a new composter and return to the game. The engine
+ * carries the colony, food queue, bedding, and colony age across, auto-sells the
+ * old bin's contents, and applies the 50% trade-in — so the only thing to report
+ * is the net wallet change.
+ * @param {string} composterId the model to move into
+ */
+function upgradeComposter(composterId) {
+  if (!gameFarm || !gameProfile) return;
+
+  const before = gameProfile.wallet;
+  const result = migrateToComposter(gameFarm, before, composterId);
+  if (!result.ok) {
+    // The shop already disables unaffordable models; this covers the edge where
+    // the wallet changed underneath (e.g. a purchase in another tab).
+    showFeedback(t('game.upgradeRejected'), true);
+    return;
+  }
+
+  gameFarm = result.state;
+  gameProfile = { ...gameProfile, wallet: result.wallet };
+  persistGame();
+  showScreen('game');
+
+  // Reported AFTER the screen switch: entering the game repaints, and would
+  // otherwise leave the summary competing with a stale feedback line.
+  const delta = Math.round(result.wallet - before);
+  showFeedback(
+    `${t('game.upgraded')}: ${t(`composters.${composterId}.name`)} · ` +
+      `${delta >= 0 ? '+' : ''}${delta} ${t('common.coins')}`,
+  );
+}
+
+/**
+ * End the running farm and start a fresh one. The finished run is frozen into
+ * the ranking FIRST (§2.1 — its final score becomes a permanent row) and only
+ * then is the wallet/farm reset. A corrupt or future save is left untouched, so
+ * nothing is frozen and nothing is written.
+ */
+function restartRun() {
+  const loaded = load();
+  const stored = loaded.status === LOAD_STATUS.OK ? loaded.save : null;
+  if (stored && gameFarm) {
+    // Freeze from the LIVE state, not the last autosave, so the row reflects the
+    // score at the moment the player restarted.
+    save(freezeRun({ ...stored, profile: gameProfile ?? stored.profile, farm: gameFarm }));
+  }
+  startNewGame();
 }
 
 /** A random 32-bit RNG seed for a new farm (entropy — UI layer, not the sim). */
@@ -532,6 +593,7 @@ function init() {
     onDrain,
     onHarvest,
     onMove,
+    onRestart: restartRun,
   });
 
   // Home screen — nickname (generate/persist/reroll), local ranking, and
