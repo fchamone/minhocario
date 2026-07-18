@@ -17,8 +17,28 @@ import { listSpecies } from '../sim/worms.js';
 import { listFoods } from '../sim/foods.js';
 import { MIN_PORTION_LITERS, RECOMMENDED_BEDDING } from '../sim/engine.js';
 
-/** Default first-waste portion, in liters (a friendly starting amount). */
+/** Default first-waste portion for the anchor bin, in liters. */
 const DEFAULT_FIRST_WASTE_LITERS = 1;
+
+/** Bin capacity the default above is written for — matches ui/actions.js. */
+const FIRST_WASTE_ANCHOR_CAPACITY = 30;
+
+/**
+ * A friendly starting amount for the chosen bin: the anchor default scaled by the
+ * bin's size, so a large first purchase isn't seeded with a token portion. The
+ * field stays freely editable — this is only what it opens on.
+ * @param {number} [capacity] chosen bin capacity in liters
+ * @returns {number}
+ */
+function defaultFirstWaste(capacity) {
+  if (!(typeof capacity === 'number' && Number.isFinite(capacity) && capacity > 0)) {
+    return DEFAULT_FIRST_WASTE_LITERS;
+  }
+  const scaled = (DEFAULT_FIRST_WASTE_LITERS * capacity) / FIRST_WASTE_ANCHOR_CAPACITY;
+  // Snap to the input's own step so the field never opens on an unreachable value.
+  const snapped = Math.round(scaled / MIN_PORTION_LITERS) * MIN_PORTION_LITERS;
+  return Math.max(MIN_PORTION_LITERS, Math.round(snapped * 100) / 100);
+}
 
 /** The three bedding components, paired with their string keys, in mix order. */
 const BEDDING_FIELDS = [
@@ -101,8 +121,9 @@ function renderBedding(container) {
  * Render the first-waste picker: a name-only select over the raw food catalog
  * (no suitability signal) plus an amount input.
  * @param {HTMLElement} container
+ * @param {number} [capacity] the chosen bin's capacity, which sizes the default.
  */
-function renderWaste(container) {
+function renderWaste(container, capacity) {
   container.replaceChildren();
 
   const select = document.createElement('select');
@@ -122,8 +143,10 @@ function renderWaste(container) {
   amount.type = 'number';
   amount.id = 'setup-waste-liters';
   amount.min = String(MIN_PORTION_LITERS);
-  amount.step = '0.25';
-  amount.value = String(DEFAULT_FIRST_WASTE_LITERS);
+  // Derived, not the literal '0.25' it used to duplicate — the step and the
+  // engine's minimum must not be able to drift apart.
+  amount.step = String(MIN_PORTION_LITERS);
+  amount.value = String(defaultFirstWaste(capacity));
   amountRow.append(amountCaption, amount);
 
   container.append(select, amountRow);
@@ -161,9 +184,11 @@ function gatherValues() {
  * (Re)render the setup form and wire the confirm submit. Re-entering the screen
  * re-populates the dynamic fields and refreshes the confirm callback; the form's
  * submit listener is attached exactly once (guarded) so it never stacks.
- * @param {{onConfirm: (values: object) => void}} deps
+ * @param {{onConfirm: (values: object) => void, capacity?: number}} deps
+ *   `capacity` is the just-purchased bin's volume; it sizes the default first
+ *   waste so a big first bin isn't seeded with a token 1 L.
  */
-export function initSetup({ onConfirm }) {
+export function initSetup({ onConfirm, capacity }) {
   confirmHandler = onConfirm;
 
   const species = document.getElementById('setup-species');
@@ -172,7 +197,7 @@ export function initSetup({ onConfirm }) {
   const form = document.getElementById('setup-form');
   if (species) renderSpecies(species);
   if (bedding) renderBedding(bedding);
-  if (waste) renderWaste(waste);
+  if (waste) renderWaste(waste, capacity);
 
   if (form && !form.dataset.wired) {
     form.addEventListener('submit', (event) => {

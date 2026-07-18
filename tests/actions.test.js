@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import {
   foodChoices,
   portionValid,
+  portionOptions,
+  sawdustPortion,
   gauge,
   internalsSnapshot,
   QUEUE_PREVIEW_LIMIT,
 } from '../js/ui/actions.js';
 import { FOODS } from '../js/sim/foods.js';
 import { MIN_PORTION_LITERS, createInitialFarmState, addFood } from '../js/sim/engine.js';
-import { getComposter } from '../js/sim/composters.js';
+import { getComposter, listComposters } from '../js/sim/composters.js';
 import { getSpecies, carryingCapacity } from '../js/sim/worms.js';
 import { setLang } from '../js/strings.js';
 
@@ -64,6 +66,79 @@ test('portionValid rejects non-numeric input', () => {
   assert.equal(portionValid(NaN), false);
   assert.equal(portionValid(undefined), false);
   assert.equal(portionValid('1'), false);
+});
+
+// --- Portions scale with the bin so upkeep effort survives an upgrade --------
+// A fixed ladder meant filling the 100 L `eco` took ~25 clicks of its biggest
+// button. These lock the scaling AND the invariants the dialog relies on.
+
+test('portionOptions preserves the historical ladder on the anchor bin', () => {
+  // tier2 (30 L) is the anchor: its ladder must not move, so an existing
+  // player's muscle memory and the balance suite's feeding regime both hold.
+  assert.equal(getComposter('tier2').capacity, 30);
+  assert.deepEqual(portionOptions(30), [0.25, 1, 2, 4]);
+  assert.equal(sawdustPortion(30), 0.5);
+});
+
+test('portionOptions returns ascending, deduped, engine-valid amounts', () => {
+  for (const composter of listComposters()) {
+    const options = portionOptions(composter.capacity);
+    assert.ok(options.length > 0 && options.length <= 4, `${composter.id}: sane option count`);
+    assert.deepEqual(
+      options,
+      [...new Set(options)].sort((a, b) => a - b),
+      `${composter.id}: ascending and deduped`,
+    );
+    for (const liters of options) {
+      // Every button must survive the same guard the dialog applies before
+      // dispatching, or it would be a dead button.
+      assert.equal(portionValid(liters), true, `${composter.id}: ${liters} L is dispatchable`);
+    }
+    // A single portion may never exceed the bin it is offered for.
+    assert.ok(
+      options[options.length - 1] <= composter.capacity,
+      `${composter.id}: largest portion fits the bin`,
+    );
+  }
+});
+
+test('portion and sawdust amounts grow with bin capacity', () => {
+  const bins = [...listComposters()].sort((a, b) => a.capacity - b.capacity);
+  for (let i = 1; i < bins.length; i++) {
+    const prev = bins[i - 1];
+    const curr = bins[i];
+    const biggest = (c) => portionOptions(c.capacity).at(-1);
+    assert.ok(
+      biggest(curr) >= biggest(prev),
+      `${curr.id} (${curr.capacity} L) offers at least ${prev.id}'s largest portion`,
+    );
+    assert.ok(
+      sawdustPortion(curr.capacity) >= sawdustPortion(prev.capacity),
+      `${curr.id} drops at least as much sawdust per click as ${prev.id}`,
+    );
+  }
+  // Strictly larger across the full span, not merely non-decreasing — otherwise a
+  // helper that ignored capacity entirely would pass the pairwise check above.
+  const [small, large] = [bins[0], bins[bins.length - 1]];
+  assert.ok(portionOptions(large.capacity).at(-1) > portionOptions(small.capacity).at(-1));
+  assert.ok(sawdustPortion(large.capacity) > sawdustPortion(small.capacity));
+});
+
+test('sawdustPortion is always dispatchable, including for tiny bins', () => {
+  for (const composter of listComposters()) {
+    assert.equal(portionValid(sawdustPortion(composter.capacity)), true, composter.id);
+  }
+  // Degenerate capacities must clamp to the minimum, never to 0 or NaN — the
+  // sawdust button dispatches without a confirmation dialog to catch a bad value.
+  for (const capacity of [0, -5, NaN, undefined]) {
+    assert.equal(portionValid(sawdustPortion(capacity)), true, `capacity ${capacity}`);
+  }
+});
+
+test('portionOptions falls back to the anchor ladder without a composter', () => {
+  // The panel can be rendered before a bin exists (capacity resolves to 0).
+  assert.deepEqual(portionOptions(0), [0.25, 1, 2, 4]);
+  assert.deepEqual(portionOptions(undefined), [0.25, 1, 2, 4]);
 });
 
 // --- gauge: an env variable positioned against its comfort band --------------

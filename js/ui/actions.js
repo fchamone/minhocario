@@ -35,11 +35,32 @@ import {
 /** How many queue entries the panel previews; the rest are counted, not hidden. */
 export const QUEUE_PREVIEW_LIMIT = 6;
 
-/** Default waste portion offered in the add-waste dialog (liters). */
-const DEFAULT_PORTION_LITERS = 1;
+// --- Capacity-scaled portions ------------------------------------------------
+// Portions scale with the bin so upkeep effort stays roughly constant across
+// upgrades: a fixed ladder meant filling the 100 L `eco` took ~25 clicks of its
+// largest button while the 20 L `electric` overflowed on the same click.
+//
+// Everything is anchored on `tier2` (30 L), which keeps its historical
+// 0.25/1/2/4 L ladder and 0.5 L sawdust click exactly. The resulting mid rungs
+// land on the feeding rate the balance suite already exercises (it feeds
+// `cap * 0.06`-`0.07` per feeding), so this moves the UI toward the regime the
+// sim is tuned for rather than away from it.
+//
+// Note the sim environment is ABSOLUTE, not volume-normalised: `queueDynamics`
+// multiplies each food's moisture/pH/toxicity by its liters and never divides by
+// capacity. A bigger bin therefore does NOT dilute a feeding — which is exactly
+// why sawdust has to scale on the same unit. Left fixed at 0.5 L it would no
+// longer offset a (now larger) feeding, and the drying lever would silently
+// weaken with every upgrade.
 
-/** Fixed sawdust portion the "add sawdust" button applies (liters). */
-const SAWDUST_PORTION_LITERS = 0.5;
+/** Bin capacity the portion ladder is anchored on (liters). */
+const PORTION_ANCHOR_CAPACITY = 30;
+
+/** Multipliers on the capacity unit, ascending — the four offered rungs. */
+const PORTION_STEPS = [0.25, 1, 2, 4];
+
+/** Sawdust portion per click, as a multiple of the capacity unit. */
+const SAWDUST_STEP = 0.5;
 
 // Display domains for the env gauges — the full scale each bar is drawn on.
 // These are PRESENTATION ranges only (how wide the bar is), not sim thresholds;
@@ -85,6 +106,63 @@ export function foodChoices() {
  */
 export function portionValid(liters) {
   return typeof liters === 'number' && Number.isFinite(liters) && liters >= MIN_PORTION_LITERS;
+}
+
+/**
+ * Snap a raw liter amount to a readable value a player can reason about, on a
+ * coarser grid as the number grows (nobody wants a "6.67 L" button). Always at
+ * least MIN_PORTION_LITERS, so a snap can never produce an amount the engine
+ * would reject.
+ * @param {number} liters
+ * @returns {number}
+ */
+function snapLiters(liters) {
+  const grid = liters < 2 ? 0.25 : liters < 5 ? 0.5 : 1;
+  const snapped = Math.round(liters / grid) * grid;
+  // Re-round to kill float dust from the divide (e.g. 0.30000000000000004).
+  return Math.max(MIN_PORTION_LITERS, Math.round(snapped * 100) / 100);
+}
+
+/**
+ * The capacity unit both ladders scale on: 1 for the anchor bin, 2 for a bin
+ * twice its size. Falls back to the anchor for a missing/invalid capacity so the
+ * UI still offers the historical ladder before a composter exists.
+ * @param {number} capacity bin capacity in liters
+ * @returns {number}
+ */
+function capacityUnit(capacity) {
+  const cap =
+    typeof capacity === 'number' && Number.isFinite(capacity) && capacity > 0
+      ? capacity
+      : PORTION_ANCHOR_CAPACITY;
+  return cap / PORTION_ANCHOR_CAPACITY;
+}
+
+/**
+ * The waste portions offered for a bin of the given capacity, ascending and
+ * deduped. The smallest rung stays at or near MIN_PORTION_LITERS on every bin so
+ * precise top-ups remain possible; the largest deliberately sits above the
+ * sustainable feeding rate, so a one-click overfeed stays reachable (§2.8's
+ * overfeeding chain is a designed failure the player should be able to walk into).
+ * @param {number} capacity bin capacity in liters
+ * @returns {number[]} 1-4 ascending liter amounts, all >= MIN_PORTION_LITERS
+ */
+export function portionOptions(capacity) {
+  const unit = capacityUnit(capacity);
+  const snapped = PORTION_STEPS.map((step) => snapLiters(step * unit));
+  // Small bins can snap two rungs onto the same value (both clamped to the
+  // minimum); collapse them rather than showing a duplicate button.
+  return [...new Set(snapped)].sort((a, b) => a - b);
+}
+
+/**
+ * The sawdust volume one "add sawdust" click applies for a bin of the given
+ * capacity. Same unit as portionOptions, so it keeps pace with feeding.
+ * @param {number} capacity bin capacity in liters
+ * @returns {number} liters, >= MIN_PORTION_LITERS
+ */
+export function sawdustPortion(capacity) {
+  return snapLiters(SAWDUST_STEP * capacityUnit(capacity));
 }
 
 /**
@@ -470,16 +548,17 @@ function chooseFrom(titleKey, options) {
  * Ask which waste to add and how much, then dispatch it.
  * The food list is rendered EXACTLY as `foodChoices` returns it — no grouping,
  * no sorting, no annotation (§2.7).
+ * @param {number} capacity current bin capacity, which sizes the portion ladder.
  * @param {(foodId: string, liters: number) => void} onAddWaste
  */
-async function promptAddWaste(onAddWaste) {
+async function promptAddWaste(capacity, onAddWaste) {
   const foodId = await chooseFrom(
     'game.chooseFood',
     foodChoices().map((choice) => ({ value: choice.id, label: choice.name })),
   );
   if (!foodId) return;
 
-  const portions = [MIN_PORTION_LITERS, DEFAULT_PORTION_LITERS, 2, 4];
+  const portions = portionOptions(capacity);
   const liters = await chooseFrom(
     'game.choosePortion',
     portions.map((value) => ({ value, label: formatLiters(value) })),
@@ -568,8 +647,13 @@ export function initActions(deps) {
     if (el) el.addEventListener('click', handler);
   };
 
-  on('addWaste', () => promptAddWaste(onAddWaste));
-  on('addSawdust', () => onAddSawdust(SAWDUST_PORTION_LITERS));
+  // Both waste and sawdust amounts are sized from the CURRENT bin, resolved at
+  // click time rather than captured here — the player can upgrade mid-run and the
+  // ladder has to follow the migration without re-initialising the panel.
+  const currentCapacity = () => getComposter(getFarm()?.composterId)?.capacity ?? 0;
+
+  on('addWaste', () => promptAddWaste(currentCapacity(), onAddWaste));
+  on('addSawdust', () => onAddSawdust(sawdustPortion(currentCapacity())));
   on('addWorms', () => promptBuyWorms(getFarm()?.speciesId ?? null, getWallet(), onBuyWorms));
   on('drain', onDrain);
   on('harvest', onHarvest);

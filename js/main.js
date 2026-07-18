@@ -279,7 +279,10 @@ function createFarmFromSetup(values) {
 
 /** Render the guided setup form and route Confirm → farm created + saved. */
 function renderSetup() {
-  initSetup({ onConfirm: createFarmFromSetup });
+  initSetup({
+    onConfirm: createFarmFromSetup,
+    capacity: getComposter(newFarmDraft.composterId)?.capacity,
+  });
 }
 
 // --- Game loop (T13) --------------------------------------------------------
