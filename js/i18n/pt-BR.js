@@ -67,6 +67,9 @@ export const ptBR = {
     hudTime: 'Hora',
     hudStatus: 'Situação',
     statusOk: 'Tudo bem',
+    statusColonyDead: 'Colônia morreu',
+    statusTrayFull: 'Bandeja de húmus cheia',
+    statusTankFull: 'Tanque de chorume cheio',
     // Actions panel
     actionsTitle: 'Ações',
     addWaste: 'Adicionar resíduo',

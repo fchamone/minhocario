@@ -65,6 +65,9 @@ export const es = {
     hudTime: 'Hora',
     hudStatus: 'Estado',
     statusOk: 'Todo bien',
+    statusColonyDead: 'La colonia murió',
+    statusTrayFull: 'Bandeja de humus llena',
+    statusTankFull: 'Tanque de lixiviado lleno',
     // Actions panel
     actionsTitle: 'Acciones',
     addWaste: 'Agregar residuo',

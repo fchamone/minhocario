@@ -25,7 +25,7 @@
 - [x] **CP4** — save round-trip proven + home persists. Review: save schema (freezes at v1 ship)
 - [x] **T11** Shop screen, first purchase (S) — deps: T7, T10
 - [x] **T12** Setup screen → farm created and saved (M) — deps: T11
-- [ ] **T13** Game loop wiring: HUD, speed, tick timer, autosave (M) — deps: T12, T9
+- [x] **T13** Game loop wiring: HUD, speed, tick timer, autosave (M) — deps: T12, T9
 - [ ] **CP5** — first end-to-end human playtest (shop→setup→running farm→persistence)
 - [ ] **T14** Actions panel + DOM internals (x-ray data) panel (M) — deps: T13
 - [ ] **T15** Full lifecycle: death/repopulate, upgrade, restart, live ranking (M) — deps: T14

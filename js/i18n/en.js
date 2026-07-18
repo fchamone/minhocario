@@ -65,6 +65,9 @@ export const en = {
     hudTime: 'Time',
     hudStatus: 'Status',
     statusOk: 'All good',
+    statusColonyDead: 'Colony died',
+    statusTrayFull: 'Humus tray full',
+    statusTankFull: 'Leachate tank full',
     // Actions panel
     actionsTitle: 'Actions',
     addWaste: 'Add waste',
