@@ -109,3 +109,19 @@ test('createInitialFarmState merges an env override over the defaults', () => {
   assert.equal(s.env.toxicity, 0, 'unspecified env fields keep their defaults');
   assert.equal(s.env.temperature, 20);
 });
+
+// --- createdAt: injected, never read from the clock inside the sim ----------
+
+test('createInitialFarmState carries an injected createdAt', () => {
+  const farm = createInitialFarmState({ seed: 1, createdAt: 1700000000000 });
+  assert.equal(farm.createdAt, 1700000000000);
+});
+
+test('createdAt defaults to 0 so the sim never needs a clock', () => {
+  assert.equal(createInitialFarmState({ seed: 1 }).createdAt, 0);
+});
+
+test('createdAt survives a JSON round-trip (it is part of the save)', () => {
+  const farm = createInitialFarmState({ seed: 1, createdAt: 12345 });
+  assert.equal(JSON.parse(JSON.stringify(farm)).createdAt, 12345);
+});

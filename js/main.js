@@ -257,6 +257,8 @@ function createFarmFromSetup(values) {
     speciesId: values.speciesId,
     wallPosition: values.wallPosition,
     env: beddingEnv(values.bedding),
+    // Injected here, not read inside the sim, so the engine stays clock-free.
+    createdAt: Date.now(),
   });
 
   // Seed the first colony (50 worms of the chosen species) — pays the pack price.

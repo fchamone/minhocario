@@ -79,12 +79,15 @@ test('topRanking tolerates an empty or missing list', () => {
 // per-tick ranking write and no farm-identity field in the save schema — the
 // live row simply IS the current farm, and restarting is what freezes it.
 
-test('rankingEntry summarizes a farm as a ranking row', () => {
-  const farm = { score: 123.4, day: 7 };
+test('rankingEntry produces the exact record shape the spec freezes (§2.1)', () => {
+  // This shape IS the phase-2 ranking API payload — keep all five fields.
+  const farm = { score: 123.4, day: 7, composterId: 'tier3', createdAt: 1700000000000 };
   assert.deepEqual(rankingEntry(farm, 'MinhocaVeloz42'), {
     nickname: 'MinhocaVeloz42',
     score: 123,
+    composterId: 'tier3',
     daysSurvived: 7,
+    createdAt: 1700000000000,
   });
 });
 
@@ -92,7 +95,9 @@ test('rankingEntry tolerates a missing nickname or farm fields', () => {
   assert.deepEqual(rankingEntry({}, undefined), {
     nickname: '',
     score: 0,
+    composterId: null,
     daysSurvived: 0,
+    createdAt: null,
   });
 });
 
@@ -129,14 +134,20 @@ test('displayRanking is empty for a fresh profile', () => {
 test('freezeRun turns the live farm into a permanent ranking row', () => {
   const save = {
     profile: { nickname: 'Runner', wallet: 50 },
-    farm: { score: 400, day: 12 },
+    farm: { score: 400, day: 12, composterId: 'tier2', createdAt: 42 },
     ranking: [{ nickname: 'Old', score: 900, daysSurvived: 20 }],
   };
   const frozen = freezeRun(save);
 
   assert.equal(frozen.farm, null, 'the run is over — no live farm remains');
   assert.equal(frozen.ranking.length, 2);
-  assert.deepEqual(frozen.ranking[1], { nickname: 'Runner', score: 400, daysSurvived: 12 });
+  assert.deepEqual(frozen.ranking[1], {
+    nickname: 'Runner',
+    score: 400,
+    composterId: 'tier2',
+    daysSurvived: 12,
+    createdAt: 42,
+  });
   assert.equal(frozen.profile.nickname, 'Runner', 'the player identity survives a restart');
 });
 

@@ -41,16 +41,25 @@ export function topRanking(entries, limit = RANKING_LIMIT) {
 }
 
 /**
- * Summarize a farm as a ranking row. Pure.
- * @param {{score?: number, day?: number}|null} farm
+ * Summarize a farm as a ranking row.
+ *
+ * The field set is fixed by spec §2.1 — `{nickname, score, composterId,
+ * daysSurvived, createdAt}` — because this record IS the payload a phase-2
+ * ranking backend would ingest. Do not add or drop fields here without
+ * revisiting that contract. Pure.
+ * @param {{score?: number, day?: number, composterId?: string|null,
+ *   createdAt?: number|null}|null} farm
  * @param {string|null|undefined} nickname
- * @returns {{nickname: string, score: number, daysSurvived: number}}
+ * @returns {{nickname: string, score: number, composterId: string|null,
+ *   daysSurvived: number, createdAt: number|null}}
  */
 export function rankingEntry(farm, nickname) {
   return {
     nickname: nickname ?? '',
     score: Math.round(farm?.score ?? 0),
+    composterId: farm?.composterId ?? null,
     daysSurvived: farm?.day ?? 0,
+    createdAt: farm?.createdAt ?? null,
   };
 }
 

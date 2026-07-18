@@ -120,6 +120,9 @@ function clamp(x, lo, hi) {
  * @property {number} colonyAgeDays days since the current colony started
  * @property {boolean} colonyAlive  false once the population hits zero
  * @property {number} score         live score (couples output and colony age)
+ * @property {number} createdAt     wall-clock ms when the farm was created; part
+ *   of the frozen ranking record (§2.1). INJECTED by the orchestrator — the sim
+ *   never reads the clock, so it stays pure and deterministic under test.
  */
 
 // Guided bedding mix -> initial bin environment (setup, §2.3). The mix is three
@@ -175,6 +178,8 @@ export function beddingEnv(mix) {
  * @property {number} [wallPosition=0.5]
  * @property {Partial<BinEnv>|null} [env=null] initial env override (e.g. from
  *   beddingEnv) merged over the neutral defaults; unset fields keep defaults.
+ * @property {number} [createdAt=0] wall-clock ms the farm was created at. The
+ *   caller supplies it (`Date.now()` in the browser) so the sim reads no clock.
  */
 
 /**
@@ -189,6 +194,7 @@ export function createInitialFarmState(opts = {}) {
     speciesId = null,
     wallPosition = 0.5,
     env = null,
+    createdAt = 0,
   } = opts;
 
   const baseEnv = { moisture: 0.5, ph: 7, toxicity: 0, temperature: 20 };
@@ -208,6 +214,7 @@ export function createInitialFarmState(opts = {}) {
     colonyAgeDays: 0,
     colonyAlive: true,
     score: 0,
+    createdAt,
   };
 }
 
