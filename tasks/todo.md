@@ -52,7 +52,14 @@
       Decisions + measurements in `tasks/t21-balance.md`.
 - [x] **T21b** Behavior/constants/rules reference doc → `docs/game-reference.md` (S/M) — deps: T21
 - [x] **T22** UX/visual polish + audits (strings/Math.random/food labels) (S/M) — deps: T20
-- [ ] **T23** Release checklist + deploy dry run (S) — deps: T21, T21b, T22
+- [x] **T23** Release checklist + deploy dry run (S) — deps: T21, T21b, T22
+      T21b + T22 committed separately (docs / feat(ui)). Deploy dry run: pruned
+      copy (minus tests/.harn/.claude/tasks/docs/.git) statically verified — all
+      48 runtime imports resolve locally, index.html refs exist, zero runtime
+      external URLs / network calls (Three.js `fetch` is in unused loader code).
+      `docs/` EXCLUDED from the FTP upload (maintainer spoiler sheet, not
+      player-facing). Full checklist + CP9 human gates in
+      `tasks/release-checklist.md`. Suite 222 green.
 - [ ] **CP9** — ship gate: human sign-off vs spec acceptance criteria; scoring + save schema freeze
 
 ## Change C-0002 — Multi-language (i18n): pt-BR / en / es
