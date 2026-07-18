@@ -82,6 +82,19 @@ export const es = {
     coins: 'monedas',
   },
 
+  // Save-slot prompts (spec §2.11 — a corrupt or newer-than-us save is shown to
+  // the player, never silently discarded). Wired into the home screen at T10.
+  storage: {
+    corruptTitle: 'Partida dañada',
+    corruptBody:
+      'No se pudo leer tu partida guardada. No se ha borrado. ¿Empezar una partida nueva de todos modos?',
+    futureTitle: 'Partida de una versión más nueva',
+    futureBody:
+      'Esta partida fue creada por una versión más reciente del juego y no se puede abrir aquí. No se sobrescribirá nada.',
+    startNew: 'Empezar nueva',
+    keepSave: 'Mantener partida',
+  },
+
   // Catalog display text, keyed by sim id (js/sim/composters.js). Descriptions
   // paraphrase each model's traits (regulation/insulation, capacity, speed).
   composters: {

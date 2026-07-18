@@ -82,6 +82,19 @@ export const en = {
     coins: 'coins',
   },
 
+  // Save-slot prompts (spec §2.11 — a corrupt or newer-than-us save is shown to
+  // the player, never silently discarded). Wired into the home screen at T10.
+  storage: {
+    corruptTitle: 'Corrupted save',
+    corruptBody:
+      'Your saved game could not be read. It was not deleted. Start a new game anyway?',
+    futureTitle: 'Save from a newer version',
+    futureBody:
+      'This save was created by a newer version of the game and cannot be opened here. Nothing will be overwritten.',
+    startNew: 'Start new',
+    keepSave: 'Keep save',
+  },
+
   // Catalog display text, keyed by sim id (js/sim/composters.js). Descriptions
   // paraphrase each model's traits (regulation/insulation, capacity, speed).
   composters: {

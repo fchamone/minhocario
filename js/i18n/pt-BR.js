@@ -84,6 +84,19 @@ export const ptBR = {
     coins: 'moedas',
   },
 
+  // Save-slot prompts (spec §2.11 — a corrupt or newer-than-us save is shown to
+  // the player, never silently discarded). Wired into the home screen at T10.
+  storage: {
+    corruptTitle: 'Save danificado',
+    corruptBody:
+      'Não foi possível ler seu jogo salvo. Ele não foi apagado. Deseja começar um jogo novo mesmo assim?',
+    futureTitle: 'Save de uma versão mais nova',
+    futureBody:
+      'Este save foi criado por uma versão mais recente do jogo e não pode ser aberto aqui. Nada será sobrescrito.',
+    startNew: 'Começar novo',
+    keepSave: 'Manter save',
+  },
+
   // Catalog display text, keyed by sim id (js/sim/composters.js). Descriptions
   // paraphrase each model's traits (regulation/insulation, capacity, speed).
   composters: {

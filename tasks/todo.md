@@ -20,7 +20,7 @@
 
 ## Phase 2 — Persistence and DOM-playable game
 
-- [ ] **T9** Storage: versioned save, migrations, round-trip (S) — deps: T7
+- [x] **T9** Storage: versioned save, migrations, round-trip (S) — deps: T7
 - [ ] **T10** Home screen: nickname, ranking, Play/Continue (S/M) — deps: T1, T9
 - [ ] **CP4** — save round-trip proven + home persists. Review: save schema (freezes at v1 ship)
 - [ ] **T11** Shop screen, first purchase (S) — deps: T7, T10
