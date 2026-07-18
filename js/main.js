@@ -20,6 +20,7 @@ import {
   DEFAULT_SPEED,
 } from './ui/speed.js';
 import { load, save, LOAD_STATUS } from './storage.js';
+import { initScene, renderState, resizeScene } from './render/scene.js';
 import {
   STARTING_WALLET,
   createInitialFarmState,
@@ -323,6 +324,30 @@ let currentScreen = null;
  */
 let continuousHour = 0;
 
+// --- Render layer (T16) ------------------------------------------------------
+// The 3D scene is initialized lazily on first game-screen entry (the canvas has
+// no layout size while its screen is hidden) and attempted exactly once: if WebGL
+// is unavailable the game stays fully playable DOM-only, and we never retry/re-warn.
+
+/** True once we've tried to init the scene (whether or not it succeeded). */
+let sceneAttempted = false;
+/** True only if WebGL is up and the scene may be rendered. */
+let sceneEnabled = false;
+
+/**
+ * Mount the 3D scene onto the game-screen canvas the first time it's needed.
+ * Idempotent and failure-tolerant: a missing canvas or WebGL failure leaves
+ * `sceneEnabled` false and the DOM game untouched.
+ * @returns {boolean} whether the scene is available to render
+ */
+function ensureScene() {
+  if (sceneAttempted) return sceneEnabled;
+  sceneAttempted = true;
+  const canvas = document.getElementById('scene-canvas');
+  sceneEnabled = canvas ? initScene(canvas) : false;
+  return sceneEnabled;
+}
+
 /** Persist the live farm under the current profile/ranking (autosave). */
 function persistGame() {
   if (!gameFarm || !gameProfile) return;
@@ -485,6 +510,12 @@ function frame(now) {
   }
 
   if (gameFarm) continuousHour = gameFarm.hour + drain.fraction;
+
+  // Render every animation frame (decoupled from the discrete tick rate) so the
+  // scene stays smooth and live even while the clock is paused. renderState is a
+  // no-op when WebGL is unavailable, so this is safe regardless of sceneEnabled.
+  renderState(gameFarm, continuousHour);
+
   rafId = requestAnimationFrame(frame);
 }
 
@@ -509,10 +540,15 @@ function stopLoop() {
  * clock stays stopped.
  */
 function startGame() {
+  // Mount + size the 3D scene now that its canvas is visible. Sizing must happen
+  // on entry because the canvas has no layout size while the screen is hidden.
+  if (ensureScene()) resizeScene();
+
   const result = load();
   if (result.status !== LOAD_STATUS.OK || !result.save.farm) {
     gameFarm = null;
     updateHud(null, currentWallet());
+    renderState(gameFarm, continuousHour); // wall + floor even with no farm
     return;
   }
   gameFarm = result.save.farm;
@@ -524,6 +560,7 @@ function startGame() {
   // as a transition and stops the clock straight away.
   lastColonyAlive = true;
   refreshGameUi();
+  renderState(gameFarm, continuousHour); // immediate paint before the first tick
   startLoop();
 }
 
