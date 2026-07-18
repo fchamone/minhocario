@@ -25,6 +25,19 @@ const PH_DRIFT_RATE = 0.02; // fraction of the gap to neutral closed per tick
 const TOX_DECAY_RATE = 0.001; // per-tick toxicity decay — deliberately very slow
 const SAWDUST_DRY_PER_LITER = 0.03; // moisture removed per liter of sawdust added
 
+// Passive evaporation (§2.5): a warm bin loses moisture to the air every tick.
+// Without this, moisture is a ONE-WAY ratchet — only food and leachate backup
+// raise it, only sawdust lowers it — so an untended bin can never dry out on its
+// own and the "too dry" failure state (§2.8) is unreachable by neglect.
+//
+// Evaporation is TEMPERATURE-GATED: negligible at room temperature, climbing only
+// as the bin heats past EVAP_THRESHOLD. This mirrors real drying (evaporation rises
+// steeply with temperature) and, crucially, means a cool shaded bin barely dries —
+// so a hot, sun-baked or neglected bin dries into lethal territory while a
+// well-placed, well-fed bin holds its moisture. First-pass; tuned at T8/T21.
+const EVAP_THRESHOLD = 24; // °C below which passive drying is negligible
+const EVAP_COEF = 0.0006; // per-tick moisture lost per °C above the threshold
+
 // Production / consumption / overflow constants (§2.6, §2.8). First-pass; tuned
 // at T8. The eating throughput of the colony per tick is
 //   activeWorms × species.speed × composter.speed × CONSUMPTION_PER_WORM
@@ -101,12 +114,59 @@ function clamp(x, lo, hi) {
  * @property {number} score         live score (couples output and colony age)
  */
 
+// Guided bedding mix -> initial bin environment (setup, §2.3). The mix is three
+// components; the starting moisture/pH is their volume-weighted blend. Values
+// are FIRST-PASS: sawdust is dry & mildly acidic, fruit peels wet & acidic, wet
+// cardboard wet & near-neutral — so more sawdust dries the bin, more peels
+// acidify it, more cardboard wets it.
+const BEDDING_COMPONENTS = {
+  sawdust: { moisture: 0.15, ph: 6.2 },
+  peels: { moisture: 0.85, ph: 5.0 },
+  cardboard: { moisture: 0.8, ph: 7.2 },
+};
+
+/**
+ * Guided (pre-filled) bedding amounts in liters — tuned so the blend lands
+ * moisture/pH inside every species' comfort band (locked by the engine test).
+ */
+export const RECOMMENDED_BEDDING = { sawdust: 1.5, peels: 1, cardboard: 2.5 };
+
+/**
+ * A bedding mix, in liters per component.
+ * @typedef {object} BeddingMix
+ * @property {number} sawdust   dry, mildly acidic
+ * @property {number} peels     fruit peels/husks — wet, acidic
+ * @property {number} cardboard wet cardboard — wet, near-neutral
+ */
+
+/**
+ * Initial bin moisture and pH from a bedding mix: the volume-weighted blend of
+ * the component characteristics. An empty mix returns neutral defaults. Pure.
+ * @param {BeddingMix} mix
+ * @returns {{moisture: number, ph: number}}
+ */
+export function beddingEnv(mix) {
+  let total = 0;
+  let moisture = 0;
+  let ph = 0;
+  for (const [key, comp] of Object.entries(BEDDING_COMPONENTS)) {
+    const liters = mix && mix[key] > 0 ? mix[key] : 0;
+    total += liters;
+    moisture += liters * comp.moisture;
+    ph += liters * comp.ph;
+  }
+  if (total <= 0) return { moisture: 0.5, ph: 7 };
+  return { moisture: clamp01(moisture / total), ph: clamp(ph / total, 0, 14) };
+}
+
 /**
  * @typedef {object} InitialFarmOptions
  * @property {number} [seed=1]           RNG seed (orchestrator supplies entropy)
  * @property {string|null} [composterId=null]
  * @property {string|null} [speciesId=null]
  * @property {number} [wallPosition=0.5]
+ * @property {Partial<BinEnv>|null} [env=null] initial env override (e.g. from
+ *   beddingEnv) merged over the neutral defaults; unset fields keep defaults.
  */
 
 /**
@@ -120,7 +180,10 @@ export function createInitialFarmState(opts = {}) {
     composterId = null,
     speciesId = null,
     wallPosition = 0.5,
+    env = null,
   } = opts;
+
+  const baseEnv = { moisture: 0.5, ph: 7, toxicity: 0, temperature: 20 };
 
   return {
     day: 1,
@@ -130,7 +193,7 @@ export function createInitialFarmState(opts = {}) {
     speciesId,
     wallPosition,
     population: { cocoons: 0, juveniles: 0, adults: 0 },
-    env: { moisture: 0.5, ph: 7, toxicity: 0, temperature: 20 },
+    env: env ? { ...baseEnv, ...env } : baseEnv,
     queue: [],
     humus: 0,
     leachate: 0,
@@ -322,10 +385,15 @@ export function tick(state, rng) {
     }
   }
 
-  // Environment dynamics: moisture accrues (sawdust removes it, leachate backup
-  // spikes it); pH eases back toward neutral then takes the food push; toxicity
-  // decays very slowly then takes the food load plus any rot.
-  const moisture = clamp01(state.env.moisture + dyn.moisture + spillMoisture);
+  // Environment dynamics: moisture accrues (food releases it, leachate backup
+  // spikes it) and is lost to passive evaporation (faster when warm) and sawdust;
+  // pH eases back toward neutral then takes the food push; toxicity decays very
+  // slowly then takes the food load plus any rot. Evaporation uses the pre-tick
+  // temperature (the warmth the bin carried into this hour).
+  const evaporation = EVAP_COEF * Math.max(0, state.env.temperature - EVAP_THRESHOLD);
+  const moisture = clamp01(
+    state.env.moisture + dyn.moisture + spillMoisture - evaporation,
+  );
   const ph = clamp(
     state.env.ph + (NEUTRAL_PH - state.env.ph) * PH_DRIFT_RATE + dyn.phPush,
     0,

@@ -29,6 +29,7 @@ const isDead = (s) => !s.colonyAlive || total(s.population) === 0;
 /** Californiana lethal thresholds (comfort band edge + LETHAL_RATIO x stall span). */
 const TEMP_LETHAL = 30 + 2 * 4; // tempComfort.max + LETHAL_RATIO * TEMP_STALL
 const MOIST_LETHAL = 0.85 + 2 * 0.06; // moistureComfort.max + LETHAL_RATIO * MOISTURE_STALL
+const MOIST_DRY_LETHAL = 0.4 - 2 * 0.06; // moistureComfort.min - LETHAL_RATIO * MOISTURE_STALL
 
 // --- GOOD CARE: a tended beginner colony thrives for a full season ----------
 
@@ -82,11 +83,16 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
 // --- §2.8 neglect chain 1: leachate overflow -> saturation -> mortality ------
 
 test('NEGLECT (leachate): never draining saturates the bedding and kills the colony', () => {
-  // Feed a moisture-NEUTRAL food (eggshells) and harvest every tick, so the ONLY
-  // thing that can move moisture is leachate backing up out of a never-drained
-  // tank. Once the tank overflows it re-saturates the bedding; moisture climbs to
-  // saturation and turns lethal.
-  const BOUND_DAYS = 45;
+  // Feed a normal, non-toxic wet food (vegetable scraps) and NEVER drain: the
+  // leachate backs up out of the tank and the food's own moisture has nowhere to
+  // go, so the bedding saturates to a lethal moisture level. Harvest every tick
+  // and keep the wall shaded so neither the humus/rot chain nor fermentation heat
+  // confounds it — saturation is the only lethal factor (asserted: temperature
+  // and toxicity both stay sub-lethal throughout). (An earlier version fed
+  // moisture-neutral eggshells to isolate the tank, but with passive evaporation
+  // in play a zero-moisture bin now just dries out instead — so the faithful way
+  // to reach saturation is to over-wet a normally-fed bin that is never drained.)
+  const BOUND_DAYS = 30;
   let s = createInitialFarmState({
     seed: 7,
     composterId: 'tier2',
@@ -98,17 +104,23 @@ test('NEGLECT (leachate): never draining saturates the bedding and kills the col
 
   let dieDay = -1;
   let sawSpike = false;
+  let maxTemp = 0;
+  let maxTox = 0;
   for (let d = 0; d < BOUND_DAYS && dieDay < 0; d++) {
     for (let h = 0; h < 24; h++) {
-      if (queueVolume(s) < 20 && h % 3 === 0) s = addFood(s, 'eggshells', 5);
+      if (queueVolume(s) < 12 && h % 2 === 0) s = addFood(s, 'vegetableScraps', 3);
       s = tick(s, rng);
       s = harvestHumus(s).state; // keep the tray clear; NEVER drain the tank
       if (s.env.moisture >= MOIST_LETHAL) sawSpike = true;
+      maxTemp = Math.max(maxTemp, s.env.temperature);
+      maxTox = Math.max(maxTox, s.env.toxicity);
     }
     if (isDead(s)) dieDay = s.day;
   }
 
-  assert.ok(sawSpike, 'the undrained tank re-saturated the bedding to a lethal moisture level');
+  assert.ok(sawSpike, 'the never-drained bin saturated the bedding to a lethal moisture level');
+  assert.ok(maxTemp < TEMP_LETHAL, `heat stayed sub-lethal — this death is saturation, not fermentation: max ${maxTemp.toFixed(2)}`);
+  assert.ok(maxTox < 0.1, `toxicity stayed sub-lethal — vegetable scraps are non-toxic: max ${maxTox.toFixed(3)}`);
   assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
   assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
   assert.equal(s.colonyAlive, false, 'colonyAlive flipped to false');
@@ -157,15 +169,17 @@ test('NEGLECT (humus): never harvesting fills the tray, halts processing, and ro
 // --- §2.8 neglect chain 3: overfeeding -> fermentation heat -> mortality -----
 
 test('NEGLECT (overfeeding): chronic fresh dumps ferment the bin to a lethal temperature', () => {
-  // Worst case per §2.8: a poorly-insulated open tray (tier2) in the sun patch
-  // (wallPosition 0.5). Sustained daytime dumps of fresh food keep the hot,
-  // still-fermenting mass topped up; harvest + drain each tick so the tray/tank
-  // never confound the HEAT mechanism. coffeeGrounds are used (low moisture) so
-  // fermentation heat, not saturation, is the first factor to turn lethal.
-  const BOUND_DAYS = 20;
+  // Chronic overfeeding of a LARGE bin (eco) in the sun patch (wallPosition 0.5).
+  // Sustained daytime dumps keep a big, still-fermenting fresh mass, and a bin
+  // this size holds that fermentation heat through the cold night, so the
+  // temperature stays lethal rather than cooling off and letting a heat-hardened
+  // remnant survive (a small open tray cools overnight and never fully dies).
+  // Harvest + drain each tick so the tray/tank chains don't do the killing;
+  // fermentation heat reaches the lethal threshold first.
+  const BOUND_DAYS = 15;
   let s = createInitialFarmState({
     seed: 7,
-    composterId: 'tier2',
+    composterId: 'eco',
     speciesId: 'californiana',
     wallPosition: 0.5,
   });
@@ -178,7 +192,7 @@ test('NEGLECT (overfeeding): chronic fresh dumps ferment the bin to a lethal tem
   let moistLethalDay = -1;
   for (let d = 0; d < BOUND_DAYS && dieDay < 0; d++) {
     for (let h = 0; h < 24; h++) {
-      if (h >= 8 && h <= 16) s = addFood(s, 'coffeeGrounds', 8); // overfeed all daytime
+      if (h >= 8 && h <= 16) s = addFood(s, 'coffeeGrounds', 15); // overfeed all daytime
       s = tick(s, rng);
       s = harvestHumus(s).state;
       s = drainLeachate(s).state;
@@ -236,6 +250,47 @@ test('NEGLECT (only unsuitable food): feeding only toxic foods poisons the colon
   }
 
   assert.ok(maxTox > 0.4, `toxicity climbed into lethal territory: max ${maxTox.toFixed(3)}`);
+  assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
+  assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
+  assert.equal(s.colonyAlive, false, 'colonyAlive flipped to false');
+  assert.equal(total(s.population), 0, 'population reached zero');
+});
+
+// --- §2.8 neglect chain 5: no feeding + heat -> bedding dries out -> mortality ---
+
+test('NEGLECT (drying): a hot, unfed bin evaporates the bedding to a lethal dryness', () => {
+  // The mirror image of the leachate chain: never add food OR sawdust, and leave
+  // the bin baking in the sun patch (wallPosition 0.5). With no food moisture to
+  // replenish it, passive evaporation — which climbs with temperature — draws the
+  // bedding down past the DRY edge of the comfort band until dryness turns lethal.
+  // Harvest + drain each tick so nothing else can confound it; heat stays
+  // sub-lethal, so dryness (not overheating) is what kills.
+  const BOUND_DAYS = 30;
+  let s = createInitialFarmState({
+    seed: 7,
+    composterId: 'tier2',
+    speciesId: 'californiana',
+    wallPosition: 0.5,
+  });
+  ({ state: s } = buyWormPack(s, 1000, 'californiana', 200));
+  const rng = createRng(s.rngState);
+
+  let dieDay = -1;
+  let minMoisture = 1;
+  let maxTemp = 0;
+  for (let d = 0; d < BOUND_DAYS && dieDay < 0; d++) {
+    for (let h = 0; h < 24; h++) {
+      s = tick(s, rng); // never feed, never add sawdust
+      s = harvestHumus(s).state;
+      s = drainLeachate(s).state;
+      minMoisture = Math.min(minMoisture, s.env.moisture);
+      maxTemp = Math.max(maxTemp, s.env.temperature);
+    }
+    if (isDead(s)) dieDay = s.day;
+  }
+
+  assert.ok(minMoisture < MOIST_DRY_LETHAL, `the bedding dried past the lethal-dry edge: min ${minMoisture.toFixed(3)}`);
+  assert.ok(maxTemp < TEMP_LETHAL, `heat stayed sub-lethal — this death is dryness, not overheating: max ${maxTemp.toFixed(2)}`);
   assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
   assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
   assert.equal(s.colonyAlive, false, 'colonyAlive flipped to false');

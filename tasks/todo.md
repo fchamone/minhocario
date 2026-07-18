@@ -13,7 +13,7 @@
 - [x] **T4** Food queue + foods catalog + bin environment dynamics (M) — deps: T3
 - [x] **T5** Population model + species catalog + mortality (M) — deps: T4
 - [x] **T6** Production, consumption, overflow chains + drain/harvest (M) — deps: T5
-- [ ] **CP2** — all sim suites green. Review: env dynamics + queue semantics
+- [x] **CP2** — all sim suites green. Review: env dynamics + queue semantics
 - [x] **T7** Scoring + economy + colony death/repopulate + migration (M) — deps: T6
 - [x] **T8** Balance harness + first tuning pass (M) — deps: T7
 - [ ] **CP3** — full suite green. **Human review of balance numbers (most important review)**
@@ -24,7 +24,7 @@
 - [x] **T10** Home screen: nickname, ranking, Play/Continue (S/M) — deps: T1, T9
 - [x] **CP4** — save round-trip proven + home persists. Review: save schema (freezes at v1 ship)
 - [x] **T11** Shop screen, first purchase (S) — deps: T7, T10
-- [ ] **T12** Setup screen → farm created and saved (M) — deps: T11
+- [x] **T12** Setup screen → farm created and saved (M) — deps: T11
 - [ ] **T13** Game loop wiring: HUD, speed, tick timer, autosave (M) — deps: T12, T9
 - [ ] **CP5** — first end-to-end human playtest (shop→setup→running farm→persistence)
 - [ ] **T14** Actions panel + DOM internals (x-ray data) panel (M) — deps: T13

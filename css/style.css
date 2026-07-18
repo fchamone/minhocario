@@ -141,7 +141,33 @@ h1, h2 { margin: 0 0 0.4em; }
 .shop-card--disabled .shop-card__buy { background: var(--panel-2); color: var(--ink); }
 .shop-card__reason { color: var(--danger); font-size: 0.8rem; margin: 0; }
 .setup { max-width: 640px; margin: 0 auto; display: grid; gap: var(--gap); }
-.setup fieldset { border: 1px solid var(--panel-2); border-radius: var(--radius); }
+.setup fieldset { border: 1px solid var(--panel-2); border-radius: var(--radius); display: grid; gap: 8px; }
+
+.setup-species {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.setup-species:hover { background: var(--panel-2); }
+.setup-species__body { display: grid; gap: 2px; }
+.setup-species__latin { color: var(--ink-dim); font-size: 0.85rem; }
+.setup-species__desc { font-size: 0.9rem; }
+.setup-species__price { color: var(--accent); font-size: 0.85rem; }
+
+.setup-bedding__row,
+.setup-waste__amount {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.setup-bedding__row input,
+.setup-waste__amount input { width: 90px; }
+#setup-waste { display: grid; gap: 8px; }
+#setup-waste select { padding: 6px; }
 
 /* --- Game screen grid --- */
 /* Regions: HUD across the top, stage (3D canvas) fills the middle,

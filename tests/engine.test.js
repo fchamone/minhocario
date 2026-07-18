@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createInitialFarmState, tick } from '../js/sim/engine.js';
+import {
+  createInitialFarmState,
+  tick,
+  beddingEnv,
+  RECOMMENDED_BEDDING,
+} from '../js/sim/engine.js';
 import { createRng } from '../js/sim/rng.js';
+import { getSpecies } from '../js/sim/worms.js';
 
 test('createInitialFarmState starts at day 1, hour 0', () => {
   const s = createInitialFarmState({ seed: 1 });
@@ -63,4 +69,43 @@ test('farm state round-trips through JSON deep-equal (initial and after ticks)',
   const rng = createRng(s.rngState);
   for (let i = 0; i < 50; i++) s = tick(s, rng);
   assert.deepEqual(JSON.parse(JSON.stringify(s)), s);
+});
+
+// --- bedding mix -> initial moisture/pH (T12 setup helper) -------------------
+
+test('the recommended bedding mix lands moisture and pH inside the comfort bands', () => {
+  const { moisture, ph } = beddingEnv(RECOMMENDED_BEDDING);
+  // pH comfort band is 6..8 (worms.js PH_COMFORT).
+  assert.ok(ph >= 6 && ph <= 8, `pH inside comfort band: ${ph}`);
+  // Moisture must sit inside even the NARROWEST species band (azul 0.55..0.72),
+  // so the guided default is comfortable whichever species the player picks.
+  const azul = getSpecies('azul').moistureComfort;
+  assert.ok(
+    moisture >= azul.min && moisture <= azul.max,
+    `moisture inside the narrowest band: ${moisture}`,
+  );
+});
+
+test('deviating the bedding mix shifts moisture and pH predictably', () => {
+  const base = beddingEnv(RECOMMENDED_BEDDING);
+  const drier = beddingEnv({ ...RECOMMENDED_BEDDING, sawdust: RECOMMENDED_BEDDING.sawdust + 6 });
+  const sour = beddingEnv({ ...RECOMMENDED_BEDDING, peels: RECOMMENDED_BEDDING.peels + 6 });
+  const wetter = beddingEnv({ ...RECOMMENDED_BEDDING, cardboard: RECOMMENDED_BEDDING.cardboard + 6 });
+  assert.ok(drier.moisture < base.moisture, 'more sawdust dries the bin');
+  assert.ok(sour.ph < base.ph, 'more fruit peels acidify the bin');
+  assert.ok(wetter.moisture > base.moisture, 'more wet cardboard wets the bin');
+});
+
+test('beddingEnv falls back to neutral defaults for an empty mix', () => {
+  const { moisture, ph } = beddingEnv({ sawdust: 0, peels: 0, cardboard: 0 });
+  assert.equal(moisture, 0.5);
+  assert.equal(ph, 7);
+});
+
+test('createInitialFarmState merges an env override over the defaults', () => {
+  const s = createInitialFarmState({ seed: 1, env: { moisture: 0.6, ph: 6.5 } });
+  assert.equal(s.env.moisture, 0.6);
+  assert.equal(s.env.ph, 6.5);
+  assert.equal(s.env.toxicity, 0, 'unspecified env fields keep their defaults');
+  assert.equal(s.env.temperature, 20);
 });

@@ -24,8 +24,12 @@ const SUNSET_HOUR = 18;
 const SOLAR_MAX = 6; // °C peak contribution in the direct sun patch
 const PATCH_WIDTH = 0.35; // half-width (in wall units) of the sunny patch
 
-// Fermentation heat from fresh food mass.
-const FERMENT_COEF = 0.8; // °C added to the target per liter of fresh food mass
+// Fermentation heat from fresh food mass. Tuned down from an initial 0.8 (which
+// drove heavily-fed bins to an unrealistic 50-90 °C) so a full fresh load peaks
+// in the 40s — hot enough that chronic overfeeding still turns lethal, but not so
+// hot that ordinary feeding cooks the colony or (via the temperature-gated
+// evaporation in engine.js) dries every fed bin out. Tuned at T8/T21.
+const FERMENT_COEF = 0.35; // °C added to the target per liter of fresh food mass
 
 /**
  * Ambient temperature (°C) as a function of the hour of day. Smooth sinusoid,
