@@ -147,3 +147,42 @@ test('tick moves bin temperature toward the environment target', () => {
   assert.notEqual(s1.env, s0.env);
   assert.equal(s0.env.temperature, 20);
 });
+
+// --- Placement is a real decision (retuned after CP6) ------------------------
+// Before the retune the sunniest spot added only ~0.8 °C to the DAILY MEAN, so
+// moving the composter changed a 30-day population by less than 3%. The bin
+// blends toward a target, and damping changes the swing but never the mean, so
+// the only lever is total daily solar energy. These lock the lever's existence
+// and rough size WITHOUT pinning SOLAR_MAX, so it stays tunable at T21.
+
+/** Mean solar gain across a full day at a wall position. */
+function dailyMeanSolar(position) {
+  let sum = 0;
+  for (let h = 0; h < 24; h++) sum += solarGain(position, h);
+  return sum / 24;
+}
+
+test('the sunny centre of the wall beats BOTH shaded ends, which are equal', () => {
+  // The patch sweeps 0 -> 1 but peaks at noon, so 0.5 is sunniest and the two
+  // ends are the shadiest — and symmetric. (Mis-reading this produced a wrong
+  // CP6 finding by comparing 0.0 against 1.0, i.e. shade against shade.)
+  const centre = dailyMeanSolar(0.5);
+  const left = dailyMeanSolar(0);
+  const right = dailyMeanSolar(1);
+  assert.ok(centre > left, 'centre must out-gain the left end');
+  assert.ok(centre > right, 'centre must out-gain the right end');
+  assert.ok(Math.abs(left - right) < 1e-9, 'the two ends are symmetric');
+});
+
+test('placement moves the daily mean enough to matter (>= 1 °C spread)', () => {
+  const spread = dailyMeanSolar(0.5) - dailyMeanSolar(0);
+  assert.ok(spread >= 1, `placement lever collapsed to ${spread.toFixed(2)} °C of daily mean`);
+});
+
+test('the sunny spot still cannot cook a well-placed bin on its own', () => {
+  // Upper guard: solar alone (no fermentation) must leave headroom under the
+  // ~38 °C lethal line, or good care in the sun becomes unsurvivable.
+  let peak = 0;
+  for (let h = 0; h < 24; h++) peak = Math.max(peak, ambientTemperature(h) + solarGain(0.5, h));
+  assert.ok(peak < 38, `bare sun peak reached ${peak.toFixed(1)} °C`);
+});

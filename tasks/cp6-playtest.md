@@ -73,19 +73,34 @@ Wall-clock figures assume 20× (one game day ≈ 3 s).
 
 ### Chain timings — all four terminate by pure neglect
 
+Re-measured after the retune (bins at `wallPosition` 0.5, the sunniest spot):
+
 | Chain | Milestones (game day) | Death | At 20× |
 |---|---|---|---|
 | Only unsuitable food (meat) | toxicity > 0.1 on d4 | d9 | ~27 s |
-| Never harvest humus | tray full d20, toxicity d25 | d34 | ~102 s |
-| Never drain leachate | tank full d12 | d21 | ~63 s |
+| Never harvest humus | tray full d20, toxicity d25 | d35 | ~105 s |
+| Never drain leachate | tank full d14 | d24 | ~72 s |
 | Overfeed (max fresh mass) | toxicity d3, tank full d4 | d4 | ~12 s |
-| Total neglect (feed once, walk away) | dries below 0.4 on d16 | d26 | ~78 s |
+| Total neglect (feed once, walk away) | dries below 0.4 on d11 | d17 | ~51 s |
+
+The drying chain accelerated (d26 → d17) because evaporation is gated on
+temperature (`engine.js`: `EVAP_COEF × max(0, T − 24)`), so a hotter sun patch
+dries an untended bin faster. Every moisture bound in the suite is a temperature
+bound in disguise — worth remembering before any further thermal tuning.
 
 All comfortably reachable in one session at 20×. At 1× the slowest chain
 (never-harvest) takes ~34 real minutes — acceptable, since 20× is the
 management speed by design.
 
-### T21-1 — Overfeeding kills by drowning, not by heat *(highest-value finding)*
+### ~~T21-1 — Overfeeding kills by drowning, not by heat~~ — RESOLVED, and partly MIS-MEASURED
+
+> **Correction.** The claim below that "the sun spot barely matters" was measured
+> wrong: it compared `wallPosition` 0.0 against 1.0. The patch sweeps 0 → 1 but
+> intensity peaks at *noon*, so **0.5 is the sunniest spot and both ends are the
+> shadiest** — that was shade against shade. See "Retune" below for the real
+> numbers and what was changed.
+
+Original finding, kept for the record:
 
 Spec §2.8 says: *"Overfeeding: large fresh mass → fermentation heat →
 temperature spike → mortality (worse in the sun spot / poorly insulated
@@ -123,6 +138,77 @@ Candidate levers (all in `js/sim/`): raise `fermentationHeat` output per liter
 of fresh mass, widen `solarGain`'s contribution, or lower the lethal temperature
 threshold. Any of these should be checked against the good-care scenario so a
 well-tended sunny farm does not start cooking.
+
+### Retune applied — placement + electric premium
+
+Both issues above were fixed rather than deferred to T21. Suite: 220 green.
+
+**Placement.** The real problem was not patch geometry but that the bin blends
+toward a target, so *damping changes the swing but never the mean* — the sunniest
+spot added only **0.78 °C** of daily mean, and a 30-day population moved under 3%.
+`SOLAR_MAX` 6 → 12 raises that spread to ~1.6 °C of mean and ~6 °C of midday peak.
+
+`PATCH_WIDTH` stays at **0.35**. Widening it to 0.5 buys only ~0.2 °C more spread
+while pushing positions 0.2–0.3 past the 30 °C stall band (hitting two balance
+chains), and 0.5 is the exact ceiling the "shaded end gets no midday sun" test
+allows. Narrow keeps the margin for T21.
+
+| position | peak target temp | daily mean solar |
+|---|---|---|
+| 0.0 / 1.0 (ends, shadiest) | 28.0 °C | +0.35 |
+| 0.25 | 28.5 °C | +1.36 |
+| 0.5 (centre, sunniest) | 37.7 °C | +1.92 |
+
+**Overfeeding now has two signatures**, decided by placement — `FERMENT_COEF` was
+left at 0.35, because the solar change alone produced the divergence:
+
+| crammed tier2 | verdict | max temp |
+|---|---|---|
+| shade (0.0) | saturation kills first | 34.9 °C (never lethal) |
+| 0.3 | heat kills first | 38.6 °C |
+| sun (0.5) | heat kills first | 43.0 °C |
+
+**Electric composter.** Its 20 L bin is the binding constraint: it sustains a
+smaller larder, hence a smaller colony (measured 465 vs tier2's 1457), and no
+amount of speed fixes that — a speed sweep showed **2.7× the speed buys only 16%
+more output**, because faster eating starves the colony. `humusRate` is the lever
+that scales output without raising food demand. Final: `speed` 1.1 → 1.7,
+`humusRate` 0.55 → 0.78, `leachateRate` 0.2 → 0.15 (an actively managed unit
+pools less runoff; keeps output ≤ intake).
+
+| model | price | cap | pop | coins/day | coins/day per litre |
+|---|---|---|---|---|---|
+| **electric** | 350 | 20 | 465 | **67.2** | **3.36** |
+| tier2 | 100 | 30 | 1457 | 53.9 | 1.80 |
+| tier3 | 180 | 45 | 1658 | 75.6 | 1.68 |
+| tier4 | 280 | 60 | 1683 | 93.9 | 1.56 |
+| buried | 300 | 80 | 2733 | 72.3 | 0.90 |
+
+### T21-3 — Electric is still out-earned by cheaper large bins *(open)*
+
+The retune took electric from **below** tier2 to **+25% above** it, and it is now
+by far the most productive bin per litre (3.36 vs ~1.7 for everything else). But
+tier3 costs **180** and still earns more in absolute terms (75.6 vs 67.2), so a
+purely rational player skips electric.
+
+This is a ceiling of the "production edge only" approach: capacity gates the
+colony, and `humusRate` is already at 0.78 against a conservation bound of
+`humusRate + leachateRate ≤ 1`. Closing the gap needs one of:
+
+- **lower its price** (~200 would make it a sensible first upgrade from tier2), or
+- **raise its capacity** (contradicts the smallest-to-largest shop ordering), or
+- **make cold nights genuinely threatening** (widen `AMBIENT_AMPLITUDE`), so its
+  thermal regulation protects against a real threat instead of a notional one.
+
+### T21-4 — Africana cannot be rescued by the sun spot *(open)*
+
+Spec §2.9 says the Gigante-Africana "pairs with the sun spot or electric
+composter". The sun spot **cannot** help it: africana's problem is cold nights,
+and solar gain is zero at night by construction. Even at `SOLAR_MAX 12` the sunny
+centre lifts the daily mean ~1.6 °C while nights still fall to ~12.7 °C, far below
+africana's 20 °C floor. Only the electric composter (min 20.6 °C) keeps it in
+band. Either the spec sentence needs correcting, or passive models need lower
+`tempResponse` so bins carry daytime heat overnight.
 
 ### T21-2 — Economy pacing (informational, looks healthy)
 

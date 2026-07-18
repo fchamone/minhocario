@@ -37,9 +37,19 @@ export const COMPOSTERS = [
     capacity: 20,
     humusCapacity: 8,
     leachateCapacity: 4,
-    speed: 1.1,
-    humusRate: 0.55,
-    leachateRate: 0.2,
+    // Smallest bin in the catalog (population ceiling 1000) at the second-highest
+    // price, so it can never win on colony SIZE — measured at CP6 it was actually
+    // worse than the 100-coin tier2 for two of the three species. Its premium is
+    // therefore throughput per worm, not headcount: it processes fastest and
+    // converts the largest share of what it eats into humus. A small, perfectly
+    // regulated colony out-earning a big cold one is the whole pitch.
+    speed: 1.7,
+    humusRate: 0.78,
+    // Lower than every other model: an actively managed, heated unit drives off
+    // and reuses moisture rather than pooling it, so more of what it eats leaves
+    // as humus and less as runoff. Also keeps humusRate + leachateRate at 0.93,
+    // inside the conservation bound (you cannot output more than you eat).
+    leachateRate: 0.15,
     tempResponse: 0.5,
     regulation: 0.9, // heated appliance: actively holds near ideal (its premium)
     price: 350,

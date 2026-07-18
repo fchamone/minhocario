@@ -412,3 +412,61 @@ test('RECOVERY LAG: a drained pipeline refills only after the hatch + maturation
     `early recovery is throttled by the hatch+mature delay: +${earlyGain} vs +${midGain} over the full delay`,
   );
 });
+
+// --- Placement decides HOW overfeeding kills (retuned after CP6) -------------
+// Same mistake, two failure signatures. Before the retune the sun was too weak
+// to matter and a crammed bin ALWAYS drowned, which contradicted §2.8's stated
+// overfeeding chain. Now: in the sun the bin cooks first, in the shade it
+// saturates first. This is the executable form of that design decision.
+
+/** Cram a tier2 bin daily at a wall position; report which threshold fires first. */
+function overfeedAt(wallPosition) {
+  let s = createInitialFarmState({
+    seed: 5,
+    composterId: 'tier2',
+    speciesId: 'californiana',
+    wallPosition,
+  });
+  ({ state: s } = buyWormPack(s, 1000, 'californiana', 50));
+  const rng = createRng(s.rngState);
+  let maxTemp = 0;
+  let tempLethalDay = -1;
+  let moistLethalDay = -1;
+  let dieDay = -1;
+  for (let d = 0; d < 25 && dieDay < 0; d++) {
+    for (let i = 0; i < 12; i++) s = addFood(s, 'vegetableScraps', 4); // cram it
+    for (let h = 0; h < 24; h++) {
+      s = tick(s, rng);
+      maxTemp = Math.max(maxTemp, s.env.temperature);
+      if (tempLethalDay < 0 && s.env.temperature >= TEMP_LETHAL) tempLethalDay = s.day;
+      if (moistLethalDay < 0 && s.env.moisture >= MOIST_LETHAL) moistLethalDay = s.day;
+    }
+    if (isDead(s)) dieDay = s.day;
+  }
+  return { maxTemp, tempLethalDay, moistLethalDay, dieDay };
+}
+
+test('OVERFEEDING in the sun cooks the bin before it drowns', () => {
+  const sun = overfeedAt(0.5);
+  assert.ok(sun.tempLethalDay > 0, `heat turned lethal (max ${sun.maxTemp.toFixed(1)} °C)`);
+  assert.ok(
+    sun.moistLethalDay < 0 || sun.tempLethalDay <= sun.moistLethalDay,
+    `heat first in the sun (temp@${sun.tempLethalDay} vs moist@${sun.moistLethalDay})`,
+  );
+  assert.ok(sun.dieDay > 0, 'the colony reached a terminal state');
+});
+
+test('OVERFEEDING in the shade drowns the bin without ever cooking it', () => {
+  const shade = overfeedAt(0);
+  assert.ok(shade.moistLethalDay > 0, 'saturation turned lethal');
+  assert.equal(shade.tempLethalDay, -1, `never overheats in the shade (max ${shade.maxTemp.toFixed(1)} °C)`);
+  assert.ok(shade.maxTemp < TEMP_LETHAL, 'peak stays below the lethal temperature');
+  assert.ok(shade.dieDay > 0, 'the colony reached a terminal state');
+});
+
+test('the same mistake produces DIFFERENT failure signatures by placement', () => {
+  // The point of the mechanic: where you put the bin changes how it fails.
+  const sun = overfeedAt(0.5);
+  const shade = overfeedAt(0);
+  assert.ok(sun.maxTemp > shade.maxTemp + 5, 'the sunny bin runs markedly hotter');
+});

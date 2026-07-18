@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import {
   createInitialFarmState,
   tick,
+  addFood,
+  harvestHumus,
+  drainLeachate,
+  buyWormPack,
 } from '../js/sim/engine.js';
 import { COMPOSTERS, getComposter } from '../js/sim/composters.js';
 import { createRng } from '../js/sim/rng.js';
@@ -154,4 +158,84 @@ test('production replays identically per seed and stays JSON-serializable', () =
   const b = run(build(), 20);
   assert.deepEqual(a, b, 'same seed + same actions -> identical state');
   assert.deepEqual(JSON.parse(JSON.stringify(a)), a, 'state round-trips through JSON');
+});
+
+// --- The electric composter earns its price (retuned after CP6) -------------
+// It has the SMALLEST bin in the catalog (population ceiling 1000) at the
+// second-highest price, so it can never win on colony size — measured at CP6 it
+// was actually out-earned by the 100-coin tier2. Its premium is throughput per
+// worm instead: it eats fastest and converts the largest share into humus.
+//
+// Note speed alone is a poor lever (faster eating starves the colony, so 2.7x
+// the speed bought only 16% more output); humusRate is what scales output
+// without raising food demand. These lock the OUTCOME, not the constants.
+
+test('electric converts a given meal into more humus than any other model', () => {
+  // Same colony, same food, different bins: electric must top the table on
+  // humus produced per unit eaten (speed x humusRate).
+  const product = (c) => c.speed * c.humusRate;
+  const electric = getComposter('electric');
+  for (const c of COMPOSTERS) {
+    if (c.id === 'electric') continue;
+    assert.ok(
+      product(electric) > product(c),
+      `electric (${product(electric).toFixed(2)}) must out-convert ${c.id} (${product(c).toFixed(2)})`,
+    );
+  }
+});
+
+test('electric out-produces the cheaper tier2 despite a much smaller colony', () => {
+  // The claim that matters, measured rather than derived: run both bins well-fed
+  // for 30 days and compare humus actually harvested. Electric fields roughly a
+  // third of tier2's worms (its bin is smaller, so it sustains a smaller larder
+  // and therefore a smaller colony) and must still finish ahead.
+  const runFor = (composterId) => {
+    const c = getComposter(composterId);
+    let s = createInitialFarmState({
+      seed: 21,
+      composterId,
+      speciesId: 'californiana',
+      wallPosition: 0.05, // shade: isolate production from the solar term
+    });
+    ({ state: s } = buyWormPack(s, 100000, 'californiana', 50));
+    const rng = createRng(s.rngState);
+    let humus = 0;
+    for (let d = 0; d < 30; d++) {
+      for (let h = 0; h < 24; h++) {
+        const queued = s.queue.reduce((a, e) => a + e.liters, 0);
+        if (queued < c.capacity * 0.5) s = addFood(s, 'vegetableScraps', c.capacity * 0.07);
+        s = tick(s, rng);
+        if (h === 20) {
+          const h2 = harvestHumus(s);
+          humus += h2.harvested;
+          s = drainLeachate(h2.state).state;
+        }
+      }
+    }
+    const pop = s.population.cocoons + s.population.juveniles + s.population.adults;
+    return { humus, pop };
+  };
+
+  const electric = runFor('electric');
+  const tier2 = runFor('tier2');
+
+  assert.ok(
+    electric.pop < tier2.pop,
+    `electric fields the smaller colony (${Math.round(electric.pop)} vs ${Math.round(tier2.pop)})`,
+  );
+  assert.ok(
+    electric.humus > tier2.humus,
+    `electric must still out-produce tier2: ${electric.humus.toFixed(1)} vs ${tier2.humus.toFixed(1)} L`,
+  );
+});
+
+test('no model claims to output more than it consumes', () => {
+  // Conservation guard: raising electric's humusRate must not push humus +
+  // leachate past what the worms actually ate.
+  for (const c of COMPOSTERS) {
+    assert.ok(
+      c.humusRate + c.leachateRate <= 1,
+      `${c.id} outputs ${(c.humusRate + c.leachateRate).toFixed(2)} per unit eaten`,
+    );
+  }
 });

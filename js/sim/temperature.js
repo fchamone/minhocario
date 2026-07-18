@@ -21,7 +21,18 @@ const AMBIENT_PEAK_HOUR = 15; // warmest hour of the day
 // sunrise to 1 at sunset; intensity peaks at solar noon.
 const SUNRISE_HOUR = 6;
 const SUNSET_HOUR = 18;
-const SOLAR_MAX = 6; // °C peak contribution in the direct sun patch
+// SOLAR_MAX was 6 through CP6, which made placement decorative: because the bin
+// blends toward a target, damping changes the SWING but never the MEAN, so the
+// sunniest spot added only ~0.8 °C to the daily average and moving the composter
+// changed a 30-day population by under 3% — inside the noise. At 12 the spread
+// between the sunny centre and the shaded ends is ~1.6 °C of daily mean and
+// ~6 °C of midday peak, which is enough to matter without making the wall lethal.
+//
+// PATCH_WIDTH stays at 0.35 deliberately. Widening it to 0.5 buys only ~0.2 °C
+// more spread while pushing positions 0.2–0.3 past the 30 °C band where laying
+// stalls, and 0.5 is also the exact ceiling the "shaded end gets no midday sun"
+// test allows (proximity hits 0 precisely at width 0.5). Narrow keeps the margin.
+const SOLAR_MAX = 12; // °C peak contribution in the direct sun patch
 const PATCH_WIDTH = 0.35; // half-width (in wall units) of the sunny patch
 
 // Fermentation heat from fresh food mass. Tuned down from an initial 0.8 (which
