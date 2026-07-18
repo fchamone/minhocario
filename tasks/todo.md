@@ -29,11 +29,10 @@
 - [x] **CP5** — first end-to-end human playtest (shop→setup→running farm→persistence)
 - [x] **T14** Actions panel + DOM internals (x-ray data) panel (M) — deps: T13
 - [x] **T15** Full lifecycle: death/repopulate, upgrade, restart, live ranking (M) — deps: T14
-- [ ] **CP6** — complete game playable DOM-only; playtest vs spec criteria minus 3D; tuning notes for T21
-      Prepared: automated audits green, chain timings + tuning notes collected in
-      `tasks/cp6-playtest.md`. **Awaiting the human playthrough** against the
-      checklist in that file. Two T21 notes recorded (overfeeding mechanism,
-      economy pacing).
+- [x] **CP6** — complete game playable DOM-only; playtest vs spec criteria minus 3D; tuning notes for T21
+      Automated audits green, chain timings + tuning notes collected in
+      `tasks/cp6-playtest.md`. Human playthrough signed off. Two T21 notes
+      recorded (overfeeding mechanism, economy pacing).
 
 ## Phase 3 — Three.js render layer
 
