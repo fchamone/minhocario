@@ -28,6 +28,7 @@ export const en = {
     rankingHeaderNick: 'Nickname',
     rankingHeaderScore: 'Points',
     rankingHeaderDays: 'Days',
+    nicknameLabel: 'Your nickname',
     reroll: 'Change nickname',
   },
 

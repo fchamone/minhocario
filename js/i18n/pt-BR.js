@@ -30,6 +30,7 @@ export const ptBR = {
     rankingHeaderNick: 'Apelido',
     rankingHeaderScore: 'Pontos',
     rankingHeaderDays: 'Dias',
+    nicknameLabel: 'Seu apelido',
     reroll: 'Trocar apelido',
   },
 
@@ -164,3 +165,40 @@ export const ptBR = {
 };
 
 export default ptBR;
+
+// Nickname word banks (spec §1 — "adjective + animal + number", rendered like
+// the spec's example "MinhocaVeloz42": animal + adjective + a two-digit number).
+// Deliberately pt-BR-flavored and LANGUAGE-INDEPENDENT — the nickname keeps the
+// same flavor regardless of the selected UI locale (spec C-0002, I2). Kept OUT
+// of the parity-checked `ptBR` catalog (whose leaves must all be strings): these
+// are separate array exports. Adjectives are gender-invariant (end in -e/-l/-z)
+// so they read naturally after any animal.
+export const NICKNAME_ANIMALS = [
+  'Minhoca',
+  'Besouro',
+  'Tatu',
+  'Lesma',
+  'Grilo',
+  'Formiga',
+  'Joaninha',
+  'Caracol',
+  'Sapo',
+  'Coruja',
+  'Coelho',
+  'Galinha',
+];
+
+export const NICKNAME_ADJECTIVES = [
+  'Veloz',
+  'Feliz',
+  'Voraz',
+  'Ágil',
+  'Forte',
+  'Valente',
+  'Gigante',
+  'Radiante',
+  'Elegante',
+  'Vibrante',
+  'Nobre',
+  'Verde',
+];

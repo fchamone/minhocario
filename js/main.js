@@ -7,6 +7,7 @@
 // All user-facing text still flows through the i18n runtime (js/strings.js).
 
 import { t, setLang, resolveLang } from './strings.js';
+import { initHome } from './ui/home.js';
 
 /** @type {readonly string[]} valid screen ids in DOM `data-screen` order */
 const SCREENS = ['home', 'shop', 'setup', 'game'];
@@ -98,6 +99,14 @@ function init() {
 
   applyStrings();
   wireNavigation();
+
+  // Home screen: nickname (generate/persist/reroll), local ranking, and
+  // Play (new farm → shop) vs Continue (resume saved farm → game) routing.
+  initHome({
+    onPlay: () => showScreen('shop'),
+    onContinue: () => showScreen('game'),
+  });
+
   showScreen('home');
 }
 

@@ -28,6 +28,7 @@ export const es = {
     rankingHeaderNick: 'Apodo',
     rankingHeaderScore: 'Puntos',
     rankingHeaderDays: 'Días',
+    nicknameLabel: 'Tu apodo',
     reroll: 'Cambiar apodo',
   },
 

@@ -4,9 +4,13 @@
 // Node-safe: NO DOM, NO browser globals. `main.js` reads browser values
 // (localStorage/navigator) and feeds them into `resolveLang`.
 
-import { ptBR } from './i18n/pt-BR.js';
+import { ptBR, NICKNAME_ANIMALS, NICKNAME_ADJECTIVES } from './i18n/pt-BR.js';
 import { en } from './i18n/en.js';
 import { es } from './i18n/es.js';
+
+// Nickname word banks — pt-BR-flavored and language-independent (spec C-0002),
+// re-exported here so UI imports ALL text from this single entry point.
+export { NICKNAME_ANIMALS, NICKNAME_ADJECTIVES };
 
 /** Reference locale — authored first, used as the missing-key fallback. */
 const REFERENCE_LANG = 'pt-BR';

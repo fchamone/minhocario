@@ -86,6 +86,24 @@ h1, h2 { margin: 0 0 0.4em; }
 }
 .home__actions button { background: var(--accent); color: var(--accent-ink); }
 
+.home__nickname {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-dim);
+  margin-top: 20px;
+}
+.home__nickname strong { color: var(--ink); }
+.home__nickname button { padding: 4px 10px; font-size: 0.85rem; }
+.home__notice {
+  color: var(--danger);
+  background: rgba(192, 86, 63, 0.12);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+.home__notice[hidden] { display: none; }
+
 .ranking { text-align: left; margin-top: 24px; }
 .ranking__table { width: 100%; border-collapse: collapse; }
 .ranking__table th,

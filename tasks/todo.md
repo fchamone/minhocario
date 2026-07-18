@@ -9,7 +9,7 @@
 - [x] **T1** Static shell: index.html, screen routing, strings.js, base CSS (S) — deps: none
 - [x] **T2** Seeded RNG + FarmState shape + engine clock (S) — deps: none (∥ T1)
 - [x] **T3** Temperature model + solarGain + composter catalog (M) — deps: T2
-- [ ] **CP1** — suites green; shell loads. Review: FarmState typedef + composter catalog numbers
+- [x] **CP1** — suites green; shell loads. Review: FarmState typedef + composter catalog numbers
 - [x] **T4** Food queue + foods catalog + bin environment dynamics (M) — deps: T3
 - [x] **T5** Population model + species catalog + mortality (M) — deps: T4
 - [x] **T6** Production, consumption, overflow chains + drain/harvest (M) — deps: T5
@@ -21,7 +21,7 @@
 ## Phase 2 — Persistence and DOM-playable game
 
 - [x] **T9** Storage: versioned save, migrations, round-trip (S) — deps: T7
-- [ ] **T10** Home screen: nickname, ranking, Play/Continue (S/M) — deps: T1, T9
+- [x] **T10** Home screen: nickname, ranking, Play/Continue (S/M) — deps: T1, T9
 - [ ] **CP4** — save round-trip proven + home persists. Review: save schema (freezes at v1 ship)
 - [ ] **T11** Shop screen, first purchase (S) — deps: T7, T10
 - [ ] **T12** Setup screen → farm created and saved (M) — deps: T11
