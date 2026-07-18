@@ -55,7 +55,7 @@ export const en = {
     speciesLabel: 'Worm species',
     beddingLabel: 'Bedding mix',
     beddingSawdust: 'Sawdust',
-    beddingPeels: 'Peels/husks',
+    beddingPeels: 'Peels/straw',
     beddingCardboard: 'Wet cardboard',
     firstWasteLabel: 'First waste',
     amountLabel: 'Amount',
