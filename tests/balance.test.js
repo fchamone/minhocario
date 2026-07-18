@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createInitialFarmState,
+  hotSideFromSeed,
+  hotSideOf,
   tick,
   addFood,
   addSawdust,
@@ -53,6 +55,12 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
     composterId: 'tier2',
     speciesId: 'californiana',
     wallPosition: 0.3,
+    // Orientation PINNED rather than left to the seed's coin flip. `hotSide`
+    // decides which end of the wall is warm, so without this a scenario's whole
+    // thermal character would flip silently if its seed ever changed. 0 = the
+    // warm end is position 0, which puts 0.3 on the WARM half (+1.2 °C): this
+    // season is a real thermal test, not a stroll in the cold corner.
+    hotSide: 0,
   });
   let wallet = 200;
   ({ state: s, wallet } = buyWormPack(s, wallet, 'californiana', 50));
@@ -132,14 +140,20 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
     `population never dipped below its starting size: min ${minPop} vs start ${startPop}`,
   );
   // Good care never let the environment run into lethal territory. T21 tightens
-  // these from the bare lethal thresholds to the actual tuned envelope (measured
-  // maxMoisture 0.710, maxTemp 31.76, minMoisture 0.500) so the well-tended run's
-  // comfort margin is itself locked — a hotter sun patch or wetter food shows up
-  // here long before it turns lethal.
+  // these from the bare lethal thresholds to the actual tuned envelope so the
+  // well-tended run's comfort margin is itself locked — a hotter sun patch or
+  // wetter food shows up here long before it turns lethal.
+  //
+  // maxTemp re-measured at 32.96 when the wall gradient landed (was 31.76): this
+  // season sits at position 0.3 on the WARM half, so it now carries +1.2 °C of
+  // placement all day. The bound moved 33 -> 34 to restore a real margin — at 33
+  // it was passing by 0.04 °C, which is a tripwire, not a guard. The claim it
+  // makes is unchanged and is the point of the test: good care stays FAR from
+  // the 38 °C lethal line even on the warm side of the garage.
   assert.ok(maxMoisture < MOIST_LETHAL, `moisture stayed sub-lethal: max ${maxMoisture.toFixed(3)}`);
   assert.ok(maxMoisture < 0.75, `good care held moisture in band (measured 0.710): max ${maxMoisture.toFixed(3)}`);
   assert.ok(maxTemp < TEMP_LETHAL, `temperature stayed sub-lethal: max ${maxTemp.toFixed(2)}`);
-  assert.ok(maxTemp < 33, `good care held temperature well below lethal (measured 31.76): max ${maxTemp.toFixed(2)}`);
+  assert.ok(maxTemp < 34, `good care held temperature well below lethal (measured 32.96): max ${maxTemp.toFixed(2)}`);
   assert.ok(minMoisture > MOIST_DRY_LETHAL, `bedding never dried into lethal territory: min ${minMoisture.toFixed(3)}`);
   assert.ok(minMoisture > 0.45, `bedding stayed comfortably moist (measured 0.500): min ${minMoisture.toFixed(3)}`);
   // Tending the bin (harvesting humus) earned score — idling would have earned
@@ -176,6 +190,7 @@ test('NEGLECT (leachate): never draining saturates the bedding and kills the col
     composterId: 'tier2',
     speciesId: 'californiana',
     wallPosition: 0.2,
+    hotSide: 0, // pinned: warm end is position 0, so 0.2 sits on the warm half (+1.8 °C)
   });
   ({ state: s } = buyWormPack(s, 1000, 'californiana', 200));
   const rng = createRng(s.rngState);
@@ -226,6 +241,7 @@ test('NEGLECT (humus): never harvesting fills the tray, halts processing, and ro
     composterId: 'tier2',
     speciesId: 'californiana',
     wallPosition: 0.2,
+    hotSide: 0, // pinned: warm end is position 0, so 0.2 sits on the warm half (+1.8 °C)
   });
   ({ state: s } = buyWormPack(s, 1000, 'californiana', 200));
   const rng = createRng(s.rngState);
@@ -279,6 +295,9 @@ test('NEGLECT (overfeeding): chronic fresh dumps ferment the bin to a lethal tem
     composterId: 'eco',
     speciesId: 'californiana',
     wallPosition: 0.5,
+    // Mid-wall: the gradient contributes nothing here, so this chain stays a
+    // pure test of fermentation heat. Pinned so it stays that way by intent.
+    hotSide: 0,
   });
   ({ state: s } = buyWormPack(s, 1000, 'californiana', 200));
   const rng = createRng(s.rngState);
@@ -327,6 +346,7 @@ test('NEGLECT (only unsuitable food): feeding only toxic foods poisons the colon
     composterId: 'tier2',
     speciesId: 'californiana',
     wallPosition: 0.2,
+    hotSide: 0, // pinned: warm end is position 0, so 0.2 sits on the warm half (+1.8 °C)
   });
   ({ state: s } = buyWormPack(s, 1000, 'californiana', 200));
   const rng = createRng(s.rngState);
@@ -372,6 +392,9 @@ test('NEGLECT (drying): a hot, unfed bin evaporates the bedding to a lethal dryn
     composterId: 'tier2',
     speciesId: 'californiana',
     wallPosition: 0.5,
+    // Mid-wall is the gradient's neutral point, so this chain is unaffected by
+    // the orientation either way — pinned only so that stays true by intent.
+    hotSide: 0,
   });
   ({ state: s } = buyWormPack(s, 1000, 'californiana', 200));
   const rng = createRng(s.rngState);
@@ -476,13 +499,20 @@ test('RECOVERY LAG: a drained pipeline refills only after the hatch + maturation
 // overfeeding chain. Now: in the sun the bin cooks first, in the shade it
 // saturates first. This is the executable form of that design decision.
 
-/** Cram a tier2 bin daily at a wall position; report which threshold fires first. */
+/**
+ * Cram a tier2 bin daily at a wall position; report which threshold fires first.
+ * `hotSide: 1` throughout, so position 0 is the COLD end — the scenarios below
+ * call it "the shade" and it must actually be cold, not merely sunless. (Left to
+ * the seed, seed 5 rolls a warm position 0 and the shade case would quietly be
+ * the WARMEST placement on the wall while still being named shade.)
+ */
 function overfeedAt(wallPosition) {
   let s = createInitialFarmState({
     seed: 5,
     composterId: 'tier2',
     speciesId: 'californiana',
     wallPosition,
+    hotSide: 1,
   });
   ({ state: s } = buyWormPack(s, 1000, 'californiana', 50));
   const rng = createRng(s.rngState);
@@ -528,6 +558,121 @@ test('the same mistake produces DIFFERENT failure signatures by placement', () =
   assert.ok(sun.maxTemp > shade.maxTemp + 5, 'the sunny bin runs markedly hotter');
 });
 
+// --- The wall has a warm end and a cold end ---------------------------------
+// The sun patch sweeps and is symmetric about mid-wall, so before the gradient
+// the two ENDS were thermally identical by construction and placement was a
+// one-dimensional "in the sun or not". `positionBias` gives the room the axis it
+// actually has. These lock the mechanic as a real, felt difference rather than a
+// decorative one — the failure mode this replaces was a lever so small it sat
+// inside the noise (see the SOLAR_MAX note in js/sim/temperature.js).
+
+/** Mean/min/max bin temperature for an UNFED bin left at a wall position. */
+function bareBinTemps(wallPosition, hotSide) {
+  let s = createInitialFarmState({
+    seed: 5,
+    composterId: 'tier2',
+    speciesId: 'californiana',
+    wallPosition,
+    hotSide,
+  });
+  const rng = createRng(s.rngState);
+  let sum = 0;
+  let n = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  for (let d = 0; d < 12; d++) {
+    for (let h = 0; h < 24; h++) {
+      s = tick(s, rng);
+      // Skip the warm-up from the 20 °C initial state; sample settled days only.
+      if (d >= 4) {
+        sum += s.env.temperature;
+        n += 1;
+        min = Math.min(min, s.env.temperature);
+        max = Math.max(max, s.env.temperature);
+      }
+    }
+  }
+  return { mean: sum / n, min, max };
+}
+
+test('the warm end runs markedly warmer than the cold end, all day and all night', () => {
+  const warm = bareBinTemps(1, 1);
+  const cold = bareBinTemps(0, 1);
+
+  // No food, so this is placement alone — fermentation heat cannot be credited
+  // for any of the difference.
+  const spread = warm.mean - cold.mean;
+  assert.ok(
+    spread >= 4,
+    `placement moves the daily mean by a felt amount: ${spread.toFixed(2)} °C`,
+  );
+  // Unlike the sun, the gradient does not clock off at dusk — this is the half of
+  // the mechanic solarGain structurally cannot provide.
+  assert.ok(
+    warm.min > cold.min + 3,
+    `the warm end is still warmer at its NIGHT trough: ${warm.min.toFixed(1)} vs ${cold.min.toFixed(1)}`,
+  );
+});
+
+test('which end is warm is a per-farm roll, and mirrors exactly when it flips', () => {
+  // Same position, opposite orientation: the effect must reverse cleanly, or the
+  // "learn your garage" premise breaks (a player who identifies the warm corner
+  // must be able to trust it for the rest of the run).
+  const endIsWarm = bareBinTemps(1, 1).mean;
+  const endIsCold = bareBinTemps(1, 0).mean;
+  assert.ok(
+    endIsWarm > endIsCold + 4,
+    `orientation flips the same spot from warm to cold: ${endIsWarm.toFixed(1)} vs ${endIsCold.toFixed(1)}`,
+  );
+  // Mid-wall is the pivot: neutral under either orientation.
+  const midA = bareBinTemps(0.5, 1).mean;
+  const midB = bareBinTemps(0.5, 0).mean;
+  assert.ok(Math.abs(midA - midB) < 1e-9, 'mid-wall is orientation-independent');
+});
+
+test('a save written before the gradient existed gets a STABLE garage', () => {
+  // Legacy saves carry no `hotSide`. They must resolve to one fixed orientation
+  // for the rest of the run — an orientation that drifted would swing the bin's
+  // target by up to 2 x POSITION_BIAS_MAX with no cause the player could see.
+  //
+  // The trap this guards: `rngState` is the obvious thing to derive a fallback
+  // from, and it is WRONG, because `tick` writes the advanced RNG state back on
+  // every tick that draws. Anchoring to the immutable `createdAt` is what makes
+  // this hold. Asserted against a mutating rngState so the unsound version fails.
+  let s = createInitialFarmState({
+    seed: 42,
+    composterId: 'tier2',
+    speciesId: 'californiana',
+    wallPosition: 1,
+    createdAt: 1234,
+  });
+  ({ state: s } = buyWormPack(s, 1000, 'californiana', 200));
+  delete s.hotSide; // as an old save would deserialize
+
+  const first = hotSideOf(s);
+  const rng = createRng(s.rngState);
+  for (let i = 0; i < 300; i++) {
+    s = tick(s, rng);
+    delete s.hotSide; // the field never appears in a legacy farm
+    assert.equal(hotSideOf(s), first, `orientation drifted at tick ${i}`);
+  }
+  // Same farm, RNG state deliberately mangled: still the same garage.
+  assert.equal(hotSideOf({ ...s, rngState: 999999 }), first);
+});
+
+test('a fresh farm rolls its warm end from the seed and keeps it', () => {
+  // Deterministic per seed (so a save reloads into the same garage)...
+  assert.equal(hotSideFromSeed(42), hotSideFromSeed(42));
+  const farm = createInitialFarmState({ seed: 42, composterId: 'tier2' });
+  assert.equal(farm.hotSide, hotSideFromSeed(42));
+  assert.ok(farm.hotSide === 0 || farm.hotSide === 1);
+
+  // ...but not the same for every seed, or every garage would be identical.
+  const sides = new Set();
+  for (let seed = 0; seed < 64; seed++) sides.add(hotSideFromSeed(seed));
+  assert.equal(sides.size, 2, 'both orientations occur across seeds');
+});
+
 // --- T21-3: the electric composter is priced as a specialist, not a trap ------
 // At 350 (through CP6) the electric bin was a trap: flagship price, yet out-earned
 // on raw coins/day by cheaper, larger bins (capacity gates the colony and its
@@ -552,27 +697,37 @@ test('electric is priced as a mid-tier specialist premium, not a flagship trap',
   assert.ok(electric < eco, `still below the largest bin: ${electric} < ${eco}`);
 });
 
-// --- T21-4: the sun spot cannot rescue Gigante-Africana; only electric can ----
+// --- T21-4: no wall position rescues Gigante-Africana; only electric can ------
 // Spec §2.9 says the Gigante-Africana "pairs with the sun spot or the electric
 // composter". The sun-spot half is a spec erratum (documented in
 // tasks/t21-balance.md, spec left untouched per the task): africana's binding
 // constraint is the COLD NIGHT (comfort floor 20 °C), and solarGain is 0 at night
-// by construction (§2.6), so no wall position lifts the night trough. This test
-// is the executable form of that finding — a passive bin at the SUNNIEST spot
-// still falls below africana's floor every night, while only the actively-heated
-// electric bin holds the night in band. (Lowering passive tempResponse to carry
-// daytime heat overnight was rejected: it needs tempResponse ~0.05, which also
-// caps the midday peak at ~24 °C and would break the overfeeding-in-the-sun and
-// placement-signature chains above — see tasks/t21-balance.md.)
+// by construction (§2.6), so no wall position lifts the night trough by sunlight.
+// Only the actively-heated electric bin holds the night in band. (Lowering
+// passive tempResponse to carry daytime heat overnight was rejected: it needs
+// tempResponse ~0.05, which also caps the midday peak at ~24 °C and would break
+// the overfeeding-in-the-sun and placement-signature chains above — see
+// tasks/t21-balance.md.)
+//
+// REVISED when the hot-end/cold-end gradient landed. `positionBias` DOES apply at
+// night — unlike the sun, it is a property of the room, not of daylight — so the
+// old form of this test ("the night trough barely moves with placement") is no
+// longer true and has been replaced. The finding it protected is unchanged and is
+// now asserted more directly: the warm end lifts the night trough but NOT far
+// enough to reach africana's floor, so buying regulation remains the only real
+// answer. That gap is the true ceiling on POSITION_BIAS_MAX — if a future retune
+// ever let the warm corner clear 20 °C at night, it would quietly delete the
+// electric composter's reason to exist, and this test is what catches it.
 
 /** Min night-time bin temperature for a tended africana colony over days 5-20. */
-function africanaNightTrough(composterId, wallPosition) {
+function africanaNightTrough(composterId, wallPosition, hotSide = 1) {
   const cap = getComposter(composterId).capacity;
   let s = createInitialFarmState({
     seed: 11,
     composterId,
     speciesId: 'africana',
     wallPosition,
+    hotSide,
   });
   let wallet = 1e6;
   ({ state: s, wallet } = buyWormPack(s, wallet, 'africana', 200));
@@ -594,18 +749,26 @@ function africanaNightTrough(composterId, wallPosition) {
   return minNight;
 }
 
-test('the sun spot cannot rescue africana from cold nights — only the electric bin can', () => {
+test('no wall position rescues africana from cold nights — only the electric bin can', () => {
   const floor = getSpecies('africana').tempComfort.min; // 20 °C
-  const passiveSun = africanaNightTrough('tier2', 0.5); // sunniest wall
-  const passiveShade = africanaNightTrough('tier2', 0.0);
-  const electric = africanaNightTrough('electric', 0.5);
+  // hotSide 1 ⇒ position 1 is the warm end, position 0 the cold one.
+  const warmEnd = africanaNightTrough('tier2', 1.0, 1);
+  const coldEnd = africanaNightTrough('tier2', 0.0, 1);
+  const electric = africanaNightTrough('electric', 1.0, 1);
 
-  // The sun spot does not lift the night trough: a passive bin sits below the
-  // floor at night whether it is in the sun or the shade (solarGain is 0 at night).
-  assert.ok(passiveSun < floor, `passive bin at the sun spot still drops below africana's floor at night: ${passiveSun.toFixed(1)} < ${floor}`);
+  // The BEST passive placement available — the warm corner — still leaves the
+  // colony below its floor every night. This is the load-bearing assertion: it
+  // is what stops the gradient from becoming a cheap substitute for regulation.
   assert.ok(
-    Math.abs(passiveSun - passiveShade) < 1,
-    `night trough barely moves with placement (sun ${passiveSun.toFixed(1)} vs shade ${passiveShade.toFixed(1)}) — the sun patch is a daytime-only effect`,
+    warmEnd < floor,
+    `even the warm end drops below africana's floor at night: ${warmEnd.toFixed(1)} < ${floor}`,
+  );
+  // The gradient is nonetheless a real, legible effect at night — the half of the
+  // placement mechanic the sun cannot provide, and the reason a player can feel
+  // the difference between the two ends after dark.
+  assert.ok(
+    warmEnd > coldEnd,
+    `the warm end is genuinely warmer at night than the cold end: ${warmEnd.toFixed(1)} > ${coldEnd.toFixed(1)}`,
   );
   // The electric bin's active regulation is the genuine remedy: it holds the
   // night in band.

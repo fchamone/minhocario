@@ -11,6 +11,7 @@ import { getSpecies, carryingCapacity, populationStep, RATION_TICKS } from './wo
 import {
   ambientTemperature,
   solarGain,
+  positionBias,
   fermentationHeat,
   blendTemperature,
 } from './temperature.js';
@@ -252,6 +253,11 @@ function eatingThroughput(active, species, composter) {
  * @property {string|null} composterId chosen composter model (catalog id)
  * @property {string|null} speciesId   chosen worm species (catalog id)
  * @property {number} wallPosition  position along the garage wall, 0..1
+ * @property {number} hotSide       which END of the wall is the warm one: 1 =
+ *   position 1, 0 = position 0. Rolled once per farm from the seed (see
+ *   `hotSideFromSeed`) and fixed for the run, so the player can learn THIS
+ *   garage. Read through `hotSideOf` so pre-existing saves without the field
+ *   still resolve to a defined orientation.
  * @property {Population} population
  * @property {BinEnv} env
  * @property {FoodEntry[]} queue    food items decomposing, oldest first
@@ -316,11 +322,61 @@ export function beddingEnv(mix) {
 }
 
 /**
+ * Which end of the wall is the warm one, derived from the farm's seed.
+ *
+ * Deliberately does NOT draw from the farm's `Rng`. Consuming a value here would
+ * advance `rngState` by one step before the first tick, which would shift every
+ * seeded sequence in the suite — the balance, population and mortality scenarios
+ * all assert on outcomes for a fixed seed, and every one of them would move for
+ * a reason that has nothing to do with what they test.
+ *
+ * Hashing the seed instead keeps determinism (same seed ⇒ same garage) while
+ * leaving the RNG stream untouched. The randomness the player experiences comes
+ * from the seed itself, which `randomSeed()` in js/main.js draws fresh per farm.
+ *
+ * The mixing step is mulberry32's (js/sim/rng.js) applied once to a COPY: the
+ * low bit of a raw seed is a poor coin flip, since consecutive seeds would
+ * alternate sides in lockstep.
+ * @param {number} seed
+ * @returns {number} 1 (position 1 is hot) or 0 (position 0 is hot)
+ */
+export function hotSideFromSeed(seed) {
+  let t = ((seed >>> 0) + 0x6d2b79f5) >>> 0;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) % 2;
+}
+
+/**
+ * Read a farm's hot end defensively. Saves written before the gradient existed
+ * carry no `hotSide`, and rather than refuse them (never silently discard a
+ * player's save) they resolve to a defined orientation, so an old farm gains a
+ * garage that is stable from then on instead of flipping between loads.
+ *
+ * The fallback is derived from `createdAt`, which is stamped once when the farm
+ * is created and never written again. It deliberately is NOT derived from
+ * `rngState`: that field advances as the RNG is drawn (see the bottom of `tick`),
+ * so a legacy save would have re-rolled which end of its garage was warm on the
+ * ticks where the population step happened to draw — the bin's temperature would
+ * lurch by up to 2 x POSITION_BIAS_MAX with no cause the player could observe.
+ * @param {FarmState} state
+ * @returns {number} 1 or 0
+ */
+export function hotSideOf(state) {
+  const raw = state?.hotSide;
+  if (raw === 0 || raw === 1) return raw;
+  return hotSideFromSeed(state?.createdAt ?? 0);
+}
+
+/**
  * @typedef {object} InitialFarmOptions
  * @property {number} [seed=1]           RNG seed (orchestrator supplies entropy)
  * @property {string|null} [composterId=null]
  * @property {string|null} [speciesId=null]
  * @property {number} [wallPosition=0.5]
+ * @property {number} [hotSide]          override which end is warm (1 or 0).
+ *   Defaults to `hotSideFromSeed(seed)`. Tests pin it so a scenario's thermal
+ *   character does not depend on the seed's coin flip.
  * @property {Partial<BinEnv>|null} [env=null] initial env override (e.g. from
  *   beddingEnv) merged over the neutral defaults; unset fields keep defaults.
  * @property {number} [createdAt=0] wall-clock ms the farm was created at. The
@@ -338,6 +394,7 @@ export function createInitialFarmState(opts = {}) {
     composterId = null,
     speciesId = null,
     wallPosition = 0.5,
+    hotSide = hotSideFromSeed(seed),
     env = null,
     createdAt = 0,
   } = opts;
@@ -351,6 +408,7 @@ export function createInitialFarmState(opts = {}) {
     composterId,
     speciesId,
     wallPosition,
+    hotSide: hotSide === 0 ? 0 : 1,
     population: { cocoons: 0, juveniles: 0, adults: 0 },
     env: env ? { ...baseEnv, ...env } : baseEnv,
     queue: [],
@@ -636,10 +694,14 @@ export function tick(state, rng) {
     state.env.toxicity * (1 - TOX_DECAY_RATE) + dyn.toxicity + rotToxicity,
   );
 
-  // Temperature: blend toward the environment target for the new hour.
+  // Temperature: blend toward the environment target for the new hour. The two
+  // positional terms are separate on purpose (see js/sim/temperature.js): the sun
+  // sweeps and sleeps at night, the garage's own hot-end/cold-end gradient does
+  // neither.
   const target =
     ambientTemperature(hour) +
     solarGain(state.wallPosition, hour) +
+    positionBias(state.wallPosition, hotSideOf(state)) +
     fermentationHeat(dyn.freshHeatMass);
   const temperature = blendTemperature(state.env.temperature, target, composter);
   const env = { moisture, ph, toxicity, temperature };

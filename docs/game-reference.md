@@ -185,7 +185,8 @@ temperature helper is cited from `js/sim/temperature.js`.
 The blend target for the new hour is:
 
 ```
-target = ambientTemperature(hour) + solarGain(wallPosition, hour) + fermentationHeat(freshHeatMass)
+target = ambientTemperature(hour) + solarGain(wallPosition, hour)
+         + positionBias(wallPosition, hotSide) + fermentationHeat(freshHeatMass)
 newTemp = blendTemperature(prevTemp, target, composter)
 ```
 
@@ -199,6 +200,28 @@ newTemp = blendTemperature(prevTemp, target, composter)
   units). A composter at the patch centre at midday gets the full contribution;
   the shaded ends get 0. This is the **single source of truth** the render layer
   samples for the sun patch, so sim and visuals cannot drift.
+- **Wall gradient** (`positionBias`, `js/sim/temperature.js`): a fixed hot-end /
+  cold-end gradient along the wall, `POSITION_BIAS_MAX = 3` °C at the warm end,
+  −3 °C at the cold end, 0 at mid-wall — a **6 °C end-to-end spread applied at
+  every hour, including at night**. This is what makes placement a real decision:
+  the sun moves the daily *mean* by only ≈1.6 °C (it is off for twelve hours and
+  sweeps past any spot quickly), so before this term the two ends of the wall were
+  thermally identical by construction and the axis was only centre-vs-ends.
+  - Which end is warm is `farm.hotSide` (1 = position 1, 0 = position 0), rolled
+    **once per farm** from its seed by `hotSideFromSeed` (`js/sim/engine.js`) and
+    fixed for the run — so each run's garage has to be learned. Read through
+    `hotSideOf`, which resolves pre-gradient saves from the immutable `createdAt`.
+  - **Deliberately not drawn** anywhere: no wall tint, no label, no readout. The
+    player discovers it from the thermometer by moving the bin, the same way the
+    food list is discovered (§2.7). This is why it is a separate term from
+    `solarGain` rather than folded into it — `solarGain` is what the render layer
+    samples for the visible sun patch, and it must stay symmetric and night-zero.
+  - `POSITION_BIAS_MAX` is tightly bracketed and should not be raised without
+    re-measuring both guards: an unfed `tier2` bin at the worst spot (position
+    ≈0.66, where sun and gradient stack) peaks at **37.0 °C** against
+    californiana's 38 °C lethal line, and the warm end's night trough (≈15 °C)
+    must stay below Gigante-Africana's 20 °C floor or it would silently replace
+    the electric composter's regulation. Both are locked by tests.
 - **Fermentation heat** (`fermentationHeat`, `js/sim/temperature.js`):
   `FERMENT_COEF = 0.35` °C per liter of fresh (heat-weighted) food mass —
   monotonic in mass, 0 when empty. This is the overfeeding chain's driver (§8).
@@ -226,7 +249,9 @@ moisture = clamp01(prev + released + eatenMoisture + spillMoisture − evaporati
   its water exactly once whether it rots in place or is eaten.
 - **Evaporation** is temperature-gated: `EVAP_COEF = 0.0006` per °C above
   `EVAP_THRESHOLD = 24` °C, using the pre-tick temperature. A cool bin barely
-  dries; a hot/sun-baked bin dries into lethal territory.
+  dries; a hot/sun-baked bin dries into lethal territory. Placement therefore
+  reaches moisture as well as temperature: a bin parked at the wall's warm end
+  (§6.1) sits closer to the evaporation threshold around the clock.
 - **Sawdust** (`addSawdust`): removes `SAWDUST_DRY_PER_LITER = 0.04` moisture per
   liter added (a direct action, not a queue entry — it applies immediately and in
   full, with no decomposition ramp). The same action also scrubs toxicity (§6.4).
@@ -438,7 +463,7 @@ stops once `colonyAlive → false`):
 |---|-------|---------------------|----------------|
 | 1 | **Leachate overflow** | Never draining: percolation fills the tank (`leachateCapacity`); once full, percolation backs up and leachate past capacity re-saturates the bedding — `spillMoisture = (leachate − leachateCapacity) × LEACHATE_SPILL_TO_MOISTURE (0.05)`, tank clamps at capacity. Moisture climbs ≥ 0.12 past the band. | Over-wetness mortality → colony death |
 | 2 | **Humus overflow** | Never harvesting: `humus ≥ humusCapacity` sets `trayFull`, halting all processing. The stranded queue rots anaerobically: `rotToxicity = strandedLiters × ROT_RATE (0.0002)` per tick. Toxicity climbs ≥ 0.4. | Toxicity mortality → colony death |
-| 3 | **Overfeeding** | A large fresh-food mass drives `fermentationHeat = FERMENT_COEF (0.35) × freshHeatMass`, spiking the temperature target — worse in the sun patch or a low-insulation model. Temperature passes 8 °C beyond the species band. | Overheat mortality → colony death |
+| 3 | **Overfeeding** | A large fresh-food mass drives `fermentationHeat = FERMENT_COEF (0.35) × freshHeatMass`, spiking the temperature target — worse in the sun patch, at the wall's warm end (§6.1), or in a low-insulation model. Temperature passes 8 °C beyond the species band. | Overheat mortality → colony death |
 | 4 | **Only unsuitable food** | Feeding only high-toxicity items accrues toxicity faster than the removal paths clear it. Reproduction stalls first (toxicity stress ≥ 1 at 0.25), then mortality begins (toxicity ≥ 0.4). | Reproduction stall → toxicity mortality → colony death |
 
 Chains 2 and 4 both terminate in toxicity, and both now have a **counter-lever**:
@@ -534,6 +559,7 @@ Source: `js/storage.js`. Single save slot under localStorage key
 | `composterId` | string \| null | catalog id |
 | `speciesId` | string \| null | catalog id |
 | `wallPosition` | number | 0..1 along the wall |
+| `hotSide` | number | which END of the wall is warm: 1 = position 1, 0 = position 0. Rolled once per farm from the seed (§6.1); absent in pre-gradient saves, which resolve via `hotSideOf` |
 | `population` | object | `{ cocoons, juveniles, adults }` |
 | `env` | object | `{ moisture, ph, toxicity, temperature }` |
 | `queue` | array | `[{ foodId, liters, addedAtTick }]`, oldest first |

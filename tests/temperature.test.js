@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   ambientTemperature,
   solarGain,
+  positionBias,
   fermentationHeat,
   blendTemperature,
   IDEAL_TEMP,
@@ -39,6 +40,87 @@ test('solarGain is never negative', () => {
   for (let h = 0; h < 24; h++) {
     for (let p = 0; p <= 1.0001; p += 0.1) assert.ok(solarGain(p, h) >= 0);
   }
+});
+
+// --- positionBias: the wall's fixed warm end / cold end ----------------------
+// Distinct from solarGain in three ways, each asserted below: it is signed (the
+// cold end is a PENALTY, not merely an absence of sun), it is antisymmetric about
+// mid-wall rather than symmetric, and it does not care what hour it is.
+
+test('positionBias is zero at mid-wall and opposite-signed at the two ends', () => {
+  for (const hotSide of [0, 1]) {
+    assert.equal(positionBias(0.5, hotSide), 0, 'mid-wall is the neutral pivot');
+    const left = positionBias(0, hotSide);
+    const right = positionBias(1, hotSide);
+    assert.ok(left * right < 0, 'the ends sit on opposite sides of neutral');
+    assert.ok(Math.abs(left + right) < 1e-9, 'and are mirror images of each other');
+  }
+});
+
+test('hotSide names which END is the warm one', () => {
+  assert.ok(positionBias(1, 1) > 0, 'hotSide 1 -> position 1 is warm');
+  assert.ok(positionBias(0, 1) < 0, 'hotSide 1 -> position 0 is cold');
+  assert.ok(positionBias(0, 0) > 0, 'hotSide 0 -> position 0 is warm');
+  assert.ok(positionBias(1, 0) < 0, 'hotSide 0 -> position 1 is cold');
+});
+
+test('flipping hotSide mirrors the whole wall exactly', () => {
+  for (let p = 0; p <= 1.0001; p += 0.1) {
+    assert.ok(
+      Math.abs(positionBias(p, 1) + positionBias(p, 0)) < 1e-9,
+      `orientation is a clean reflection at ${p.toFixed(1)}`,
+    );
+  }
+});
+
+test('positionBias rises monotonically toward the warm end', () => {
+  let prev = -Infinity;
+  for (let p = 0; p <= 1.0001; p += 0.05) {
+    const bias = positionBias(p, 1);
+    assert.ok(bias > prev, `no flat spots or reversals along the wall at ${p.toFixed(2)}`);
+    prev = bias;
+  }
+});
+
+test('positionBias applies at EVERY hour, unlike the sun', () => {
+  // The defining difference from solarGain, and the reason it is a separate term:
+  // a cold corner is coldest at night, exactly when solarGain contributes nothing.
+  // If this ever collapses to a daytime-only effect, the cold end stops being cold
+  // when it matters most.
+  for (const h of [0, 3, 6, 12, 18, 23]) {
+    assert.equal(solarGain(0, h) + solarGain(1, h) >= 0, true);
+  }
+  assert.equal(solarGain(1, 2), 0, 'the sun is off at 02h');
+  assert.ok(positionBias(1, 1) > 0, 'the gradient is not, and takes no hour argument');
+});
+
+test('positionBias is a much bigger lever than the sun patch', () => {
+  // The mechanic it replaces was too small to feel: the sun moves the daily MEAN
+  // by only ~1.6 °C between mid-wall and the ends, because it is zero for twelve
+  // hours a day and sweeps past any given spot quickly. The gradient applies
+  // around the clock, so it should dominate by a wide margin.
+  const meanSolar = (p) => {
+    let sum = 0;
+    for (let h = 0; h < 24; h++) sum += solarGain(p, h);
+    return sum / 24;
+  };
+  const solarLever = meanSolar(0.5) - meanSolar(0);
+  const biasLever = positionBias(1, 1) - positionBias(0, 1);
+  assert.ok(
+    biasLever > solarLever * 3,
+    `placement is now a real decision: ${biasLever.toFixed(2)} °C vs the sun's ${solarLever.toFixed(2)} °C`,
+  );
+});
+
+test('positionBias survives a corrupt wall position instead of poisoning the sim', () => {
+  // A hand-edited or migrated save can carry rubbish here, and a NaN would
+  // propagate through the blend target into env.temperature and never wash out.
+  for (const bad of [NaN, Infinity, -Infinity, undefined, null, 'left']) {
+    assert.equal(positionBias(bad, 1), 0, `${String(bad)} reads as neutral`);
+  }
+  // Out-of-range positions clamp to the ends rather than extrapolating past them.
+  assert.equal(positionBias(-5, 1), positionBias(0, 1));
+  assert.equal(positionBias(5, 1), positionBias(1, 1));
 });
 
 // --- ambient cycle -----------------------------------------------------------
@@ -179,10 +261,54 @@ test('placement moves the daily mean enough to matter (>= 1 °C spread)', () => 
   assert.ok(spread >= 1, `placement lever collapsed to ${spread.toFixed(2)} °C of daily mean`);
 });
 
+test('the FULL placement lever (sun + gradient) is several degrees of daily mean', () => {
+  // What the player actually feels is both terms together. The sun contributes
+  // ~1.6 °C of daily mean between mid-wall and an end; the gradient adds a signed
+  // offset around the clock, so the warm-end/cold-end spread is far larger. This
+  // is the assertion that placement is a real decision rather than a rounding
+  // error next to species and composter choice.
+  const dailyMeanTotal = (p) => {
+    let sum = 0;
+    for (let h = 0; h < 24; h++) sum += solarGain(p, h) + positionBias(p, 1);
+    return sum / 24;
+  };
+  const spread = dailyMeanTotal(1) - dailyMeanTotal(0);
+  assert.ok(spread >= 4, `warm-end vs cold-end spread collapsed to ${spread.toFixed(2)} °C`);
+});
+
 test('the sunny spot still cannot cook a well-placed bin on its own', () => {
   // Upper guard: solar alone (no fermentation) must leave headroom under the
   // ~38 °C lethal line, or good care in the sun becomes unsurvivable.
   let peak = 0;
   for (let h = 0; h < 24; h++) peak = Math.max(peak, ambientTemperature(h) + solarGain(0.5, h));
   assert.ok(peak < 38, `bare sun peak reached ${peak.toFixed(1)} °C`);
+});
+
+test('NO placement can cook an unfed bin, including where sun and gradient stack', () => {
+  // The guard above samples position 0.5 only, and the worst spot is NOT 0.5:
+  // the target peaks near 0.66, where the sweeping patch passes overhead just as
+  // the ambient cycle crests. That region was never checked before the gradient
+  // existed, and it is exactly where the gradient adds its heat.
+  //
+  // Asserted on the BIN temperature rather than the target, because that is what
+  // kills worms — the bin only ever closes `tempResponse` of the gap each tick,
+  // so the target running hot is survivable in a way the bin running hot is not.
+  // tier2 is the catalog's most exposed model (tempResponse 0.6).
+  const tier2 = getComposter('tier2');
+  let worst = { temp: -Infinity, pos: 0 };
+  for (let p = 0; p <= 1.0001; p += 0.01) {
+    let temp = 20;
+    for (let d = 0; d < 10; d++) {
+      for (let h = 0; h < 24; h++) {
+        const target = ambientTemperature(h) + solarGain(p, h) + positionBias(p, 1);
+        temp = blendTemperature(temp, target, tier2);
+        if (d >= 4 && temp > worst.temp) worst = { temp, pos: p };
+      }
+    }
+  }
+  assert.ok(
+    worst.temp < 38,
+    `an UNFED bin at the worst spot (${worst.pos.toFixed(2)}) reached ${worst.temp.toFixed(2)} °C — ` +
+      'placement alone must never be lethal, since the player still has to add food',
+  );
 });

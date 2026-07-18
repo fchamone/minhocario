@@ -449,3 +449,107 @@ The good-care moisture/temperature envelope is bit-identical too (max moisture
 `species.speed`, which made every species eat identically once the cap bound and
 silently erased africana's defining trait for any mature colony. Locked by the
 species-ordering test in `tests/production.test.js`.
+
+---
+
+# T25 — Wall thermal gradient (hot end / cold end)
+
+Placement was one-dimensional: `solarGain`'s patch SWEEPS the wall and is
+symmetric about mid-wall, so the two ENDS were thermally identical by
+construction (`tests/temperature.test.js` asserted that symmetry outright) and
+the only axis was centre-vs-ends. The whole lever was ~1.56 °C of daily mean.
+
+`positionBias(wallPosition, hotSide)` adds a fixed hot-end/cold-end gradient,
+`POSITION_BIAS_MAX = 3` (6 °C end-to-end), applied at **every hour** — unlike the
+sun, which is 0 for twelve hours a day. Which end is warm is `farm.hotSide`,
+rolled once per farm from its seed and saved.
+
+## Why a separate term rather than reshaping `solarGain`
+
+`solarGain` is the contract `js/render/scene.js` samples to draw the sun patch,
+and it normalises against `solarGain(0.5, 12)` as the global peak (`scene.js:189`).
+Reshaping it would have broken the render layer and made the "cold end" warm up at
+night. Keeping the terms separate left all four `solarGain` tests green, left the
+sun patch visually untouched (the gradient is deliberately **not drawn** — the
+player discovers it from the thermometer, per the food-list discovery principle),
+and confined the blast radius to the balance suite.
+
+## The constant is bracketed, and tightly
+
+Measured on an unfed `tier2` bin (most exposed model, `tempResponse` 0.6),
+settled days only:
+
+| | before gradient | after (MAX = 3) |
+|---|---|---|
+| peak bin temp, worst position | 36.08 °C @ pos 0.66 | **37.04 °C @ pos 0.66** |
+| headroom under the 38 °C lethal line | 1.92 °C | **0.96 °C** |
+| warm-end night trough | — | ~15 °C (africana floor is 20) |
+| daily-mean spread, end to end | 1.56 °C (sun only) | **6.00 °C** |
+
+**Upper wall:** the gradient has already spent about half the remaining thermal
+slack. `MAX = 4` would put an *unfed* bin at the worst spot essentially at the
+lethal line, before a single liter of food. **Lower wall:** the warm end must NOT
+lift africana's night trough to its 20 °C floor, or it silently replaces the
+electric composter's regulation — the one thing the catalog sells it on.
+
+Note the worst spot is **position 0.66, not 0.5**: the sweeping patch passes
+overhead there just as the ambient cycle crests. The pre-existing "well-placed
+bin" guard samples 0.5 only and never saw that region — it reads 38.54 °C of
+*target* at 0.6 on untouched code. A new test now checks the whole wall, and
+asserts on the **bin** temperature (what kills) rather than the target.
+
+## Season re-measured (good care, seed 42 / tier2 / pos 0.3)
+
+Pinned `hotSide: 0`, which puts 0.3 on the **warm half** (+1.2 °C) — the more
+demanding placement, kept deliberately so the flagship survivability test carries
+some heat.
+
+| | T24 | T25 |
+|---|---|---|
+| end population | 2034 | 1964 |
+| max temperature | 31.76 °C | **32.96 °C** |
+| banked score | 1957.6 | 1955.1 |
+
+Same season on the cold half for contrast: endPop 2027, maxTemp 30.56 °C — a
+2.4 °C swing from placement alone, which is the mechanic working.
+
+`maxTemp` bound moved **33 → 34**. At 33 it was passing by 0.04 °C, which is a
+tripwire rather than a guard; the claim it encodes ("good care stays far from
+lethal") is unchanged.
+
+## All five §2.8 chains stay inside their T21/T24-locked windows
+
+Every scenario now pins `hotSide` explicitly instead of inheriting whatever its
+seed rolls — otherwise a scenario's entire thermal character would flip silently
+if its seed ever changed. The two 0.5 scenarios (overfeeding heat, drying) sit on
+the gradient's neutral pivot and are arithmetically unaffected.
+
+## One test rewritten, by design
+
+`africanaNightTrough` asserted the night trough "barely moves with placement" —
+true only while the sun was the sole positional term. The gradient applies at
+night, so that form is now false. The **finding it protected is unchanged** and is
+asserted more directly: the warm end lifts the night trough but not to africana's
+floor, so regulation stays the only real answer. That gap is the true ceiling on
+`POSITION_BIAS_MAX`.
+
+## A bug caught on the way
+
+`hotSideOf`'s legacy-save fallback first derived the orientation from `rngState` —
+which `tick` **advances and writes back**. A pre-gradient save would have re-rolled
+which end of its garage was warm on every tick that drew RNG, lurching the target
+by up to 6 °C with no observable cause. Re-anchored to the immutable `createdAt`
+and locked by a 300-tick regression test that mangles `rngState` on purpose.
+
+## Summary of changes
+
+| file | change |
+|---|---|
+| `js/sim/temperature.js` | new `POSITION_BIAS_MAX = 3` + `positionBias()`; `solarGain` untouched |
+| `js/sim/engine.js` | `hotSide` on `FarmState`/`InitialFarmOptions`; `hotSideFromSeed` (hashes the seed, does **not** draw from the RNG, so no seeded sequence shifts); `hotSideOf` defensive read; term added to the blend target |
+| `tests/temperature.test.js` | 8 `positionBias` tests; whole-wall unfed-bin lethality guard; full-lever spread assertion |
+| `tests/balance.test.js` | `hotSide` pinned in every scenario; good-care `maxTemp` 33 → 34; 4 new gradient tests; `africanaNightTrough` rewritten |
+| `docs/game-reference.md` | §6.1 gradient subsection, `FarmState` row, evaporation + overfeeding-chain notes |
+
+No save-version bump: the field is additive and optional, and pre-gradient saves
+resolve through `hotSideOf` rather than being refused. Scoring formula untouched.
