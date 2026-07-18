@@ -113,6 +113,7 @@ export const es = {
     queueEmpty: 'Nada descomponiéndose',
     queueMore: 'más',
     // Speed control
+    speedPause: 'Pausar',
     speedLabel: 'Velocidad',
     speedPaused: 'Pausado',
   },

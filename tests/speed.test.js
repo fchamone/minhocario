@@ -7,6 +7,8 @@ import {
   TICKS_PER_DAY,
   isValidSpeed,
   drainTicks,
+  PAUSED,
+  isSelectableSpeed,
 } from '../js/ui/speed.js';
 
 // --- catalog of speeds (spec §2 — 0.25×/0.5×/1×/5×/20×) ----------------------
@@ -93,4 +95,35 @@ test('maxTicks caps a huge backlog and drops the excess (no catch-up)', () => {
   const { ticks, remainderMs } = drainTicks(1_000_000, 20, { maxTicks: 5 });
   assert.equal(ticks, 5);
   assert.equal(remainderMs, 0, 'the un-run backlog is discarded, not carried');
+});
+
+// --- Pause (a distinct control, not a sixth multiplier) ----------------------
+// The spec lists five multipliers, so PAUSED stays OUT of SPEEDS and out of
+// isValidSpeed; the bottom bar offers it alongside them via isSelectableSpeed.
+
+test('PAUSED is zero and is not one of the spec multipliers', () => {
+  assert.equal(PAUSED, 0);
+  assert.equal(SPEEDS.includes(PAUSED), false);
+  assert.equal(isValidSpeed(PAUSED), false);
+});
+
+test('isSelectableSpeed accepts the multipliers AND pause', () => {
+  for (const s of SPEEDS) assert.equal(isSelectableSpeed(s), true);
+  assert.equal(isSelectableSpeed(PAUSED), true);
+  for (const bad of [-1, 2, 10, 'fast', null, undefined, NaN]) {
+    assert.equal(isSelectableSpeed(bad), false);
+  }
+});
+
+test('a paused clock drains no ticks however long the tab runs', () => {
+  assert.deepEqual(drainTicks(60000, PAUSED), { ticks: 0, remainderMs: 0, fraction: 0 });
+  assert.deepEqual(drainTicks(1_000_000, PAUSED), { ticks: 0, remainderMs: 0, fraction: 0 });
+});
+
+test('pause banks no backlog, so resuming does not burst-simulate', () => {
+  // The frame loop feeds remainderMs back in; pause must return 0 so a long
+  // pause cannot be reinterpreted as a pile of ticks the moment speed resumes.
+  const paused = drainTicks(500_000, PAUSED);
+  assert.equal(paused.remainderMs, 0);
+  assert.equal(drainTicks(paused.remainderMs, 1).ticks, 0);
 });

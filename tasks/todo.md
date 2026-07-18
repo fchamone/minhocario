@@ -27,10 +27,7 @@
 - [x] **T12** Setup screen → farm created and saved (M) — deps: T11
 - [x] **T13** Game loop wiring: HUD, speed, tick timer, autosave (M) — deps: T12, T9
 - [x] **CP5** — first end-to-end human playtest (shop→setup→running farm→persistence)
-- [~] **T14** Actions panel + DOM internals (x-ray data) panel (M) — deps: T13
-      Code complete, suite green (179). **Awaiting the in-browser verify step**:
-      `npx serve .` → reach each §2.8 chain at 20× and confirm the panel + HUD
-      narrate it. Check the box after that playthrough.
+- [x] **T14** Actions panel + DOM internals (x-ray data) panel (M) — deps: T13
 - [ ] **T15** Full lifecycle: death/repopulate, upgrade, restart, live ranking (M) — deps: T14
 - [ ] **CP6** — complete game playable DOM-only; playtest vs spec criteria minus 3D; tuning notes for T21
 

@@ -135,12 +135,14 @@
       <footer class="speed" id="speed">
         <span data-string="game.speedLabel"></span>
         <div class="speed__buttons">
+          <button type="button" data-speed="0" data-string="game.speedPause"></button>
           <button type="button" data-speed="0.25">0.25×</button>
           <button type="button" data-speed="0.5">0.5×</button>
           <button type="button" data-speed="1" class="is-active">1×</button>
           <button type="button" data-speed="5">5×</button>
           <button type="button" data-speed="20">20×</button>
         </div>
+        <span class="speed__paused" id="speed-paused" data-string="game.speedPaused" hidden></span>
       </footer>
     </section>
   </main>

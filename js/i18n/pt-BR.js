@@ -115,6 +115,7 @@ export const ptBR = {
     queueEmpty: 'Nada em decomposição',
     queueMore: 'mais',
     // Speed control
+    speedPause: 'Pausar',
     speedLabel: 'Velocidade',
     speedPaused: 'Pausado',
   },

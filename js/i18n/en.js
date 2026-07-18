@@ -113,6 +113,7 @@ export const en = {
     queueEmpty: 'Nothing breaking down',
     queueMore: 'more',
     // Speed control
+    speedPause: 'Pause',
     speedLabel: 'Speed',
     speedPaused: 'Paused',
   },

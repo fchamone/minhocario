@@ -12,7 +12,7 @@ import { initShop } from './ui/shop.js';
 import { initSetup } from './ui/setup.js';
 import { updateHud } from './ui/hud.js';
 import { initActions, updateActions, showFeedback } from './ui/actions.js';
-import { initSpeed, drainTicks, DEFAULT_SPEED } from './ui/speed.js';
+import { initSpeed, drainTicks, paintPausedIndicator, DEFAULT_SPEED } from './ui/speed.js';
 import { load, save, LOAD_STATUS } from './storage.js';
 import {
   STARTING_WALLET,
@@ -434,6 +434,11 @@ function stopGame() {
 function onSpeedChange(speed) {
   gameSpeed = speed;
   accumulatorMs = 0;
+  paintPausedIndicator(speed);
+  // Pause is a clock stop, not a screen exit: the rAF loop keeps running (so the
+  // render layer stays live for T18) but `drainTicks` yields no ticks at speed 0.
+  // Persist here so quitting while paused resumes at the exact paused hour.
+  persistGame();
 }
 
 /** Freeze the clock and save when the tab is hidden; resume when it returns. */

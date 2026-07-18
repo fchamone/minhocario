@@ -13,6 +13,15 @@ export const SPEEDS = [0.25, 0.5, 1, 5, 20];
 /** The multiplier a fresh game runs at. */
 export const DEFAULT_SPEED = 1;
 
+/**
+ * The paused "speed". Deliberately NOT a member of SPEEDS: the spec defines five
+ * multipliers, and pause is a different thing — it stops the clock rather than
+ * scaling it. `drainTicks` already yields nothing for a non-positive speed, so
+ * pausing needs no special case in the timer, and it banks no backlog (the
+ * remainder returns 0), so resuming can never burst-simulate the paused span.
+ */
+export const PAUSED = 0;
+
 /** Game hours in a day — matches the engine clock (24 ticks = 1 day). */
 export const TICKS_PER_DAY = 24;
 
@@ -29,6 +38,17 @@ export const MS_PER_TICK = 2500;
  */
 export function isValidSpeed(speed) {
   return SPEEDS.includes(speed);
+}
+
+/**
+ * Whether `speed` is something the bottom bar may select: one of the spec
+ * multipliers OR pause. Kept separate from `isValidSpeed` so "is a spec
+ * multiplier" stays a distinct question from "is a legal control value".
+ * @param {*} speed
+ * @returns {boolean}
+ */
+export function isSelectableSpeed(speed) {
+  return isValidSpeed(speed) || speed === PAUSED;
 }
 
 /**
@@ -97,10 +117,20 @@ export function initSpeed({ initialSpeed = DEFAULT_SPEED, onSpeedChange } = {}) 
     if (btn.dataset.wired) continue;
     btn.addEventListener('click', () => {
       const speed = Number(btn.dataset.speed);
-      if (!isValidSpeed(speed)) return;
+      if (!isSelectableSpeed(speed)) return;
       paintActive(speed);
       onSpeedChange?.(speed);
     });
     btn.dataset.wired = '1';
   }
+}
+
+/**
+ * Show or hide the bottom bar's "paused" indicator, so a stopped clock is
+ * obvious even though the HUD's day/time simply stop moving.
+ * @param {number} speed the active speed.
+ */
+export function paintPausedIndicator(speed) {
+  const el = document.getElementById('speed-paused');
+  if (el) el.hidden = speed !== PAUSED;
 }

@@ -328,3 +328,11 @@ h1, h2 { margin: 0 0 0.4em; }
 }
 .chooser__option { text-align: left; }
 .chooser__cancel { width: 100%; }
+
+.speed__paused {
+  color: var(--danger);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
