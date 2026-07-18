@@ -10,6 +10,11 @@
   --ink-dim: #a9bda2;
   --accent: #7bc043;
   --accent-ink: #14210f;
+  /* The "filling up" tier, one step before --danger. Warm enough to read as a
+     caution against the green panels, and light enough to stay legible as a
+     value colour on the dark background (the readouts tint text, not just
+     borders). Distinct from --accent so a warned gauge never reads as healthy. */
+  --warn: #e0b13c;
   --danger: #c0563f;
   --radius: 8px;
   --gap: 12px;
@@ -263,8 +268,11 @@ h1, h2 { margin: 0 0 0.4em; }
 .actions__feedback:empty { display: none; }
 .actions__feedback--error { color: var(--danger); }
 
-/* --- Internals ("x-ray data") panel --- */
-/* Overlays the stage so the 3D scene keeps its full area when hidden. */
+/* --- Internals panel --- */
+/* Overlays the stage. Always present (the x-ray toggle no longer hides it), so
+   the player collapses it themselves via the <details> disclosure — and a
+   collapsed panel shrinks to its summary instead of leaving a 280px empty bar,
+   handing the 3D scene its area back. */
 .internals {
   position: absolute;
   top: 12px;
@@ -278,11 +286,19 @@ h1, h2 { margin: 0 0 0.4em; }
   border: 1px solid var(--panel-2);
   border-radius: var(--radius);
 }
+.internals:not([open]) { width: auto; overflow: visible; }
+/* Mirrors `.stats > summary` — the same disclosure affordance in the other box. */
+.internals > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink-dim);
+}
+.internals[open] > summary { margin-bottom: 8px; }
 /* Flipped to the far side when the player slides the composter under the panel
    (see `internalsSide` in js/ui/actions.js). `left: auto` releases the default
    anchor above, which is otherwise still in play. */
 .internals--right { left: auto; right: 12px; }
-.internals h3 { margin: 0 0 8px; font-size: 0.95rem; }
 .internals h4 {
   margin: 0 0 6px;
   font-size: 0.8rem;
@@ -297,6 +313,7 @@ h1, h2 { margin: 0 0 0.4em; }
 .stat { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
 .stat__label { color: var(--ink-dim); }
 .stat__value { font-variant-numeric: tabular-nums; }
+.stat--warn .stat__value { color: var(--warn); font-weight: 600; }
 .stat--alert .stat__value { color: var(--danger); font-weight: 600; }
 
 /* A gauge: label + value on one line, then a bar whose highlighted zone is the
@@ -335,12 +352,15 @@ h1, h2 { margin: 0 0 0.4em; }
   /* Glide to the new value each tick instead of jumping (T22 polish). */
   transition: left 0.3s ease, background-color 0.2s ease;
 }
+.gauge--warn .gauge__value { color: var(--warn); font-weight: 600; }
+.gauge--warn .gauge__marker { background: var(--warn); }
 .gauge--alert .gauge__value { color: var(--danger); font-weight: 600; }
 .gauge--alert .gauge__marker { background: var(--danger); }
 
 /* A band-less gauge: the bar is filled from the left to the current level. Used
    by the statistics box for the humus tray / leachate tank, which have no
-   comfort band — only a "full" edge that stops production (§2.8). */
+   comfort band — only a "filling up" tier and a "full" edge that stops
+   production (§2.8). */
 .gauge__fill {
   position: absolute;
   top: 0;
@@ -349,6 +369,7 @@ h1, h2 { margin: 0 0 0.4em; }
   background: rgba(123, 192, 67, 0.55);
   transition: width 0.3s ease, background-color 0.2s ease;
 }
+.gauge--warn .gauge__fill { background: var(--warn); }
 .gauge--alert .gauge__fill { background: var(--danger); }
 
 /* --- Statistics box (score detail) --- */
@@ -497,9 +518,17 @@ dialog.chooser[open]::backdrop { animation: backdrop-in 0.18s ease-out; }
    `.hud__item span:last-child` color rule without !important. */
 #hud-status.hud__status--alert { color: var(--danger); font-weight: 700; }
 
-/* The action that clears a full tray/tank pulses to point the player at the fix
-   (toggled from js/ui/actions.js only while the colony is alive). */
-.actions__btn--urgent {
+/* The action that clears a filling/full tray/tank points the player at the fix
+   (toggled from js/ui/actions.js only while the colony is alive). Two tiers, the
+   same ones the gauges use: a calm yellow border while it is filling up, then
+   the red pulse once it is full and production is actually suffering.
+
+   The warning tier deliberately does NOT animate. Motion is what separates
+   "act now" from "act soon" here, so spending it on the earlier tier would flatten
+   the distinction — and under prefers-reduced-motion (below) colour is carrying
+   the whole message anyway. */
+.actions__btn--warn { border-color: var(--warn); }
+.actions__btn--alert {
   border-color: var(--danger);
   animation: urgent-pulse 1.4s ease-in-out infinite;
 }

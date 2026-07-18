@@ -121,13 +121,15 @@
           <button type="button" data-action="repopulate" data-string="game.repopulate"></button>
         </div>
 
-        <!-- Internals ("x-ray data") panel: the numeric gauge layer, toggled by
-             the x-ray action. Populated by js/ui/actions.js on every tick while
-             visible. The 3D x-ray (T20) renders alongside it, not instead. -->
-        <aside class="internals" id="internals" hidden>
-          <h3 data-string="game.internalsTitle"></h3>
+        <!-- Internals panel: the numeric gauge layer, ALWAYS present. It is the
+             instrument the player reads the farm with, so it is deliberately not
+             gated behind the x-ray toggle (which now only affects the 3D bin) —
+             collapsing it is the player's choice, via the <details> disclosure.
+             Populated by js/ui/actions.js on every tick while open. -->
+        <details class="internals" id="internals" open>
+          <summary data-string="game.internalsTitle"></summary>
           <div id="internals-body"></div>
-        </aside>
+        </details>
       </div>
 
       <aside class="actions" id="actions">
@@ -138,7 +140,7 @@
         <button type="button" data-action="drain" data-string="game.drain"></button>
         <button type="button" data-action="harvest" data-string="game.harvest"></button>
         <button type="button" data-action="openShop" data-nav="shop" data-string="game.openShop"></button>
-        <button type="button" data-action="xray" data-string="game.xrayToggle"></button>
+        <button type="button" data-action="xray" data-string="game.xrayToggle" aria-pressed="false"></button>
         <button type="button" data-action="restart" data-string="game.restart"></button>
         <label class="actions__slider">
           <span data-string="game.move"></span>

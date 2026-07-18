@@ -7,8 +7,11 @@
 //      this module never touches the save, the clock, or the sim directly.
 //   2. The internals panel: population by stage, the four env gauges, the recent
 //      food queue, and humus/leachate fill. It is the numeric gauge layer the
-//      3D x-ray (T20) later renders alongside, and the instrument used to read
-//      the §2.8 failure chains while tuning.
+//      3D x-ray (T20) renders alongside, and the instrument used to read the
+//      §2.8 failure chains while tuning. It is ALWAYS present and collapses on
+//      its own — the x-ray toggle drives only the 3D view. The two used to move
+//      in lockstep, which meant the player could not read the numbers without
+//      also making the bin translucent.
 //
 // Layering: a UI module. Display copy comes through the i18n runtime and all
 // thresholds come from the pure sim layer (never re-declared here, so retuning
@@ -262,17 +265,46 @@ export function gauge(value, band, domain) {
 }
 
 /**
- * Fill descriptor for a bounded tank/tray.
+ * Fraction of a tray/tank at which it starts reading as "filling up" and the
+ * readout turns from calm to yellow. A FRACTION, not a volume: the catalog spans
+ * 5x from the electric bin's 8 L tray to eco's 40 L (and 4 L to 20 L of tank), so
+ * any absolute margin that gave a small bin useful warning would fire almost
+ * immediately on a large one.
+ *
+ * The point of the tier is LEAD TIME. `full` already exists and is where the
+ * §2.8 chains actually bite — a full tray halts processing, a full tank
+ * re-saturates the bedding — but by then the damage has started; at 0.7 there is
+ * still a comfortable margin to harvest or drain in.
+ */
+export const WARN_FILL = 0.7;
+
+/**
+ * Fill descriptor for a bounded tank/tray. Exported (and imported by
+ * js/ui/stats.js) so the two readouts cannot disagree about what "full" or
+ * "filling up" means — they used to carry independent copies of this.
+ *
+ * `warn` and `full` are MUTUALLY EXCLUSIVE by construction: a full tray is not
+ * "approaching full", it has arrived, and the two states carry different colours
+ * and different urgency. Rendering both at once would stack a yellow rule and a
+ * red one on the same node and let source order decide the winner.
  * @param {number} liters
  * @param {number} capacity
- * @returns {{liters: number, capacity: number, fill: number, full: boolean}}
+ * @returns {{liters: number, capacity: number, fill: number, warn: boolean, full: boolean}}
  */
-function fillOf(liters, capacity) {
+export function fillOf(liters, capacity) {
+  const fill = capacity > 0 ? clamp01(liters / capacity) : 0;
+  const full = capacity > 0 && liters >= capacity - EPS;
   return {
     liters,
     capacity,
-    fill: capacity > 0 ? clamp01(liters / capacity) : 0,
-    full: capacity > 0 && liters >= capacity - EPS,
+    fill,
+    // Same `EPS` slack the `full` comparison uses, for the same reason: a level
+    // computed as `capacity * WARN_FILL` does not necessarily divide back to
+    // exactly WARN_FILL in binary floating point (12 * 0.7 = 8.399999999999999,
+    // which is a hair UNDER the threshold), so a bare `>=` would silently skip
+    // the tier for whole families of capacities.
+    warn: !full && capacity > 0 && fill >= WARN_FILL - EPS,
+    full,
   };
 }
 
@@ -464,6 +496,23 @@ export function buildStat(labelKey, valueText) {
 }
 
 /**
+ * Paint a row with the two-tier fill state of the tray/tank it reports: yellow
+ * while it is filling up, red once it is full. Shared by the `stat` rows here
+ * and the `gauge` fill bars in js/ui/stats.js (hence the block-name argument) so
+ * a single descriptor drives every readout of the same number identically.
+ *
+ * Both classes are toggled on every call rather than only added, so a row reused
+ * across repaints cannot keep a stale tier after the player harvests or drains.
+ * @param {HTMLElement} row
+ * @param {{warn: boolean, full: boolean}} f  descriptor from `fillOf`
+ * @param {'stat'|'gauge'} block BEM block name to suffix
+ */
+export function markFillLevel(row, f, block) {
+  row.classList.toggle(`${block}--warn`, f.warn);
+  row.classList.toggle(`${block}--alert`, f.full);
+}
+
+/**
  * Move the internals panel out from under the composter. Reads the side the
  * panel is on back off its own class list so `internalsSide`'s hysteresis has
  * real state to compare against (see the dead-band note there), then writes the
@@ -479,13 +528,43 @@ function placeInternals(wallPosition) {
 }
 
 /**
+ * Whether the 3D x-ray view is on. Module-local because it is a pure VIEW
+ * preference: it never enters the farm state or the save (the sim knows nothing
+ * about it), so it resets to off on reload — the same contract the stats box's
+ * open/closed state has. Before the panel was decoupled this flag did not exist
+ * at all; "is x-ray on" was read back off the panel's `hidden` attribute, which
+ * stopped being a truth source the moment the panel became always-visible.
+ */
+let xrayActive = false;
+
+/**
+ * The last state handed to `updateInternals`, kept so re-opening a collapsed
+ * panel can repaint immediately. Without it, expanding the panel while the clock
+ * is paused would show whatever was there before it was collapsed (or nothing at
+ * all) until the next tick or player action — which reads as a broken panel.
+ * Mirrors the same mechanism in js/ui/stats.js.
+ */
+let lastInternals = null;
+
+/** True once the collapse/expand listener is attached (attach exactly once). */
+let internalsToggleWired = false;
+
+/**
  * Repaint the internals panel from the current state. Cheap enough to call on
- * every tick; a no-op when the panel is hidden or there is no farm.
+ * every tick; a no-op when the player has collapsed the panel (a closed
+ * `<details>` renders nothing worth building) or there is no farm.
  * @param {import('../sim/engine.js').FarmState|null} farm
  */
 export function updateInternals(farm) {
   const panel = document.getElementById('internals');
-  if (!panel || panel.hidden) return;
+  if (!panel) return;
+
+  lastInternals = farm;
+  if (!internalsToggleWired) {
+    internalsToggleWired = true;
+    panel.addEventListener('toggle', () => updateInternals(lastInternals));
+  }
+  if (!panel.open) return;
 
   if (farm) placeInternals(farm.wallPosition);
 
@@ -549,12 +628,12 @@ export function updateInternals(farm) {
     'game.humusLabel',
     `${formatLiters(snap.humus.liters)} / ${formatLiters(snap.humus.capacity)}`,
   );
-  if (snap.humus.full) humusRow.classList.add('stat--alert');
+  markFillLevel(humusRow, snap.humus, 'stat');
   const leachateRow = buildStat(
     'game.leachateLabel',
     `${formatLiters(snap.leachate.liters)} / ${formatLiters(snap.leachate.capacity)}`,
   );
-  if (snap.leachate.full) leachateRow.classList.add('stat--alert');
+  markFillLevel(leachateRow, snap.leachate, 'stat');
   tanks.append(tanksTitle, humusRow, leachateRow);
 
   // Recent food queue.
@@ -792,18 +871,27 @@ export function initActions(deps) {
     if (await confirmAction('game.restartConfirm')) onRestart();
   });
 
-  // X-ray toggle: reveals BOTH the numeric internals panel (T14) and the 3D x-ray
-  // view (T20) in lockstep — one control, two layers. Purely a view switch: it
-  // must never pause or perturb the sim (spec §2.7 / T20 acceptance criterion),
-  // so it only flips `hidden`, repaints the panel, and asks main.js to mirror the
-  // state into the render layer (which is itself read-only over the sim).
+  // X-ray toggle: drives ONLY the 3D view (T20) — the translucent shell and the
+  // rendered internals overlay. It deliberately does NOT touch the DOM internals
+  // panel, which is always available and collapses on its own (see the panel's
+  // note in index.html): reading the numbers and seeing through the bin are two
+  // separate wants, and one button cannot serve both.
+  //
+  // Purely a view switch: it must never pause or perturb the sim (spec §2.7 /
+  // T20 acceptance criterion), so it only flips a local flag and asks main.js to
+  // mirror it into the render layer (which is itself read-only over the sim).
+  //
+  // The button carries its own pressed state because it no longer has any DOM
+  // side effect to serve as feedback: `setXrayView` is a silent no-op when WebGL
+  // is unavailable, so without this the control would look dead.
   on('xray', () => {
-    const panel = document.getElementById('internals');
-    if (!panel) return;
-    panel.hidden = !panel.hidden;
-    const active = !panel.hidden;
-    updateInternals(getFarm());
-    onToggleXray?.(active);
+    xrayActive = !xrayActive;
+    const btn = document.querySelector('[data-action="xray"]');
+    if (btn) {
+      btn.setAttribute('aria-pressed', String(xrayActive));
+      btn.classList.toggle('is-active', xrayActive);
+    }
+    onToggleXray?.(xrayActive);
   });
 
   const slider = document.getElementById('wall-position');
@@ -846,25 +934,31 @@ function syncWallSlider(farm) {
 }
 
 /**
- * Point the player at the action that clears a full tray/tank (§2.8 edge state):
- * a full humus tray halts processing, a full leachate tank re-saturates the
- * bedding, and the fix is Harvest / Drain respectively. Highlight the button
- * only while the colony is alive — a dead colony's own banner takes precedence,
- * and its levels are frozen anyway. Uses the same capacities/`EPS` the internals
- * "full" readout does, so button and gauge agree.
+ * Point the player at the action that clears a filling or full tray/tank (§2.8
+ * edge state): a full humus tray halts processing, a full leachate tank
+ * re-saturates the bedding, and the fix is Harvest / Drain respectively.
+ *
+ * Two tiers, matching the readouts: yellow from `WARN_FILL` (act soon, nothing
+ * broken yet) and the red pulse at full (production is already suffering). The
+ * button and the gauge are driven by the SAME `fillOf` descriptor, so they can
+ * never disagree about which tier the bin is in.
+ *
+ * Highlighted only while the colony is alive — a dead colony's own banner takes
+ * precedence, and its levels are frozen anyway.
  * @param {import('../sim/engine.js').FarmState|null} farm
  */
 function markActionUrgency(farm) {
   const composter = farm ? getComposter(farm.composterId) : null;
   const alive = !!farm && farm.colonyAlive !== false;
-  const trayFull = !!composter && alive && farm.humus >= composter.humusCapacity - EPS;
-  const tankFull = !!composter && alive && farm.leachate >= composter.leachateCapacity - EPS;
-  const flag = (action, on) => {
+  const none = { warn: false, full: false };
+  const tray = composter && alive ? fillOf(farm.humus, composter.humusCapacity) : none;
+  const tank = composter && alive ? fillOf(farm.leachate, composter.leachateCapacity) : none;
+  const flag = (action, f) => {
     const el = document.querySelector(`[data-action="${action}"]`);
-    if (el) el.classList.toggle('actions__btn--urgent', on);
+    if (el) markFillLevel(el, f, 'actions__btn');
   };
-  flag('harvest', trayFull);
-  flag('drain', tankFull);
+  flag('harvest', tray);
+  flag('drain', tank);
 }
 
 /**

@@ -57,6 +57,67 @@ test('a tray/tank at capacity reads as full', () => {
   assert.equal(snap.leachate.full, true);
 });
 
+// --- The "filling up" tier ---------------------------------------------------
+// The warning exists to buy the player LEAD TIME: `full` is where the §2.8 chains
+// actually bite (a full tray halts processing, a full tank re-saturates the
+// bedding), so a signal that only arrives there arrives too late to act on.
+
+test('a tray below WARN_FILL is calm', () => {
+  // 8.3 / 12 = 0.69 — just under the threshold, so still nothing to report.
+  const snap = statsSnapshot(farmWith({ humus: 8.3, leachate: 4.1 }), 0);
+  assert.equal(snap.humus.warn, false);
+  assert.equal(snap.humus.full, false);
+  assert.equal(snap.leachate.warn, false);
+});
+
+test('a tray at or past WARN_FILL warns without claiming to be full', () => {
+  // Exactly on the threshold (8.4 / 12 = 0.7) must already warn — the boundary
+  // is inclusive, so the tier cannot be skipped by landing precisely on it.
+  const at = statsSnapshot(farmWith({ humus: 8.4, leachate: 4.2 }), 0);
+  assert.equal(at.humus.warn, true);
+  assert.equal(at.humus.full, false);
+  assert.equal(at.leachate.warn, true);
+
+  const past = statsSnapshot(farmWith({ humus: 11.9, leachate: 5.9 }), 0);
+  assert.equal(past.humus.warn, true);
+  assert.equal(past.humus.full, false);
+  assert.equal(past.leachate.warn, true);
+});
+
+test('warn and full are mutually exclusive, so one colour always wins', () => {
+  // Both classes are applied to the same node; if a full tray also reported
+  // `warn` the readout would stack a yellow rule and a red one and let CSS
+  // source order decide, which is exactly the ambiguity the tiers exist to avoid.
+  const snap = statsSnapshot(farmWith({ humus: 12, leachate: 6 }), 0);
+  assert.equal(snap.humus.full, true);
+  assert.equal(snap.humus.warn, false);
+  assert.equal(snap.leachate.full, true);
+  assert.equal(snap.leachate.warn, false);
+
+  const over = statsSnapshot(farmWith({ humus: 99 }), 0);
+  assert.equal(over.humus.full, true);
+  assert.equal(over.humus.warn, false);
+});
+
+test('the warning threshold is a FRACTION, so it scales across the catalog', () => {
+  // The catalog spans 5x (electric's 8 L tray to eco's 40 L). An absolute margin
+  // tuned for one end would fire almost immediately at the other, so the same
+  // proportion — not the same number of liters — must trigger both.
+  const small = statsSnapshot(
+    { ...farmWith(), composterId: 'electric', humus: 8 * 0.75 },
+    0,
+  );
+  const large = statsSnapshot({ ...farmWith(), composterId: 'eco', humus: 40 * 0.75 }, 0);
+  assert.equal(small.humus.warn, true, 'electric tray at 75%');
+  assert.equal(large.humus.warn, true, 'eco tray at 75%');
+
+  // ...and 6 L is a warning in the small tray but calm in the large one.
+  const smallAt6 = statsSnapshot({ ...farmWith(), composterId: 'electric', humus: 6 }, 0);
+  const largeAt6 = statsSnapshot({ ...farmWith(), composterId: 'eco', humus: 6 }, 0);
+  assert.equal(smallAt6.humus.warn, true, '6 L of an 8 L tray');
+  assert.equal(largeAt6.humus.warn, false, '6 L of a 40 L tray');
+});
+
 test('an over-capacity level clamps its fill to 1 rather than overflowing the bar', () => {
   const snap = statsSnapshot(farmWith({ humus: 99 }), 0);
   assert.equal(snap.humus.fill, 1);

@@ -9,6 +9,7 @@ import {
   internalsSide,
   internalsSnapshot,
   QUEUE_PREVIEW_LIMIT,
+  WARN_FILL,
 } from '../js/ui/actions.js';
 import { FOODS } from '../js/sim/foods.js';
 import { MIN_PORTION_LITERS, createInitialFarmState, addFood } from '../js/sim/engine.js';
@@ -377,6 +378,23 @@ test('internalsSnapshot marks a full tray and a full tank', () => {
   assert.equal(snap.humus.fill, 1);
   assert.equal(snap.leachate.full, true);
   assert.equal(snap.leachate.fill, 1);
+});
+
+test('internalsSnapshot warns before a tray/tank is actually full', () => {
+  // The internals panel and the statistics box read the SAME descriptor, so the
+  // tier that colours one colours the other — this asserts the panel side of the
+  // shared `fillOf` (tests/stats.test.js covers the thresholds themselves).
+  const composter = getComposter('tier2');
+  const farm = {
+    ...sampleFarm(),
+    humus: composter.humusCapacity * WARN_FILL,
+    leachate: composter.leachateCapacity * WARN_FILL,
+  };
+  const snap = internalsSnapshot(farm);
+  assert.equal(snap.humus.warn, true);
+  assert.equal(snap.humus.full, false);
+  assert.equal(snap.leachate.warn, true);
+  assert.equal(snap.leachate.full, false);
 });
 
 test('internalsSnapshot tolerates a farm with no composter or species yet', () => {

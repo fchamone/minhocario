@@ -26,17 +26,9 @@ import { getComposter } from '../sim/composters.js';
 import { carryingCapacity } from '../sim/worms.js';
 import { scorePoints, POINTS_PER_LITER } from '../sim/scoring.js';
 import { formatAmount } from './hud.js';
-import { buildStat } from './actions.js';
-
-/** Slack for "full" comparisons on floating-point volumes (matches engine EPS). */
-const EPS = 1e-9;
+import { buildStat, fillOf, markFillLevel } from './actions.js';
 
 // --- Pure helpers (Node-tested) ---------------------------------------------
-
-/** Clamp to [0, 1]. */
-function clamp01(x) {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
-}
 
 /**
  * Coerce a possibly-absent/corrupt numeric field to a usable number. A migrated
@@ -47,22 +39,6 @@ function clamp01(x) {
  */
 function num(n) {
   return typeof n === 'number' && Number.isFinite(n) ? n : 0;
-}
-
-/**
- * Fill descriptor for a bounded tank/tray — same shape the internals panel uses,
- * so the two readouts agree on what "full" means.
- * @param {number} liters
- * @param {number} capacity
- * @returns {{liters: number, capacity: number, fill: number, full: boolean}}
- */
-function fillOf(liters, capacity) {
-  return {
-    liters,
-    capacity,
-    fill: capacity > 0 ? clamp01(liters / capacity) : 0,
-    full: capacity > 0 && liters >= capacity - EPS,
-  };
 }
 
 /**
@@ -148,14 +124,14 @@ function formatLiters(liters) {
  * portion instead of a band + marker, since a tray has no "too empty" edge — it
  * only matters when it approaches full.
  * @param {string} labelKey i18n key path
- * @param {{fill: number, full: boolean}} f
+ * @param {{fill: number, warn: boolean, full: boolean}} f descriptor from `fillOf`
  * @param {string} valueText pre-formatted display value
  * @returns {HTMLElement}
  */
 function buildFillBar(labelKey, f, valueText) {
   const row = document.createElement('div');
   row.className = 'gauge';
-  if (f.full) row.classList.add('gauge--alert');
+  markFillLevel(row, f, 'gauge');
 
   const label = document.createElement('span');
   label.className = 'gauge__label';

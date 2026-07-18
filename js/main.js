@@ -717,9 +717,10 @@ function init() {
     onHarvest,
     onMove,
     onRestart: restartRun,
-    // X-ray toggle also drives the 3D view: swap the composter shell to
+    // X-ray toggle drives the 3D view ONLY: swap the composter shell to
     // translucent and reveal the internals overlay (render-only, never touches
-    // the sim). A no-op when WebGL is unavailable, so the DOM panel still works.
+    // the sim). A no-op when WebGL is unavailable — the DOM internals panel is
+    // independent of this and stays readable either way.
     onToggleXray: (active) => setXrayView(active),
   });
 
