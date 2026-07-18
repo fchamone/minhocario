@@ -48,7 +48,10 @@ import { decompositionFraction } from '../sim/foods.js';
 // --- Tunables ---------------------------------------------------------------
 
 /** Shell opacity while the x-ray is on (translucent, non-occluding). */
-const SHELL_OPACITY = 0.16;
+// Kept low on purpose: the shell colours are dark, and at each pixel the ray can
+// cross the front wall AND a rim AND the lid, so the veil STACKS over whatever it
+// covers. Every extra point of opacity darkens the internals multiple times over.
+const SHELL_OPACITY = 0.1;
 
 /** Vertical share of the cavity given to each stacked fill zone (bottom → up). */
 const LEACHATE_ZONE = 0.22; // liquid pooling at the very bottom
@@ -65,13 +68,17 @@ const WORM_HALF_POP = 120;
 const MAX_CHUNKS = 6;
 
 // Flat palette for the internals (opaque, so they read through the faint shell).
-const LEACHATE_COLOR = 0x7a5a2a; // dark tea/amber liquid
-const HUMUS_COLOR = 0x3b2a1a; // dark castings brown
+// Values are lifted well above "realistic" compost browns: these sit INSIDE a
+// shadowed bin, behind a translucent shell, and are the one thing the player
+// opened the x-ray to read. Relative hues are preserved so the stacked zones stay
+// distinguishable from each other.
+const LEACHATE_COLOR = 0xb8893f; // tea/amber liquid
+const HUMUS_COLOR = 0x6b4f30; // castings brown — fills the largest zone
 const COCOON_COLOR = 0xf0e6c0; // pale lemon-shaped cocoons
-const JUVENILE_COLOR = 0xd98f8f; // small pinkish worms
-const ADULT_COLOR = 0xbf3b2b; // larger red worms
-const FOOD_FRESH = new Color(0x8bbf4a); // bright green-yellow scraps
-const FOOD_ROTTEN = new Color(0x5c4326); // brown, fully broken down
+const JUVENILE_COLOR = 0xe0a5a5; // small pinkish worms
+const ADULT_COLOR = 0xd4503c; // larger red worms
+const FOOD_FRESH = new Color(0x9ed455); // bright green-yellow scraps
+const FOOD_ROTTEN = new Color(0x8a6a3d); // brown, fully broken down
 
 // --- Small helpers ----------------------------------------------------------
 
@@ -98,9 +105,28 @@ function makeRng(seed) {
   };
 }
 
-/** Flat-shaded opaque material for a solid internal (worms, humus). */
+/**
+ * Flat-shaded opaque material for a solid internal (worms, humus).
+ *
+ * Self-lit on purpose. These meshes sit inside the bin cavity, where the only
+ * strong light (the directional sun) rakes the OUTSIDE of the shell and never
+ * reaches them — so lit-only materials left the internals nearly black at night,
+ * exactly when the player opens the x-ray to read them. Emissive makes each zone
+ * carry its own colour regardless of the hour, and `fog: false` stops the fog
+ * washing them toward the sky colour (the sun patch opts out the same way).
+ * Emissive is kept partial, not 1.0, so flat-shaded facets still catch some
+ * scene light and the volumes keep their shape instead of reading as flat decals.
+ */
 function solidMaterial(color) {
-  return new MeshStandardMaterial({ color, roughness: 0.9, metalness: 0, flatShading: true });
+  return new MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.35,
+    roughness: 0.9,
+    metalness: 0,
+    flatShading: true,
+    fog: false,
+  });
 }
 
 /**
@@ -194,12 +220,19 @@ export function buildXrayInternals(composterId) {
   // Fill volumes: unit boxes scaled/positioned each frame (see updateXrayInternals).
   const leachateFill = new Mesh(
     new BoxGeometry(1, 1, 1),
+    // Its own material rather than solidMaterial(): the liquid stays translucent
+    // so the tank reads as wet. Emissive/fog match solidMaterial for the same
+    // reason — it pools at the bottom of the cavity, the least-lit spot of all,
+    // and being transparent it also picks up whatever dark thing is behind it.
     new MeshStandardMaterial({
       color: LEACHATE_COLOR,
+      emissive: LEACHATE_COLOR,
+      emissiveIntensity: 0.35,
       roughness: 0.4,
       metalness: 0,
       transparent: true,
       opacity: 0.72,
+      fog: false,
     }),
   );
   leachateFill.userData.xrayPart = true;
@@ -324,6 +357,10 @@ function updateChunks(chunks, cavity, farm) {
     chunk.position.set(x, topY + (i % 2) * 0.07, cavity.z);
     const decomp = clamp01(decompositionFraction(now - entry.addedAtTick));
     chunk.material.color.copy(FOOD_FRESH).lerp(FOOD_ROTTEN, decomp);
+    // solidMaterial ties emissive to the colour it was built with, so the glow
+    // has to track the fresh → rotten tint too; otherwise a fully broken-down
+    // chunk keeps glowing fresh-green over its brown albedo.
+    chunk.material.emissive.copy(chunk.material.color);
   }
 }
 

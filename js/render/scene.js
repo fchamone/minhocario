@@ -107,7 +107,7 @@ const FLOOR_COLOR = 0x5b4a37;
 //   sky   background + fog + hemisphere sky tint
 //   sun   directional light colour        sunI/hemiI/ambI  light intensities
 const DAY_CYCLE = [
-  { h: 0, sky: 0x0a0e1a, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.16, ambI: 0.1 },
+  { h: 0, sky: 0x1c2740, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.16, ambI: 0.1 },
   { h: 5, sky: 0x1b2440, sun: 0x40506e, sunI: 0.14, hemiI: 0.22, ambI: 0.12 },
   { h: 6.5, sky: 0xd98a5c, sun: 0xffb066, sunI: 0.55, hemiI: 0.45, ambI: 0.2 },
   { h: 9, sky: 0x9fb8cc, sun: 0xfff1d6, sunI: 0.9, hemiI: 0.7, ambI: 0.25 },
@@ -115,10 +115,35 @@ const DAY_CYCLE = [
   { h: 15, sky: 0x9fb8cc, sun: 0xfff0d0, sunI: 0.9, hemiI: 0.7, ambI: 0.25 },
   { h: 17.5, sky: 0xe0743c, sun: 0xff8a48, sunI: 0.55, hemiI: 0.45, ambI: 0.2 },
   { h: 19, sky: 0x2a2742, sun: 0x4a4668, sunI: 0.16, hemiI: 0.26, ambI: 0.13 },
-  { h: 21, sky: 0x10152a, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.17, ambI: 0.1 },
+  { h: 21, sky: 0x1a2338, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.17, ambI: 0.1 },
   // Duplicate of h:0 so interpolation wraps cleanly through midnight.
-  { h: 24, sky: 0x0a0e1a, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.16, ambI: 0.1 },
+  { h: 24, sky: 0x1c2740, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.16, ambI: 0.1 },
 ];
+
+// Exposure correction for the vendored Three r170, which uses the post-r155
+// physically-correct light units (`useLegacyLights` was removed in r165). The
+// DAY_CYCLE intensities above are authored in legacy-era numbers and render far
+// too dim under r170, so every intensity is remapped as `floor + GAIN * curve`
+// before it reaches a light.
+//
+// The FLOOR is what keeps the bin readable at midnight; the GAIN preserves the
+// authored day/night SHAPE on top of it. Deliberately a floor-lift rather than a
+// flat multiply: a pure multiply would leave night proportionally as black as it
+// is now. Ambient runs 0.10 -> 0.49 at night and 0.30 -> 0.87 at noon, so the
+// day/night ratio compresses from 3.0x to ~1.8x — dimmer at night, never black.
+// Scene-wide the totals go 0.36 -> 1.45 at midnight and 2.12 -> 4.80 at noon,
+// leaving night 3.3x darker than noon.
+//
+// Why these values are safe rather than merely brighter: pre-r155 Three scaled
+// these light types by PI internally, so an authored 1.0 already MEANT ~3.14.
+// Measured against that original intent, every daytime value here still lands
+// BELOW it (noon sun 64%, hemi 74%, ambient 92%) — this restores brightness the
+// renderer upgrade silently took away, it does not add new, so midday cannot
+// clip to flat white and no tone-mapping curve is needed. Only the night end is
+// pushed past the old intent (ambient 156%), which is the deliberate floor.
+// These two constants are the only brightness knobs; tune them by eye.
+const LIGHT_FLOOR = { sun: 0.12, hemi: 0.35, amb: 0.3 };
+const LIGHT_GAIN = 1.9;
 
 // Directional-light arc: the "sun" rises on the left, peaks overhead at noon, and
 // sets on the right — matching the sun patch, which sweeps wallPosition 0 → 1.
@@ -255,8 +280,12 @@ let dragListeners = null;
  */
 function buildScene(target) {
   target.background = new Color(SKY_COLOR);
-  // A little distance fog softens the wall edges and reads as garage depth.
-  target.fog = new Fog(SKY_COLOR, 14, 30);
+  // A little distance fog softens the wall edges and reads as garage depth. The
+  // near plane must stay BEYOND the subject: the camera sits at z=9 and the wall
+  // at z=0, so a near of 14 was fogging the wall and bin themselves — pulling
+  // them toward the (at night, near-black) sky colour. Starting at 22 keeps the
+  // depth cue for the far edges while leaving the composter unfogged.
+  target.fog = new Fog(SKY_COLOR, 22, 45);
 
   // Garage wall: a vertical plane at z=0, its base on the ground, facing +z
   // (toward the camera). A thin box would also work; a plane keeps it cheap.
@@ -456,6 +485,19 @@ function lerp(a, b, t) {
 }
 
 /**
+ * Map an authored DAY_CYCLE intensity onto the r170 physical light scale: lift it
+ * by a per-light floor so night never bottoms out to black, then apply the global
+ * gain so the authored day/night shape survives on top of the floor. See the
+ * LIGHT_FLOOR/LIGHT_GAIN comment for why this is a floor-lift, not a multiply.
+ * @param {number} curveValue interpolated DAY_CYCLE intensity
+ * @param {number} floor the light's LIGHT_FLOOR entry
+ * @returns {number} intensity to hand to the light
+ */
+function litIntensity(curveValue, floor) {
+  return floor + LIGHT_GAIN * curveValue;
+}
+
+/**
  * Sweep the directional light along its daytime arc: low on the left at sunrise,
  * high overhead at noon, low on the right at sunset. At night it parks at an end
  * (intensity is near-zero there anyway). Direction matches the sun patch, which
@@ -506,14 +548,16 @@ function applyDayNight(hour) {
 
   if (sunLight) {
     sunLight.color.copy(_sunColor.set(k0.sun).lerp(_lerpTmp.set(k1.sun), t));
-    sunLight.intensity = lerp(k0.sunI, k1.sunI, t);
+    sunLight.intensity = litIntensity(lerp(k0.sunI, k1.sunI, t), LIGHT_FLOOR.sun);
     positionSun(hour);
   }
   if (hemiLight) {
-    hemiLight.intensity = lerp(k0.hemiI, k1.hemiI, t);
+    hemiLight.intensity = litIntensity(lerp(k0.hemiI, k1.hemiI, t), LIGHT_FLOOR.hemi);
     hemiLight.color.copy(_skyColor);
   }
-  if (ambientLight) ambientLight.intensity = lerp(k0.ambI, k1.ambI, t);
+  if (ambientLight) {
+    ambientLight.intensity = litIntensity(lerp(k0.ambI, k1.ambI, t), LIGHT_FLOOR.amb);
+  }
 
   updateSunPatch(hour);
 }
