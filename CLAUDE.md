@@ -17,6 +17,11 @@ Minhocário — a browser-based vermicomposting (worm farm) simulator game. Full
 
 Node is needed only for tests. There are no runtime dependencies other than the vendored Three.js in `vendor/` (version pinned in a comment header).
 
+## Development workflow
+
+- Develop **directly on `master`** — this project does **not** use git worktrees. Commit straight to `master` (or a short-lived branch merged back promptly) and keep history linear.
+- No build step and no toolchain: edits to `index.html` / `css/` / `js/` are the deliverable. Deploy = FTP-upload the project folder (minus `tests/`, `.harn/`, `.claude/`).
+
 ## Architecture
 
 Single-page app: `index.html` holds all screens as DOM sections (home/shop/setup/game); `js/main.js` does screen routing and game-loop wiring.
