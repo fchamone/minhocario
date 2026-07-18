@@ -401,16 +401,24 @@ function chooseFrom(titleKey, options) {
       return;
     }
 
-    let settled = false;
-    const finish = (value) => {
-      if (settled) return;
-      settled = true;
+    // Resolution is driven by the dialog's own `close` event, NOT by the click
+    // handler. `close()` fires that event ASYNCHRONOUSLY (it is queued as a
+    // task), so resolving eagerly would let this prompt's queued event land on
+    // the NEXT prompt's listener — the two prompts share one <dialog> element.
+    // That is what made the portion chooser open and shut instantly after a
+    // food was picked. Waiting for the event keeps sequential prompts serialized:
+    // the listener detaches as the event is delivered, so nothing is left queued.
+    let picked = null;
+    const onClose = () => {
       dialog.removeEventListener('close', onClose);
-      dialog.close();
-      resolve(value);
+      resolve(picked);
     };
-    // Escape / backdrop dismissal resolves as a cancel rather than hanging.
-    const onClose = () => finish(null);
+    // Also covers Escape / backdrop dismissal, which resolve as a cancel (null).
+    dialog.addEventListener('close', onClose);
+    const finish = (value) => {
+      picked = value;
+      dialog.close();
+    };
 
     const title = document.createElement('h3');
     title.textContent = t(titleKey);
@@ -434,7 +442,6 @@ function chooseFrom(titleKey, options) {
     cancel.addEventListener('click', () => finish(null));
 
     dialog.replaceChildren(title, list, cancel);
-    dialog.addEventListener('close', onClose);
     dialog.showModal();
   });
 }
