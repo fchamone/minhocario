@@ -94,6 +94,49 @@ export function drainTicks(accumulatedMs, speed, opts = {}) {
 }
 
 /**
+ * Decide the clock speed across a colony-alive transition. A dead colony
+ * produces nothing (§2.1), so running the clock only burns game days — the
+ * clock stops on death and returns to its previous speed once the colony is
+ * repopulated, which keeps "buy worms → time resumes" from needing a manual
+ * un-pause.
+ *
+ * Acts ONLY on a transition, so a player who deliberately resumes time over a
+ * dead colony (the environment still evolves) is not overridden every frame.
+ * Pure — the caller owns the state.
+ * @param {object} args
+ * @param {boolean} args.alive       colony alive now
+ * @param {boolean} args.wasAlive    colony alive at the previous sync
+ * @param {number} args.speed        the current speed
+ * @param {number} args.resumeSpeed  the speed banked for a later revival
+ * @returns {{speed: number, resumeSpeed: number}}
+ */
+export function clockForColony({ alive, wasAlive, speed, resumeSpeed }) {
+  if (alive === wasAlive) return { speed, resumeSpeed };
+  if (!alive) {
+    // Bank the speed to come back to. Dying while already paused would
+    // otherwise strand the player at 0× after reviving.
+    return { speed: PAUSED, resumeSpeed: speed === PAUSED ? DEFAULT_SPEED : speed };
+  }
+  return { speed: resumeSpeed, resumeSpeed };
+}
+
+/**
+ * Paint the bottom bar to reflect a speed: highlight its button and show or hide
+ * the paused indicator. Used both by the control itself and by callers that
+ * change speed programmatically (e.g. the colony-death auto-pause).
+ * @param {number} speed
+ */
+export function paintSpeed(speed) {
+  const bar = document.getElementById('speed');
+  if (bar) {
+    for (const btn of bar.querySelectorAll('[data-speed]')) {
+      btn.classList.toggle('is-active', Number(btn.dataset.speed) === speed);
+    }
+  }
+  paintPausedIndicator(speed);
+}
+
+/**
  * Wire the bottom speed bar: highlight the active multiplier and report clicks.
  * The handler is attached once per button (guarded) so re-entering the game
  * screen never stacks listeners; the active-state paint runs every call.
@@ -105,20 +148,14 @@ export function initSpeed({ initialSpeed = DEFAULT_SPEED, onSpeedChange } = {}) 
   const bar = document.getElementById('speed');
   if (!bar) return;
   const buttons = bar.querySelectorAll('[data-speed]');
-
-  const paintActive = (active) => {
-    for (const btn of buttons) {
-      btn.classList.toggle('is-active', Number(btn.dataset.speed) === active);
-    }
-  };
-  paintActive(initialSpeed);
+  paintSpeed(initialSpeed);
 
   for (const btn of buttons) {
     if (btn.dataset.wired) continue;
     btn.addEventListener('click', () => {
       const speed = Number(btn.dataset.speed);
       if (!isSelectableSpeed(speed)) return;
-      paintActive(speed);
+      paintSpeed(speed);
       onSpeedChange?.(speed);
     });
     btn.dataset.wired = '1';

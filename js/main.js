@@ -12,7 +12,13 @@ import { initShop } from './ui/shop.js';
 import { initSetup } from './ui/setup.js';
 import { updateHud } from './ui/hud.js';
 import { initActions, updateActions, showFeedback } from './ui/actions.js';
-import { initSpeed, drainTicks, paintPausedIndicator, DEFAULT_SPEED } from './ui/speed.js';
+import {
+  initSpeed,
+  drainTicks,
+  paintSpeed,
+  clockForColony,
+  DEFAULT_SPEED,
+} from './ui/speed.js';
 import { load, save, LOAD_STATUS } from './storage.js';
 import {
   STARTING_WALLET,
@@ -294,6 +300,10 @@ let gameProfile = null;
 let gameRanking = [];
 /** Active speed multiplier (js/ui/speed.js). */
 let gameSpeed = DEFAULT_SPEED;
+/** Colony-alive at the last UI sync, so `syncColonyClock` sees transitions. */
+let lastColonyAlive = true;
+/** Speed to restore once a dead colony is repopulated. */
+let speedBeforeColonyDeath = DEFAULT_SPEED;
 /** Real ms banked but not yet converted to whole ticks. */
 let accumulatorMs = 0;
 /** Timestamp of the previous frame, or null to start a fresh delta. */
@@ -319,8 +329,36 @@ function persistGame() {
 
 /** Repaint everything that reads the live state: HUD + actions/internals panel. */
 function refreshGameUi() {
+  syncColonyClock();
   updateHud(gameFarm, gameProfile?.wallet ?? 0);
   updateActions(gameFarm);
+}
+
+/**
+ * Stop the clock when the colony dies and restart it when the colony is revived
+ * (§2.1 — a dead colony produces nothing, so running time just burns days). The
+ * decision itself is the pure `clockForColony`; this only owns the state and the
+ * repaint. Called from every UI refresh, so it catches a death mid-tick and a
+ * revival from the worm-pack purchase alike.
+ */
+function syncColonyClock() {
+  const alive = gameFarm ? gameFarm.colonyAlive !== false : true;
+  const next = clockForColony({
+    alive,
+    wasAlive: lastColonyAlive,
+    speed: gameSpeed,
+    resumeSpeed: speedBeforeColonyDeath,
+  });
+  lastColonyAlive = alive;
+  speedBeforeColonyDeath = next.resumeSpeed;
+  if (next.speed !== gameSpeed) applySpeed(next.speed);
+}
+
+/** Set the clock speed and reflect it in the bottom bar. */
+function applySpeed(speed) {
+  gameSpeed = speed;
+  accumulatorMs = 0; // drop the sub-tick backlog so a speed jump can't burst
+  paintSpeed(speed);
 }
 
 /**
@@ -480,6 +518,9 @@ function startGame() {
   gameRanking = result.save.ranking ?? [];
   accumulatorMs = 0;
   continuousHour = gameFarm.hour;
+  // Assume alive so that loading a save whose colony is already dead registers
+  // as a transition and stops the clock straight away.
+  lastColonyAlive = true;
   refreshGameUi();
   startLoop();
 }
@@ -493,9 +534,11 @@ function stopGame() {
 /** Change speed: only the timer scales. Drop the sub-tick backlog so a jump to a
  * faster speed can't reinterpret it as a burst of ticks. */
 function onSpeedChange(speed) {
-  gameSpeed = speed;
-  accumulatorMs = 0;
-  paintPausedIndicator(speed);
+  applySpeed(speed);
+  // A manual speed change is also the player's new "resume" speed, so reviving a
+  // colony later returns them to what they last chose rather than to whatever
+  // they were running at when it died.
+  if (speed !== 0) speedBeforeColonyDeath = speed;
   // Pause is a clock stop, not a screen exit: the rAF loop keeps running (so the
   // render layer stays live for T18) but `drainTicks` yields no ticks at speed 0.
   // Persist here so quitting while paused resumes at the exact paused hour.
@@ -553,6 +596,31 @@ function showScreen(name) {
   SCREEN_ENTER[name]?.();
 }
 
+/**
+ * DEV ONLY — top up the wallet so mid-game flows (notably the upgrade shop) can
+ * be exercised without first playing out the economy. Lives on the temporary
+ * dev-nav bar and is removed with it before release (T23).
+ * @param {number} [amount]
+ */
+function devAddCoins(amount = 500) {
+  if (gameProfile) {
+    gameProfile = { ...gameProfile, wallet: gameProfile.wallet + amount };
+    persistGame();
+    refreshGameUi();
+  } else {
+    const loaded = load();
+    if (loaded.status !== LOAD_STATUS.OK) return; // never touch a corrupt/future save
+    const stored = loaded.save;
+    save({
+      ...stored,
+      profile: { ...stored.profile, wallet: (stored.profile?.wallet ?? 0) + amount },
+    });
+  }
+  // Repaint whatever screen is showing so the new balance is visible at once
+  // (the shop reads the wallet on entry).
+  if (currentScreen !== 'game') SCREEN_ENTER[currentScreen]?.();
+}
+
 /** Wire click handlers for anything carrying a `data-nav` attribute. */
 function wireNavigation() {
   for (const el of document.querySelectorAll('[data-nav]')) {
@@ -575,6 +643,7 @@ function init() {
 
   applyStrings();
   wireNavigation();
+  document.getElementById('dev-coins')?.addEventListener('click', () => devAddCoins());
 
   // Bottom speed bar → adjust the tick timer; freeze/resume + autosave on tab
   // visibility changes (killing the tab persists the exact game hour, no catch-up).

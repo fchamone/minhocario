@@ -9,6 +9,7 @@ import {
   drainTicks,
   PAUSED,
   isSelectableSpeed,
+  clockForColony,
 } from '../js/ui/speed.js';
 
 // --- catalog of speeds (spec §2 — 0.25×/0.5×/1×/5×/20×) ----------------------
@@ -126,4 +127,44 @@ test('pause banks no backlog, so resuming does not burst-simulate', () => {
   const paused = drainTicks(500_000, PAUSED);
   assert.equal(paused.remainderMs, 0);
   assert.equal(drainTicks(paused.remainderMs, 1).ticks, 0);
+});
+
+// --- Colony death stops the clock (T15 follow-up) ----------------------------
+// A dead colony produces nothing, so letting the clock run just burns game days.
+// The rule: pause on the death transition, restore the previous speed when the
+// colony is revived, and never act except on a transition.
+
+test('clockForColony pauses the clock when the colony dies', () => {
+  const next = clockForColony({ alive: false, wasAlive: true, speed: 5, resumeSpeed: 1 });
+  assert.equal(next.speed, PAUSED);
+  assert.equal(next.resumeSpeed, 5, 'the speed at death is what we resume to');
+});
+
+test('clockForColony restores the pre-death speed when the colony revives', () => {
+  const next = clockForColony({ alive: true, wasAlive: false, speed: PAUSED, resumeSpeed: 20 });
+  assert.equal(next.speed, 20);
+});
+
+test('clockForColony never records PAUSED as the speed to resume to', () => {
+  // Dying while already paused must not strand the player at 0× after reviving.
+  const next = clockForColony({ alive: false, wasAlive: true, speed: PAUSED, resumeSpeed: 5 });
+  assert.equal(next.speed, PAUSED);
+  assert.notEqual(next.resumeSpeed, PAUSED);
+  assert.equal(next.resumeSpeed, DEFAULT_SPEED);
+});
+
+test('clockForColony leaves a steady state alone', () => {
+  // No transition → the player's own speed choice is never overridden.
+  const running = { alive: true, wasAlive: true, speed: 20, resumeSpeed: 1 };
+  assert.deepEqual(clockForColony(running), { speed: 20, resumeSpeed: 1 });
+
+  const stillDead = { alive: false, wasAlive: false, speed: 5, resumeSpeed: 1 };
+  assert.deepEqual(clockForColony(stillDead), { speed: 5, resumeSpeed: 1 });
+});
+
+test('clockForColony lets the player resume time on a still-dead colony', () => {
+  // Un-pausing a dead colony is allowed (the env keeps evolving); the rule only
+  // fires on transitions, so the manual choice sticks.
+  const next = clockForColony({ alive: false, wasAlive: false, speed: 1, resumeSpeed: 1 });
+  assert.equal(next.speed, 1);
 });

@@ -16,6 +16,7 @@ export const es = {
     shop: 'Tienda',
     setup: 'Preparación',
     game: 'Granja',
+    addCoins: '+500 monedas (dev)',
   },
 
   home: {
