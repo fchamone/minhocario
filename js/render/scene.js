@@ -33,6 +33,10 @@ import {
   Float32BufferAttribute,
   DynamicDrawUsage,
   AdditiveBlending,
+  Raycaster,
+  Vector2,
+  Vector3,
+  Plane,
 } from '../../vendor/three.module.min.js';
 import { buildComposterMesh, disposeComposterMesh } from './composter3d.js';
 // The ONE sim import the plan sanctions for the render layer: the SAME pure
@@ -194,6 +198,38 @@ const _lerpTmp = new Color();
  * with its back at local z=0, so this is applied as the group's z position.
  */
 const BIN_WALL_GAP = 0.5;
+
+// --- Drag-move state (T19) ---------------------------------------------------
+// Pointer-driven placement: grab the composter mesh with a raycast, then drag it
+// along a wall-aligned plane. The clamped wallPosition is handed back to main.js
+// through `onDragMove` — the SAME action the actions-panel slider dispatches — so
+// autosave, state, and the slider stay in lockstep (bidirectional sync).
+
+/** @type {Raycaster|null} lazily created when drag-move is enabled. */
+let raycaster = null;
+/** Pointer position in normalized device coords, reused each raycast. */
+const _pointerNdc = new Vector2();
+/** Plane normal (faces the camera, so the drag plane is parallel to the wall). */
+const _planeNormal = new Vector3(0, 0, 1);
+/** The wall-aligned drag plane; reset through the grab point on each pointerdown. */
+const _dragPlane = new Plane(_planeNormal.clone(), -BIN_WALL_GAP);
+/** Scratch vector for the ray↔plane intersection, reused each move. */
+const _dragHit = new Vector3();
+/** Whether pointer listeners are installed (enableDragMove is idempotent). */
+let dragEnabled = false;
+/** @type {((position: number) => void)|null} sink for the dragged wallPosition. */
+let onDragMove = null;
+/** Whether a grab is currently in progress. */
+let dragging = false;
+/** The pointerId that owns the active drag (ignore other pointers mid-drag). */
+let dragPointerId = null;
+/**
+ * World-X gap between the composter's origin and the grabbed surface point, so the
+ * exact point the player grabbed stays pinned under the cursor during the drag.
+ */
+let dragGrabOffsetX = 0;
+/** Retained bound listeners, so disposeScene can detach them. */
+let dragListeners = null;
 
 /**
  * Build the wall + floor + lights into the scene. Pure scene-graph assembly, no
@@ -476,6 +512,158 @@ export function renderState(state, continuousHour = 0) {
   renderer.render(scene, camera);
 }
 
+// --- Drag-move (T19) ---------------------------------------------------------
+// Raycast the composter to grab it, then drag along a wall-aligned plane. Uses
+// Pointer Events (mouse + touch + pen through one API) and pointer capture so a
+// release outside the canvas still ends the drag rather than wedging it.
+
+/**
+ * Convert a pointer event's client coords to normalized device coords within the
+ * canvas (both axes in [-1, 1], y up). Returns the reused scratch vector.
+ * @param {PointerEvent} event
+ * @returns {Vector2}
+ */
+function pointerToNdc(event) {
+  const rect = sceneCanvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    _pointerNdc.set(0, 0);
+    return _pointerNdc;
+  }
+  _pointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  _pointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  return _pointerNdc;
+}
+
+/**
+ * Raycast the composter group under a pointer event. Returns the nearest
+ * intersection, or null when the pointer is not over the mesh (or there is none).
+ * @param {PointerEvent} event
+ * @returns {import('three').Intersection|null}
+ */
+function raycastComposter(event) {
+  if (!raycaster || !camera || !composterGroup) return null;
+  camera.updateMatrixWorld();
+  composterGroup.updateMatrixWorld(true);
+  raycaster.setFromCamera(pointerToNdc(event), camera);
+  const hits = raycaster.intersectObject(composterGroup, true);
+  return hits.length > 0 ? hits[0] : null;
+}
+
+/**
+ * Begin a drag if the pointer went down on the composter. Anchors a wall-aligned
+ * plane through the grabbed point and records the grab offset so that point stays
+ * under the cursor. Empty-space clicks are ignored (not a grab).
+ * @param {PointerEvent} event
+ */
+function onPointerDown(event) {
+  if (!ready || dragging || !composterGroup) return;
+  const hit = raycastComposter(event);
+  if (!hit) return;
+
+  dragging = true;
+  dragPointerId = event.pointerId;
+  // Plane parallel to the wall, through the grabbed surface point; the offset
+  // pins that point under the cursor as it moves horizontally.
+  _dragPlane.setFromNormalAndCoplanarPoint(_planeNormal, hit.point);
+  dragGrabOffsetX = composterGroup.position.x - hit.point.x;
+
+  sceneCanvas.style.cursor = 'grabbing';
+  // Pointer capture keeps move/up flowing to the canvas even outside its bounds,
+  // so leaving the canvas mid-drag never wedges the grab (spec: release-outside).
+  try {
+    sceneCanvas.setPointerCapture(event.pointerId);
+  } catch {
+    // Capture unsupported/failed — the window-level safety net still ends the drag.
+  }
+  event.preventDefault();
+}
+
+/**
+ * While dragging, map the pointer onto the drag plane and dispatch the clamped
+ * wallPosition. When not dragging, show a grab-cursor affordance over the mesh.
+ * @param {PointerEvent} event
+ */
+function onPointerMove(event) {
+  if (!ready) return;
+
+  if (dragging && event.pointerId === dragPointerId) {
+    raycaster.setFromCamera(pointerToNdc(event), camera);
+    const point = raycaster.ray.intersectPlane(_dragPlane, _dragHit);
+    if (!point) return; // ray parallel to / behind the plane — ignore this move
+    const worldX = point.x + dragGrabOffsetX;
+    const position = Math.min(1, Math.max(0, worldXToWallPosition(worldX)));
+    onDragMove?.(position);
+    event.preventDefault();
+    return;
+  }
+
+  // Hover affordance: 'grab' over the composter, default cursor elsewhere. Only
+  // when idle, so a second pointer can't flip the 'grabbing' cursor mid-drag.
+  if (!dragging && composterGroup) {
+    sceneCanvas.style.cursor = raycastComposter(event) ? 'grab' : '';
+  }
+}
+
+/**
+ * End the active drag: release pointer capture and restore the hover cursor. A
+ * no-op for a pointer that does not own the drag, so stray up/cancel events (or
+ * the window-level safety net firing after the canvas already handled it) are
+ * harmless.
+ * @param {PointerEvent} [event]
+ */
+function endDrag(event) {
+  if (!dragging) return;
+  if (event && event.pointerId !== dragPointerId) return;
+  dragging = false;
+  dragPointerId = null;
+  if (event && sceneCanvas) {
+    try {
+      sceneCanvas.releasePointerCapture(event.pointerId);
+    } catch {
+      // Nothing captured (or already released) — safe to ignore.
+    }
+  }
+  if (sceneCanvas) {
+    sceneCanvas.style.cursor = event && raycastComposter(event) ? 'grab' : '';
+  }
+}
+
+/**
+ * Turn on pointer drag-move, routing each dragged wallPosition to `onWallPositionChange`
+ * (main.js wires this to the SAME action the slider dispatches, keeping autosave,
+ * state, and the slider in sync). Idempotent: safe to call on every game-screen
+ * entry — listeners are installed once and only the callback is refreshed.
+ * @param {(position: number) => void} onWallPositionChange sink for wallPosition 0..1
+ * @returns {boolean} whether drag-move is active (false if the scene is not ready)
+ */
+export function enableDragMove(onWallPositionChange) {
+  if (!ready || !sceneCanvas) return false;
+  onDragMove = typeof onWallPositionChange === 'function' ? onWallPositionChange : null;
+  if (dragEnabled) return true;
+
+  raycaster = new Raycaster();
+  // Pointer Events cover mouse, touch, and pen; touch-action:none lets a touch
+  // drag the bin instead of scrolling/zooming the page.
+  sceneCanvas.style.touchAction = 'none';
+
+  const down = (e) => onPointerDown(e);
+  const move = (e) => onPointerMove(e);
+  const up = (e) => endDrag(e);
+  sceneCanvas.addEventListener('pointerdown', down);
+  sceneCanvas.addEventListener('pointermove', move);
+  sceneCanvas.addEventListener('pointerup', up);
+  sceneCanvas.addEventListener('pointercancel', up);
+  sceneCanvas.addEventListener('lostpointercapture', up);
+  // Safety net: a release ANYWHERE ends the drag, so a pointerup outside the
+  // canvas can never leave the grab stuck even if pointer capture was refused.
+  globalThis.addEventListener?.('pointerup', up);
+  globalThis.addEventListener?.('pointercancel', up);
+
+  dragListeners = { down, move, up };
+  dragEnabled = true;
+  return true;
+}
+
 /**
  * Tear down the renderer and detach listeners. Not needed in the single-page
  * happy path (the scene lives for the page's lifetime) but keeps the module
@@ -484,6 +672,23 @@ export function renderState(state, continuousHour = 0) {
 export function disposeScene() {
   if (onWindowResize) globalThis.removeEventListener?.('resize', onWindowResize);
   onWindowResize = null;
+  if (dragEnabled && dragListeners) {
+    if (sceneCanvas) {
+      sceneCanvas.removeEventListener('pointerdown', dragListeners.down);
+      sceneCanvas.removeEventListener('pointermove', dragListeners.move);
+      sceneCanvas.removeEventListener('pointerup', dragListeners.up);
+      sceneCanvas.removeEventListener('pointercancel', dragListeners.up);
+      sceneCanvas.removeEventListener('lostpointercapture', dragListeners.up);
+    }
+    globalThis.removeEventListener?.('pointerup', dragListeners.up);
+    globalThis.removeEventListener?.('pointercancel', dragListeners.up);
+  }
+  dragEnabled = false;
+  dragListeners = null;
+  onDragMove = null;
+  dragging = false;
+  dragPointerId = null;
+  raycaster = null;
   if (composterGroup) disposeComposterMesh(composterGroup);
   composterGroup = null;
   composterModelId = null;

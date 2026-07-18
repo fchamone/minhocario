@@ -20,7 +20,7 @@ import {
   DEFAULT_SPEED,
 } from './ui/speed.js';
 import { load, save, LOAD_STATUS } from './storage.js';
-import { initScene, renderState, resizeScene } from './render/scene.js';
+import { initScene, renderState, resizeScene, enableDragMove } from './render/scene.js';
 import {
   STARTING_WALLET,
   createInitialFarmState,
@@ -542,7 +542,13 @@ function stopLoop() {
 function startGame() {
   // Mount + size the 3D scene now that its canvas is visible. Sizing must happen
   // on entry because the canvas has no layout size while the screen is hidden.
-  if (ensureScene()) resizeScene();
+  if (ensureScene()) {
+    resizeScene();
+    // Drag-move (T19): grabbing the composter in 3D dispatches through the SAME
+    // onMove action as the slider, so both controls and the autosave stay in
+    // sync. Idempotent — listeners are installed once across game-screen entries.
+    enableDragMove(onMove);
+  }
 
   const result = load();
   if (result.status !== LOAD_STATUS.OK || !result.save.farm) {

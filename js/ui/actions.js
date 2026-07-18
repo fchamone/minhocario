@@ -588,22 +588,36 @@ export function initActions(deps) {
   if (slider) {
     const farm = getFarm();
     if (farm) slider.value = String(farm.wallPosition);
-    // `input` (not `change`) so the composter tracks the drag live — T19 syncs
-    // the 3D drag back into this same control.
+    // `input` (not `change`) so the composter tracks the slider live. This is the
+    // slider → 3D half of the bidirectional sync (T19): it dispatches the SAME
+    // `onMove` action the 3D drag does, and the reverse (3D drag → slider) lands
+    // through `syncWallSlider` on the resulting repaint.
     slider.addEventListener('input', () => onMove(Number(slider.value)));
   }
 }
 
 /**
- * Reflect current state in the actions panel: sync the slider (e.g. after a
- * load) and repaint the internals panel if it is open.
+ * State → slider half of the wall-position bidirectional sync (T19): reflect the
+ * live `wallPosition` on the range input so a 3D drag moves the thumb. Skipped
+ * while the slider itself has focus, so dragging the slider is never fought by a
+ * same-tick repaint; a 3D drag focuses the canvas (not the slider), so it flows
+ * through here.
  * @param {import('../sim/engine.js').FarmState|null} farm
  */
-export function updateActions(farm) {
+function syncWallSlider(farm) {
   const slider = document.getElementById('wall-position');
   if (slider && farm && document.activeElement !== slider) {
     slider.value = String(farm.wallPosition);
   }
+}
+
+/**
+ * Reflect current state in the actions panel: sync the slider (e.g. after a
+ * load, or from a 3D drag) and repaint the internals panel if it is open.
+ * @param {import('../sim/engine.js').FarmState|null} farm
+ */
+export function updateActions(farm) {
+  syncWallSlider(farm);
 
   // Dead-colony banner: production has stopped and repopulating is the only way
   // forward (§2.1). Driven purely by state, so it clears itself the moment a
