@@ -37,12 +37,20 @@ export const COMPOSTERS = [
     capacity: 20,
     humusCapacity: 8,
     leachateCapacity: 4,
-    // Smallest bin in the catalog (population ceiling 1000) at the second-highest
-    // price, so it can never win on colony SIZE — measured at CP6 it was actually
-    // worse than the 100-coin tier2 for two of the three species. Its premium is
-    // therefore throughput per worm, not headcount: it processes fastest and
-    // converts the largest share of what it eats into humus. A small, perfectly
-    // regulated colony out-earning a big cold one is the whole pitch.
+    // Smallest bin in the catalog (population ceiling 1000), so it can never win
+    // on colony SIZE — a larger, cheaper bin always out-earns it on raw coins/day
+    // (capacity gates the colony, and its humusRate is already at the conservation
+    // bound). Its role is a SPECIALIST side-grade, not a raw-output king: it leads
+    // the catalog on throughput per worm AND per litre (it eats fastest and
+    // converts the largest share into humus), and — the part no other bin can do —
+    // its active regulation is the ONLY thing that keeps a cold-sensitive species
+    // (Gigante-Africana) reproducing through the cold night, since the sun patch
+    // adds heat only by day (solarGain is 0 at night; see tasks/t21-balance.md).
+    //
+    // Priced at 350 through CP6 it was a trap: flagship price, out-earned by the
+    // 100-coin tier2. T21 cut it to 200 — a modest premium over tier3 (180) that
+    // reads as "cheapest efficient regulated bin", so it is a sensible first
+    // upgrade from tier2 instead of a coins-per-day loss (see tasks/t21-balance.md).
     speed: 1.7,
     humusRate: 0.78,
     // Lower than every other model: an actively managed, heated unit drives off
@@ -52,7 +60,7 @@ export const COMPOSTERS = [
     leachateRate: 0.15,
     tempResponse: 0.5,
     regulation: 0.9, // heated appliance: actively holds near ideal (its premium)
-    price: 350,
+    price: 200,
   },
   {
     id: 'tier2',

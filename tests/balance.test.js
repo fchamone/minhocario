@@ -91,17 +91,35 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
   const endPop = total(s.population);
   assert.ok(endPop > startPop, `net population GROWTH: ${startPop} -> ${endPop}`);
   assert.ok(endPop > startPop * 2, `growth is substantial, not marginal: ${endPop}`);
+  // T21 lock: the tuned constants settle this run at a food-supported ~1.5k, not
+  // a marginal survival and not a runaway boom. The window brackets the measured
+  // 1463 so any constant edit that materially shifts the carrying/breeding balance
+  // (either starving it down or letting it explode) trips this test.
+  assert.ok(
+    endPop > 1150 && endPop < 1800,
+    `settles at a food-supported size (measured ~1463): ${endPop}`,
+  );
   // The colony never crashed on the way: no boom-bust hidden by the end state.
   assert.ok(
     minPop >= startPop,
     `population never dipped below its starting size: min ${minPop} vs start ${startPop}`,
   );
-  // Good care never let the environment run into lethal territory.
+  // Good care never let the environment run into lethal territory. T21 tightens
+  // these from the bare lethal thresholds to the actual tuned envelope (measured
+  // maxMoisture 0.710, maxTemp 31.76, minMoisture 0.500) so the well-tended run's
+  // comfort margin is itself locked — a hotter sun patch or wetter food shows up
+  // here long before it turns lethal.
   assert.ok(maxMoisture < MOIST_LETHAL, `moisture stayed sub-lethal: max ${maxMoisture.toFixed(3)}`);
+  assert.ok(maxMoisture < 0.75, `good care held moisture in band (measured 0.710): max ${maxMoisture.toFixed(3)}`);
   assert.ok(maxTemp < TEMP_LETHAL, `temperature stayed sub-lethal: max ${maxTemp.toFixed(2)}`);
+  assert.ok(maxTemp < 33, `good care held temperature well below lethal (measured 31.76): max ${maxTemp.toFixed(2)}`);
   assert.ok(minMoisture > MOIST_DRY_LETHAL, `bedding never dried into lethal territory: min ${minMoisture.toFixed(3)}`);
-  // Tending the bin (harvesting humus) earned score — idling would have earned none.
+  assert.ok(minMoisture > 0.45, `bedding stayed comfortably moist (measured 0.500): min ${minMoisture.toFixed(3)}`);
+  // Tending the bin (harvesting humus) earned score — idling would have earned
+  // none. T21 puts a real floor on it (measured 1962.8) so a scoring/economy
+  // regression that quietly zeroes the season's yield is caught here too.
   assert.ok(s.score > 0, `harvesting humus accrued score: ${s.score.toFixed(1)}`);
+  assert.ok(s.score > 1500, `a tended season banks substantial score (measured ~1963): ${s.score.toFixed(1)}`);
 });
 
 // --- §2.8 neglect chain 1: leachate overflow -> saturation -> mortality ------
@@ -121,7 +139,11 @@ test('NEGLECT (leachate): never draining saturates the bedding and kills the col
   // back into the survivable band and a remnant colony rides out the flood
   // forever. Steady feeding keeps genuinely fresh food in the bin, which is both
   // what a real keeper does and what keeps the chain terminal.
-  const BOUND_DAYS = 30;
+  // T21 lock: measured terminal day is 13. BOUND_DAYS tightened 30 -> 16 and a
+  // lower bound added below, so the chain is pinned to a ~10-16 day window — fast
+  // enough to reach at 20x in one session, but still a genuine slow-neglect death
+  // (not an instant one). ~39 s of wall-clock at 20x.
+  const BOUND_DAYS = 16;
   let s = createInitialFarmState({
     seed: 7,
     composterId: 'tier2',
@@ -150,7 +172,7 @@ test('NEGLECT (leachate): never draining saturates the bedding and kills the col
   assert.ok(sawSpike, 'the never-drained bin saturated the bedding to a lethal moisture level');
   assert.ok(maxTemp < TEMP_LETHAL, `heat stayed sub-lethal — this death is saturation, not fermentation: max ${maxTemp.toFixed(2)}`);
   assert.ok(maxTox < 0.1, `toxicity stayed sub-lethal — vegetable scraps are non-toxic: max ${maxTox.toFixed(3)}`);
-  assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
+  assert.ok(dieDay >= 10, `not an instant death — saturation builds over days (measured 13): died day ${dieDay}`);
   assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
   assert.equal(s.colonyAlive, false, 'colonyAlive flipped to false');
   assert.equal(total(s.population), 0, 'population reached zero');
@@ -168,7 +190,9 @@ test('NEGLECT (humus): never harvesting fills the tray, halts processing, and ro
   // isolate the tank; with nothing replenishing the bedding that bin now just
   // dries out and dies of the §2.8 drying chain before the tray ever fills — so
   // the faithful isolation is a moist food plus a drained tank.)
-  const BOUND_DAYS = 35;
+  // T21 lock: measured terminal day is 16. BOUND_DAYS tightened 35 -> 22 with a
+  // lower bound below, pinning the rot chain to a ~12-22 day window (~48 s at 20x).
+  const BOUND_DAYS = 22;
   const trayCap = getComposter('tier2').humusCapacity;
   let s = createInitialFarmState({
     seed: 7,
@@ -204,7 +228,7 @@ test('NEGLECT (humus): never harvesting fills the tray, halts processing, and ro
   // contributed — this death is the rot chain alone.
   assert.ok(maxMoisture < MOIST_LETHAL, `moisture stayed sub-lethal wet: max ${maxMoisture.toFixed(3)}`);
   assert.ok(minMoisture > MOIST_DRY_LETHAL, `moisture stayed sub-lethal dry: min ${minMoisture.toFixed(3)}`);
-  assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
+  assert.ok(dieDay >= 12, `the tray must fill and the queue rot first — not instant (measured 16): died day ${dieDay}`);
   assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
   assert.equal(s.colonyAlive, false, 'colonyAlive flipped to false');
   assert.equal(total(s.population), 0, 'population reached zero');
@@ -220,7 +244,9 @@ test('NEGLECT (overfeeding): chronic fresh dumps ferment the bin to a lethal tem
   // remnant survive (a small open tray cools overnight and never fully dies).
   // Harvest + drain each tick so the tray/tank chains don't do the killing;
   // fermentation heat reaches the lethal threshold first.
-  const BOUND_DAYS = 15;
+  // T21 lock: measured terminal day is 3 (a big sunny bin crammed daily cooks
+  // almost at once). BOUND_DAYS tightened 15 -> 8 with a lower bound below.
+  const BOUND_DAYS = 8;
   let s = createInitialFarmState({
     seed: 7,
     composterId: 'eco',
@@ -253,7 +279,7 @@ test('NEGLECT (overfeeding): chronic fresh dumps ferment the bin to a lethal tem
     moistLethalDay < 0 || tempLethalDay <= moistLethalDay,
     `heat turned lethal no later than moisture (temp@${tempLethalDay} vs moist@${moistLethalDay})`,
   );
-  assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
+  assert.ok(dieDay >= 2, `fermentation still takes a day to build (measured 3): died day ${dieDay}`);
   assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
   assert.equal(total(s.population), 0, 'population reached zero');
 });
@@ -265,7 +291,9 @@ test('NEGLECT (only unsuitable food): feeding only toxic foods poisons the colon
   // toxicity as they decompose faster than it decays; harvest + drain each tick so
   // neither overflow chain confounds this — toxicity alone stalls reproduction and
   // then kills. (The foods carry no label; only their emergent effect is toxic.)
-  const BOUND_DAYS = 20;
+  // T21 lock: measured terminal day is 5. BOUND_DAYS tightened 20 -> 10 with a
+  // lower bound below, so toxicity has to accumulate over several days first.
+  const BOUND_DAYS = 10;
   const toxicFoods = ['meat', 'dairy', 'oilyFood', 'saltyLeftovers'];
   let s = createInitialFarmState({
     seed: 7,
@@ -294,7 +322,7 @@ test('NEGLECT (only unsuitable food): feeding only toxic foods poisons the colon
   }
 
   assert.ok(maxTox > 0.4, `toxicity climbed into lethal territory: max ${maxTox.toFixed(3)}`);
-  assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
+  assert.ok(dieDay >= 3, `toxicity accumulates over several days first (measured 5): died day ${dieDay}`);
   assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
   assert.equal(s.colonyAlive, false, 'colonyAlive flipped to false');
   assert.equal(total(s.population), 0, 'population reached zero');
@@ -309,7 +337,9 @@ test('NEGLECT (drying): a hot, unfed bin evaporates the bedding to a lethal dryn
   // bedding down past the DRY edge of the comfort band until dryness turns lethal.
   // Harvest + drain each tick so nothing else can confound it; heat stays
   // sub-lethal, so dryness (not overheating) is what kills.
-  const BOUND_DAYS = 30;
+  // T21 lock: measured terminal day is 11. BOUND_DAYS tightened 30 -> 16 with a
+  // lower bound below — the sun-baked bin has to evaporate down over ~a week first.
+  const BOUND_DAYS = 16;
   let s = createInitialFarmState({
     seed: 7,
     composterId: 'tier2',
@@ -335,7 +365,7 @@ test('NEGLECT (drying): a hot, unfed bin evaporates the bedding to a lethal dryn
 
   assert.ok(minMoisture < MOIST_DRY_LETHAL, `the bedding dried past the lethal-dry edge: min ${minMoisture.toFixed(3)}`);
   assert.ok(maxTemp < TEMP_LETHAL, `heat stayed sub-lethal — this death is dryness, not overheating: max ${maxTemp.toFixed(2)}`);
-  assert.ok(dieDay > 0, `the colony reached a terminal state (day ${dieDay})`);
+  assert.ok(dieDay >= 8, `evaporation draws the bedding down over ~a week first (measured 11): died day ${dieDay}`);
   assert.ok(dieDay <= BOUND_DAYS, `terminal within the bound of ${BOUND_DAYS} days: died day ${dieDay}`);
   assert.equal(s.colonyAlive, false, 'colonyAlive flipped to false');
   assert.equal(total(s.population), 0, 'population reached zero');
@@ -469,4 +499,88 @@ test('the same mistake produces DIFFERENT failure signatures by placement', () =
   const sun = overfeedAt(0.5);
   const shade = overfeedAt(0);
   assert.ok(sun.maxTemp > shade.maxTemp + 5, 'the sunny bin runs markedly hotter');
+});
+
+// --- T21-3: the electric composter is priced as a specialist, not a trap ------
+// At 350 (through CP6) the electric bin was a trap: flagship price, yet out-earned
+// on raw coins/day by cheaper, larger bins (capacity gates the colony and its
+// humusRate is already at the conservation bound, so it cannot close that gap on
+// output). T21 cut it to 200 — a modest premium over tier3 that reads as "the
+// cheapest efficient regulated bin" and a sensible first upgrade from tier2. This
+// locks that decision: reverting toward the old flagship price (> tier4) fails.
+// Rationale + measurements: tasks/t21-balance.md.
+
+test('electric is priced as a mid-tier specialist premium, not a flagship trap', () => {
+  const electric = getComposter('electric').price;
+  const tier2 = getComposter('tier2').price;
+  const tier3 = getComposter('tier3').price;
+  const tier4 = getComposter('tier4').price;
+  const eco = getComposter('eco').price;
+  assert.ok(electric > tier2, `costs more than the entry bin it upgrades from: ${electric} > ${tier2}`);
+  assert.ok(electric > tier3, `a premium over tier3 for its efficiency + regulation: ${electric} > ${tier3}`);
+  assert.ok(
+    electric <= tier4,
+    `NOT priced as a flagship — must not exceed the tier4 output bin (this fails at the old 350): ${electric} <= ${tier4}`,
+  );
+  assert.ok(electric < eco, `still below the largest bin: ${electric} < ${eco}`);
+});
+
+// --- T21-4: the sun spot cannot rescue Gigante-Africana; only electric can ----
+// Spec §2.9 says the Gigante-Africana "pairs with the sun spot or the electric
+// composter". The sun-spot half is a spec erratum (documented in
+// tasks/t21-balance.md, spec left untouched per the task): africana's binding
+// constraint is the COLD NIGHT (comfort floor 20 °C), and solarGain is 0 at night
+// by construction (§2.6), so no wall position lifts the night trough. This test
+// is the executable form of that finding — a passive bin at the SUNNIEST spot
+// still falls below africana's floor every night, while only the actively-heated
+// electric bin holds the night in band. (Lowering passive tempResponse to carry
+// daytime heat overnight was rejected: it needs tempResponse ~0.05, which also
+// caps the midday peak at ~24 °C and would break the overfeeding-in-the-sun and
+// placement-signature chains above — see tasks/t21-balance.md.)
+
+/** Min night-time bin temperature for a tended africana colony over days 5-20. */
+function africanaNightTrough(composterId, wallPosition) {
+  const cap = getComposter(composterId).capacity;
+  let s = createInitialFarmState({
+    seed: 11,
+    composterId,
+    speciesId: 'africana',
+    wallPosition,
+  });
+  let wallet = 1e6;
+  ({ state: s, wallet } = buyWormPack(s, wallet, 'africana', 200));
+  const rng = createRng(s.rngState);
+  let minNight = Infinity;
+  for (let d = 0; d < 20; d++) {
+    for (let h = 0; h < 24; h++) {
+      if ((h === 8 || h === 18) && queueVolume(s) < cap * 0.25) s = addFood(s, 'vegetableScraps', cap * 0.06);
+      s = tick(s, rng);
+      if (s.env.moisture > 0.7) s = addSawdust(s, (s.env.moisture - 0.55) / 0.03);
+      if (h === 20) {
+        ({ state: s, wallet } = harvestAndSell(s, wallet));
+        ({ state: s, wallet } = drainAndSell(s, wallet));
+      }
+      // Skip the warm-up from the 20 °C initial state; sample settled nights only.
+      if (d >= 5 && (h < 6 || h >= 20)) minNight = Math.min(minNight, s.env.temperature);
+    }
+  }
+  return minNight;
+}
+
+test('the sun spot cannot rescue africana from cold nights — only the electric bin can', () => {
+  const floor = getSpecies('africana').tempComfort.min; // 20 °C
+  const passiveSun = africanaNightTrough('tier2', 0.5); // sunniest wall
+  const passiveShade = africanaNightTrough('tier2', 0.0);
+  const electric = africanaNightTrough('electric', 0.5);
+
+  // The sun spot does not lift the night trough: a passive bin sits below the
+  // floor at night whether it is in the sun or the shade (solarGain is 0 at night).
+  assert.ok(passiveSun < floor, `passive bin at the sun spot still drops below africana's floor at night: ${passiveSun.toFixed(1)} < ${floor}`);
+  assert.ok(
+    Math.abs(passiveSun - passiveShade) < 1,
+    `night trough barely moves with placement (sun ${passiveSun.toFixed(1)} vs shade ${passiveShade.toFixed(1)}) — the sun patch is a daytime-only effect`,
+  );
+  // The electric bin's active regulation is the genuine remedy: it holds the
+  // night in band.
+  assert.ok(electric >= floor, `only the electric bin keeps africana's night in band: ${electric.toFixed(1)} >= ${floor}`);
 });

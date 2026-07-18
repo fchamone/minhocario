@@ -184,7 +184,7 @@ pools less runoff; keeps output ≤ intake).
 | tier4 | 280 | 60 | 1683 | 93.9 | 1.56 |
 | buried | 300 | 80 | 2733 | 72.3 | 0.90 |
 
-### T21-3 — Electric is still out-earned by cheaper large bins *(open)*
+### T21-3 — Electric is still out-earned by cheaper large bins *(RESOLVED at T21 — see `tasks/t21-balance.md`: price cut 350 → 200)*
 
 The retune took electric from **below** tier2 to **+25% above** it, and it is now
 by far the most productive bin per litre (3.36 vs ~1.7 for everything else). But
@@ -200,7 +200,7 @@ colony, and `humusRate` is already at 0.78 against a conservation bound of
 - **make cold nights genuinely threatening** (widen `AMBIENT_AMPLITUDE`), so its
   thermal regulation protects against a real threat instead of a notional one.
 
-### T21-4 — Africana cannot be rescued by the sun spot *(open)*
+### T21-4 — Africana cannot be rescued by the sun spot *(RESOLVED at T21 — see `tasks/t21-balance.md`: documented spec erratum; tempResponse lever rejected)*
 
 Spec §2.9 says the Gigante-Africana "pairs with the sun spot or electric
 composter". The sun spot **cannot** help it: africana's problem is cold nights,

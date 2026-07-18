@@ -160,11 +160,13 @@ test('production replays identically per seed and stays JSON-serializable', () =
   assert.deepEqual(JSON.parse(JSON.stringify(a)), a, 'state round-trips through JSON');
 });
 
-// --- The electric composter earns its price (retuned after CP6) -------------
-// It has the SMALLEST bin in the catalog (population ceiling 1000) at the
-// second-highest price, so it can never win on colony size — measured at CP6 it
-// was actually out-earned by the 100-coin tier2. Its premium is throughput per
-// worm instead: it eats fastest and converts the largest share into humus.
+// --- The electric composter earns its price (retuned after CP6 / T21) --------
+// It has the SMALLEST bin in the catalog (population ceiling 1000), so it can
+// never win on colony size — measured at CP6 it was actually out-earned by the
+// 100-coin tier2. Its premium is throughput per worm instead: it eats fastest
+// and converts the largest share into humus. (T21 also cut its price 350 -> 200
+// so this efficiency reads as a sensible upgrade rather than a coins/day trap;
+// price is not exercised here — see tests/balance.test.js + tasks/t21-balance.md.)
 //
 // Note speed alone is a poor lever (faster eating starves the colony, so 2.7x
 // the speed bought only 16% more output); humusRate is what scales output
