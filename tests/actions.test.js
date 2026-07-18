@@ -229,3 +229,24 @@ test('internalsSnapshot tolerates a farm with no composter or species yet', () =
   assert.equal(snap.queue.length, 0);
   assert.ok(Number.isFinite(snap.env.moisture.ratio));
 });
+
+// --- The panel names the bin it is showing the inside of ---------------------
+
+test('internalsSnapshot carries the composter model and its capacity', () => {
+  const snap = internalsSnapshot(sampleFarm());
+  assert.equal(snap.composterId, 'tier2');
+  assert.equal(snap.capacity, getComposter('tier2').capacity);
+});
+
+test('internalsSnapshot reports a null model before a composter is chosen', () => {
+  const snap = internalsSnapshot(createInitialFarmState({ seed: 1 }));
+  assert.equal(snap.composterId, null);
+  assert.equal(snap.capacity, 0);
+});
+
+test('the model shown tracks a migration', () => {
+  const migrated = { ...sampleFarm(), composterId: 'eco' };
+  const snap = internalsSnapshot(migrated);
+  assert.equal(snap.composterId, 'eco');
+  assert.equal(snap.capacity, getComposter('eco').capacity);
+});

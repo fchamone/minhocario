@@ -164,6 +164,10 @@ export function internalsSnapshot(farm) {
   const ordered = [...farm.queue].reverse();
 
   return {
+    // Which bin the player is looking inside — the panel names it, so an
+    // upgrade is visible in the readout as well as in the 3D scene.
+    composterId: composter ? composter.id : null,
+    capacity: composter ? composter.capacity : 0,
     population: {
       cocoons,
       juveniles,
@@ -290,6 +294,16 @@ export function updateInternals(farm) {
   }
 
   const body = document.createElement('div');
+
+  // Which bin this is: model name + total volume. Rendered into the body (not
+  // the static heading) so it follows a mid-farm upgrade automatically.
+  if (snap.composterId) {
+    const model = document.createElement('p');
+    model.className = 'internals__model';
+    model.textContent =
+      `${t(`composters.${snap.composterId}.name`)} · ${snap.capacity} ${t('common.liters')}`;
+    body.append(model);
+  }
 
   // Population by stage, against carrying capacity.
   const pop = document.createElement('section');

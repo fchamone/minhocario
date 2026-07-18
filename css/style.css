@@ -360,3 +360,11 @@ h1, h2 { margin: 0 0 0.4em; }
 /* --- Shop: mid-farm upgrade extras --- */
 .shop-card__tradein { margin: 0; font-size: 0.85rem; color: var(--accent); }
 .shop-card--current { border-color: var(--accent); }
+
+.internals__model {
+  margin: -4px 0 10px;
+  padding-bottom: 8px;
+  font-weight: 600;
+  color: var(--accent);
+  border-bottom: 1px solid var(--panel-2);
+}
