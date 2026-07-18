@@ -102,6 +102,9 @@
     <!-- GAME -->
     <section id="screen-game" class="screen screen--game" data-screen="game" hidden>
       <header class="hud" id="hud">
+        <!-- Player identity: no `data-string` — the nickname is player data, not
+             translatable copy (it stays pt-BR-flavored in every locale). -->
+        <span class="hud__item hud__item--player"><span id="hud-nickname">—</span></span>
         <span class="hud__item"><span data-string="game.hudScore"></span>: <span id="hud-score">0</span></span>
         <span class="hud__item"><span data-string="game.hudMoney"></span>: <span id="hud-money">0</span></span>
         <span class="hud__item"><span data-string="game.hudDay"></span>: <span id="hud-day">1</span></span>

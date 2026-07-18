@@ -1,6 +1,8 @@
-// HUD (game-screen header): score, money, day, time, and a status line. The
-// dynamic values are written by `updateHud`; the static labels are filled from
-// the i18n catalog by main.js's applyStrings (they carry `data-string`).
+// HUD (game-screen header): the player nickname, score, money, day, time, and a
+// status line. The dynamic values are written by `updateHud`; the static labels
+// are filled from the i18n catalog by main.js's applyStrings (they carry
+// `data-string`). The nickname chip has no label and no `data-string` — it is
+// player data, not translatable copy.
 //
 // Layering: a UI module. It reads the sim state and the composter catalog (a
 // pure lookup) and pulls the status text through the i18n runtime. The three
@@ -56,19 +58,22 @@ export function farmStatus(farm) {
 }
 
 /**
- * Paint the HUD's dynamic fields from the current sim state and wallet. Money
- * lives on the player profile (not the farm), so it is passed in. Tolerates a
- * null farm (e.g. the game screen shown before a farm exists) by rendering
- * neutral defaults. DOM function — not unit-tested.
+ * Paint the HUD's dynamic fields from the current sim state and profile. Money
+ * and the nickname live on the player profile (not the farm), so they are passed
+ * in. Tolerates a null farm (e.g. the game screen shown before a farm exists) by
+ * rendering neutral defaults. DOM function — not unit-tested.
  * @param {import('../sim/engine.js').FarmState|null} farm
  * @param {number} wallet coins on the player profile
+ * @param {string} nickname player nickname ('' before a profile exists)
  */
-export function updateHud(farm, wallet) {
+export function updateHud(farm, wallet, nickname) {
   const set = (id, text) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
   };
 
+  // Em dash rather than an empty chip when there is no profile yet.
+  set('hud-nickname', nickname || '—');
   set('hud-money', formatAmount(wallet));
   set('hud-score', formatAmount(farm ? farm.score : 0));
   set('hud-day', String(farm ? farm.day : 1));

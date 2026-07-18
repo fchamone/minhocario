@@ -111,6 +111,16 @@ function currentWallet() {
 }
 
 /**
+ * Nickname currently on the player profile, read fresh from the save. Empty when
+ * there is no save yet — the HUD renders a placeholder in that case.
+ * @returns {string}
+ */
+function currentNickname() {
+  const result = load();
+  return result.save?.profile?.nickname ?? '';
+}
+
+/**
  * Start a NEW game: reset the run while keeping the player's identity and
  * history. The wallet returns to STARTING_WALLET and the farm is cleared, but
  * the nickname and ranking survive — otherwise a second playthrough inherits the
@@ -361,7 +371,7 @@ function persistGame() {
 /** Repaint everything that reads the live state: HUD + actions/internals/stats. */
 function refreshGameUi() {
   syncColonyClock();
-  updateHud(gameFarm, gameProfile?.wallet ?? 0);
+  updateHud(gameFarm, gameProfile?.wallet ?? 0, gameProfile?.nickname ?? '');
   updateActions(gameFarm);
   // The wallet lives on the profile, not the farm, so the stats box takes it the
   // same way the HUD does. Called from here (not from the tick loop) so the box
@@ -561,7 +571,7 @@ function startGame() {
   const result = load();
   if (result.status !== LOAD_STATUS.OK || !result.save.farm) {
     gameFarm = null;
-    updateHud(null, currentWallet());
+    updateHud(null, currentWallet(), currentNickname());
     renderState(gameFarm, continuousHour); // wall + floor even with no farm
     return;
   }
