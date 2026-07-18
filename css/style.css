@@ -278,6 +278,10 @@ h1, h2 { margin: 0 0 0.4em; }
   border: 1px solid var(--panel-2);
   border-radius: var(--radius);
 }
+/* Flipped to the far side when the player slides the composter under the panel
+   (see `internalsSide` in js/ui/actions.js). `left: auto` releases the default
+   anchor above, which is otherwise still in play. */
+.internals--right { left: auto; right: 12px; }
 .internals h3 { margin: 0 0 8px; font-size: 0.95rem; }
 .internals h4 {
   margin: 0 0 6px;
@@ -333,6 +337,45 @@ h1, h2 { margin: 0 0 0.4em; }
 }
 .gauge--alert .gauge__value { color: var(--danger); font-weight: 600; }
 .gauge--alert .gauge__marker { background: var(--danger); }
+
+/* A band-less gauge: the bar is filled from the left to the current level. Used
+   by the statistics box for the humus tray / leachate tank, which have no
+   comfort band — only a "full" edge that stops production (§2.8). */
+.gauge__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(123, 192, 67, 0.55);
+  transition: width 0.3s ease, background-color 0.2s ease;
+}
+.gauge--alert .gauge__fill { background: var(--danger); }
+
+/* --- Statistics box (score detail) --- */
+/* Sits in the .actions sidebar flow, not over the stage — see js/ui/stats.js. */
+.stats {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  background: var(--panel-2);
+  border-radius: var(--radius);
+}
+.stats > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+.stats h4 {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+.stats__group { margin-top: 10px; }
+/* The bar's own track reads as a hole against the lighter box background, so it
+   borrows the panel color here instead of the page background it uses on the
+   (darker) internals overlay. */
+.stats .gauge__bar { background: var(--panel); }
 
 /* --- Modal chooser (add waste / portion / worm pack) --- */
 .chooser {

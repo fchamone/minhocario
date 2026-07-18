@@ -51,6 +51,7 @@
       lever rejected (T21-4); balance bounds tightened + 2 locking tests. Suite 222 green.
       Decisions + measurements in `tasks/t21-balance.md`.
 - [x] **T21b** Behavior/constants/rules reference doc → `docs/game-reference.md` (S/M) — deps: T21
+      Kept current through T24 (§7 `ration`, §8 throughput ceiling / gating / `DECOMP_TICKS`).
 - [x] **T22** UX/visual polish + audits (strings/Math.random/food labels) (S/M) — deps: T20
 - [x] **T23** Release checklist + deploy dry run (S) — deps: T21, T21b, T22
       T21b + T22 committed separately (docs / feat(ui)). Deploy dry run: pruned
@@ -60,6 +61,15 @@
       `docs/` EXCLUDED from the FTP upload (maintainer spoiler sheet, not
       player-facing). Full checklist + CP9 human gates in
       `tasks/release-checklist.md`. Suite 222 green.
+- [x] **T24** Feed-rate pacing fix — `THROUGHPUT_CAP_PER_LITER` (M) — deps: T21, T21b
+      Found IN PLAY, not by the suite: at 5× a mature colony ate the largest servable
+      portion in ~3 s. Capacity-scaled throughput ceiling (0.014 L/tick/L) shared by the
+      `ration` demand and the actual eating; portion ladder widened; ceiling `species.speed`
+      regression fixed. Bracketed above by pacing and below by the `OVERPOP_STALL` crowding
+      wall — good-care equilibrium 1463 → 2034 worms (active/cap 1.31, still food-limited),
+      season score 1962.8 → 1957.6, all five §2.8 chain days unchanged. Scoring formula and
+      save schema untouched (CP9 freeze unaffected). Suite 256 green. Measurements in
+      `tasks/t21-balance.md` (T24 section).
 - [ ] **CP9** — ship gate: human sign-off vs spec acceptance criteria; scoring + save schema freeze
 
 ## Change C-0002 — Multi-language (i18n): pt-BR / en / es

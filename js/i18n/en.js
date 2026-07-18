@@ -118,6 +118,16 @@ export const en = {
     queueTitle: 'Waste breaking down',
     queueEmpty: 'Nothing breaking down',
     queueMore: 'more',
+    // Statistics panel (score detail). Labels only — the population, tank and
+    // unit strings are shared with the internals panel and `common` above, so
+    // the two readouts never drift apart in wording.
+    statsTitle: 'Statistics',
+    statsScoreTitle: 'Score and balance',
+    statsNextHarvest: 'Harvesting now is worth',
+    statsAgeMultiplier: 'Age multiplier',
+    statsDays: 'days',
+    statsFarmDays: 'Days on this farm',
+    statsQueued: 'Waste queued',
     // Run lifecycle (T15): colony death, restart, upgrade feedback
     colonyDeadTitle: 'The colony died',
     colonyDeadBody: 'Production has stopped. Buy worms to repopulate the composter.',

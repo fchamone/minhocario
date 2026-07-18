@@ -145,6 +145,17 @@
           <input type="range" id="wall-position" min="0" max="1" step="0.01" value="0.5">
         </label>
         <p class="actions__feedback" id="action-feedback"></p>
+
+        <!-- Score-detail / statistics box: the score and what drives it (§2.10's
+             frozen formula is otherwise invisible behind a single HUD number).
+             Deliberately in this sidebar column rather than as a .stage overlay —
+             a second absolutely-positioned panel would fight the x-ray internals
+             panel for the right-hand edge. Populated by js/ui/stats.js on every
+             tick and every action; collapsible, open by default. -->
+        <details class="stats" id="stats" open>
+          <summary data-string="game.statsTitle"></summary>
+          <div id="stats-body"></div>
+        </details>
       </aside>
 
       <!-- Modal chooser reused by the add-waste / portion / worm-pack prompts.

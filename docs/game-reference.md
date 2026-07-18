@@ -118,14 +118,18 @@ effect numbers released **gradually** as the entry decomposes; `heat` is a
 fermentation-heat multiplier applied while the entry is still fresh. No
 suitability field exists in the data shape.
 
+`toxicity /L` is **signed**: positive entries add toxicity as they break down,
+and negative entries remove it (see §6.4 — the engine clamps the bin's toxicity
+at 0, so a negative entry is simply inert in a clean bin).
+
 | id (catalog order) | moisture /L | ph /L (− acid, + alkaline) | toxicity /L | heat (fresh) |
 |--------------------|-----:|-----:|-----:|-----:|
 | `fruitPeels`      | 0.05 | −0.02 | 0.00 | 1.0 |
 | `onionGarlic`     | 0.04 | −0.05 | 0.03 | 1.0 |
-| `coffeeGrounds`   | 0.03 | −0.03 | 0.00 | 1.1 |
+| `coffeeGrounds`   | 0.03 | −0.03 | −0.03 | 1.1 |
 | `vegetableScraps` | 0.06 |  0.00 | 0.00 | 1.0 |
 | `meat`            | 0.03 |  0.00 | 0.15 | 1.8 |
-| `eggshells`       | 0.00 |  0.04 | 0.00 | 0.9 |
+| `eggshells`       | 0.00 |  0.04 | −0.05 | 0.9 |
 | `cookedPasta`     | 0.05 |  0.00 | 0.06 | 1.4 |
 | `citrus`          | 0.05 | −0.15 | 0.01 | 1.0 |
 | `wetCardboard`    | 0.07 |  0.00 | 0.00 | 0.8 |
@@ -223,8 +227,9 @@ moisture = clamp01(prev + released + eatenMoisture + spillMoisture − evaporati
 - **Evaporation** is temperature-gated: `EVAP_COEF = 0.0006` per °C above
   `EVAP_THRESHOLD = 24` °C, using the pre-tick temperature. A cool bin barely
   dries; a hot/sun-baked bin dries into lethal territory.
-- **Sawdust** (`addSawdust`): removes `SAWDUST_DRY_PER_LITER = 0.03` moisture per
-  liter added (a direct action, not a queue entry).
+- **Sawdust** (`addSawdust`): removes `SAWDUST_DRY_PER_LITER = 0.04` moisture per
+  liter added (a direct action, not a queue entry — it applies immediately and in
+  full, with no decomposition ramp). The same action also scrubs toxicity (§6.4).
 - **spillMoisture** comes from the leachate-overflow chain (§8).
 - **Percolation** (the water OUT-path of a cool bin): when
   `moisture > FIELD_CAPACITY = 0.75` **and** the leachate tank has room,
@@ -250,13 +255,25 @@ of the way back to neutral each tick, then takes the signed food push
 ### 6.4 Toxicity (0..1)
 
 ```
-toxicity = clamp01(prev × (1 − TOX_DECAY_RATE) + released + rotToxicity)
+per tick:    toxicity = clamp01(prev × (1 − TOX_DECAY_RATE) + released + rotToxicity)
+addSawdust:  toxicity = clamp01(prev − SAWDUST_TOX_PER_LITER × liters)
 ```
 
 `TOX_DECAY_RATE = 0.001` (`js/sim/engine.js`) — deliberately very slow decay, so
-toxicity is the long-term punishment. `released` is the food toxicity load (§4);
-`rotToxicity` comes from the humus-overflow chain (§8). **Toxicity is
-comfortable below `TOX_THRESHOLD = 0.1`** (`js/sim/worms.js`).
+toxicity is the long-term punishment. Left to decay alone, a lethal 0.4 takes
+~470 ticks (19.6 days) to reach 0.25 and ~1386 ticks (57.8 days) to re-enter the
+comfort band. `rotToxicity` comes from the humus-overflow chain (§8).
+**Toxicity is comfortable below `TOX_THRESHOLD = 0.1`** (`js/sim/worms.js`).
+
+`released` is the food toxicity load (§4) and is **signed** — the negative-`toxicity`
+entries subtract here, which is what makes them remediators. Together with
+`addSawdust`'s `SAWDUST_TOX_PER_LITER = 0.01` per liter, these are the only two
+paths that remove toxicity faster than `TOX_DECAY_RATE`, and they bring an
+actively-managed 0.4 → 0.1 recovery down to a few game days.
+
+Both paths run through `clamp01`, so toxicity can never go below 0: a remediator
+fed into a clean bin does nothing, and no amount of sawdust banks negative
+headroom against a later bad feeding.
 
 ### 6.5 Comfort / stress calibration (summary)
 
@@ -302,14 +319,26 @@ mature, so neglect keeps hurting after recovery.
   clamped, with `LETHAL_RATIO = 2`, `MORT_SLOPE = 0.08`. Mortality is 0 until a
   variable passes its lethal distance, so **laying always stalls before dying**.
 - **Carrying capacity** = `composter.capacity × DENSITY`, `DENSITY = 50`
-  worms/L (`carryingCapacity`). Overpopulation stress =
-  `max(0, active/cap − 1) / OVERPOP_STALL`.
+  worms/L (`carryingCapacity`, `js/sim/worms.js`). Overpopulation stress =
+  `max(0, active/cap − 1) / OVERPOP_STALL`, `OVERPOP_STALL = 0.5`
+  (`js/sim/worms.js`) — so **crowding alone** stalls laying at
+  `active/cap = 1.5` and turns lethal at `2.0` (§7 mortality table). A tended
+  colony is meant to settle *below* that wall, braked by **food** rather than by
+  crowding: the locked good-care season ends at `active/cap = 1.31`
+  (`tests/balance.test.js`). The throughput cap (§8) moves this ratio — lowering
+  it pushes the equilibrium **up** toward the crowding wall, which is what bounds
+  how far the cap may be turned down.
 - **Nutrition (`ration`)** = `clamp01(standing / (demand × RATION_TICKS))`,
-  `RATION_TICKS = 24` (`js/sim/worms.js`), where `demand = active ×
-  species.speed × composter.speed × CONSUMPTION_PER_WORM` (computed in `tick`).
-  Hunger stress = `clamp01(1 − ration)` — **capped at the stall distance (1)**,
-  so hunger brakes reproduction but is **never lethal**: a starving colony stops
-  growing and ages out, it is not struck down.
+  `RATION_TICKS = 24` (`js/sim/worms.js`), where `standing` is the queued food
+  volume and `demand` is one tick of
+  `eatingThroughput(active, species, composter)` (`js/sim/engine.js`) — the
+  **same capped expression** `tick` then actually eats with (§8). The sharing is
+  load-bearing, not tidiness: an *uncapped* demand measured against *capped*
+  eating would make a throttled colony read as permanently underfed however full
+  the bin, holding the laying brake down forever at a silently different
+  equilibrium. Hunger stress = `clamp01(1 − ration)` — **capped at the stall
+  distance (1)**, so hunger brakes reproduction but is **never lethal**: a
+  starving colony stops growing and ages out, it is not struck down.
 
 ### Mortality triggers (each kills independently)
 
@@ -345,17 +374,57 @@ Source: `js/sim/engine.js` (`tick`) and `js/sim/engine.js` economy functions.
 Source: `js/sim/engine.js` (`tick`). Consumption uses the pre-tick population and
 is fully deterministic (no RNG).
 
-- **Eating throughput per tick:**
-  `toEat = active × species.speed × composter.speed × CONSUMPTION_PER_WORM`,
+- **Eating throughput per tick** (`eatingThroughput`, `js/sim/engine.js` — the
+  same helper the `ration` hunger demand calls, §7): `toEat = min(linear,
+  ceiling)`, where
+  `linear = active × species.speed × composter.speed × CONSUMPTION_PER_WORM`,
   `CONSUMPTION_PER_WORM = 0.0005` L/worm/tick.
+- **Throughput ceiling:** `ceiling = composter.capacity × composter.speed ×
+  species.speed × THROUGHPUT_CAP_PER_LITER`, `THROUGHPUT_CAP_PER_LITER = 0.014`
+  L/tick per liter of bin capacity (`js/sim/engine.js`). Worms eat at the
+  food/bedding **interface**, and that interface is a property of the box, not of
+  how many worms are stacked inside it — so the ceiling scales on capacity, while
+  **both** speed traits stay on it because the species and the model still set
+  how fast each worm at that face works. (Dropping `species.speed` from the
+  ceiling makes every species eat identically once the cap binds, erasing
+  africana's defining trait for any mature colony; `tests/production.test.js`
+  locks the species ordering against exactly that.) The cap engages at
+  `THROUGHPUT_CAP_PER_LITER / CONSUMPTION_PER_WORM = 28` worms/L against
+  `DENSITY = 50` — **56 % of carrying capacity** — so small and mid colonies stay
+  purely linear and feeding still visibly matters. Measured and bracketed on both
+  sides at T24; see `tasks/t21-balance.md` before moving it.
 - **Oldest-first:** the queue is eaten from the front; a fully consumed entry is
   removed, a partially eaten one keeps its remainder in place.
 - **Output:** `humus += eaten × composter.humusRate`;
   `leachate += eaten × composter.leachateRate`.
 - **Gating:** worm processing runs only when a species is set, `active > 0`, the
-  humus tray is **not** full, and `colonyAlive` is true. Fully decomposed food
-  (age ≥ `DECOMP_TICKS`) is worked into the bedding and leaves the queue when
-  eating runs; it yields **no** humus (humus is only what worms make).
+  humus tray is **not** full, and `colonyAlive` is true. The `ration` measurement
+  above is **not** gated on the tray or on `colonyAlive` — it is taken before
+  eating, from the pre-tick population.
+- **`DECOMP_TICKS` drop:** food that reaches `DECOMP_TICKS = 48` ticks old
+  (`js/sim/foods.js`) is worked into the bedding and leaves the queue — but
+  **only on a tick where eating ran** (the same gate), and it yields **no** humus,
+  since humus is only what worms make. When processing is halted the matter
+  strands in the queue instead and drives the tray-full rot chain below.
+- **Wastage from the throughput ceiling** (corrected at the T24 review; the
+  earlier "half capacity … 1.33× slowdown against the ~2× the 48-tick window
+  allows" claim here was **unsupported and is withdrawn** — that probe was
+  structurally blind, see `tasks/t21-balance.md`). An entry can only age out when
+  the 48-tick eating budget fails to cover the standing stock, which reduces to a
+  capacity-independent fill threshold:
+  `fill > 48 × THROUGHPUT_CAP_PER_LITER × composter.speed × species.speed`.
+  At `K = 0.014` with californiana that is 53.8 % fill for tier2, 67.2 % for
+  tier3/buried, 80.6 % for tier4, 94.1 % for eco, and **never** for electric.
+  Below the threshold the cap costs nothing; above it the loss is large. Bin held
+  **full**, population pinned at carrying capacity, 30 days: tier2 drops **44.7 %**
+  of the liters fed (3.8 % uncapped), tier3 and buried 31.4 % (0 %), tier4 18.4 %,
+  eco 5.6 %; at 75 % fill tier2 27.1 %, tier3/buried 9.8 %. Realistic play is
+  unaffected — the good-care season tops the bin toward a **quarter** full, and
+  capped vs uncapped food accounting is identical (195.0 fed / 183.8 eaten /
+  11.3 dropped L) with humus 91.6 vs 91.9 L. This is **intended** behaviour, not a
+  defect: over-stuffing a bin is the §2.8 overfeeding chain, and dropped liters
+  still load moisture, pH and toxicity for their full 48 ticks. The **open gap** is
+  that the player gets no feedback that fed waste expired uneaten.
 - **Player actions** (all pure, no RNG): `addFood`, `addSawdust`,
   `drainLeachate` (instant, empties the tank fully), `harvestHumus` (empties the
   tray at any time — re-enables processing after a tray-full halt).
@@ -370,7 +439,15 @@ stops once `colonyAlive → false`):
 | 1 | **Leachate overflow** | Never draining: percolation fills the tank (`leachateCapacity`); once full, percolation backs up and leachate past capacity re-saturates the bedding — `spillMoisture = (leachate − leachateCapacity) × LEACHATE_SPILL_TO_MOISTURE (0.05)`, tank clamps at capacity. Moisture climbs ≥ 0.12 past the band. | Over-wetness mortality → colony death |
 | 2 | **Humus overflow** | Never harvesting: `humus ≥ humusCapacity` sets `trayFull`, halting all processing. The stranded queue rots anaerobically: `rotToxicity = strandedLiters × ROT_RATE (0.0002)` per tick. Toxicity climbs ≥ 0.4. | Toxicity mortality → colony death |
 | 3 | **Overfeeding** | A large fresh-food mass drives `fermentationHeat = FERMENT_COEF (0.35) × freshHeatMass`, spiking the temperature target — worse in the sun patch or a low-insulation model. Temperature passes 8 °C beyond the species band. | Overheat mortality → colony death |
-| 4 | **Only unsuitable food** | Feeding only high-toxicity items accrues toxicity faster than `TOX_DECAY_RATE (0.001)` removes it. Reproduction stalls first (toxicity stress ≥ 1 at 0.25), then mortality begins (toxicity ≥ 0.4). | Reproduction stall → toxicity mortality → colony death |
+| 4 | **Only unsuitable food** | Feeding only high-toxicity items accrues toxicity faster than the removal paths clear it. Reproduction stalls first (toxicity stress ≥ 1 at 0.25), then mortality begins (toxicity ≥ 0.4). | Reproduction stall → toxicity mortality → colony death |
+
+Chains 2 and 4 both terminate in toxicity, and both now have a **counter-lever**:
+the removal paths in §6.4 (`addSawdust`, and the negative-`toxicity` foods) can
+pull a bin back from the brink instead of leaving decay as the only recourse.
+Neither chain is defused by it — each still reaches its terminal state within its
+bound under pure neglect (locked by `tests/balance.test.js`), because remediating
+requires the player to actually act. What changed is that a *recoverable* mistake
+is now recoverable in a few game days rather than ~58.
 
 ---
 

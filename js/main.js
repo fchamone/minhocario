@@ -12,6 +12,7 @@ import { initShop } from './ui/shop.js';
 import { initSetup } from './ui/setup.js';
 import { updateHud } from './ui/hud.js';
 import { initActions, updateActions, showFeedback } from './ui/actions.js';
+import { updateStats } from './ui/stats.js';
 import {
   initSpeed,
   drainTicks,
@@ -357,11 +358,15 @@ function persistGame() {
   save({ v: 1, profile: gameProfile, farm: gameFarm, ranking: gameRanking });
 }
 
-/** Repaint everything that reads the live state: HUD + actions/internals panel. */
+/** Repaint everything that reads the live state: HUD + actions/internals/stats. */
 function refreshGameUi() {
   syncColonyClock();
   updateHud(gameFarm, gameProfile?.wallet ?? 0);
   updateActions(gameFarm);
+  // The wallet lives on the profile, not the farm, so the stats box takes it the
+  // same way the HUD does. Called from here (not from the tick loop) so the box
+  // repaints on player actions too, not only on the clock.
+  updateStats(gameFarm, gameProfile?.wallet ?? 0);
 }
 
 /**
@@ -421,7 +426,7 @@ function onAddWaste(foodId, liters) {
   commitAction();
 }
 
-/** Add sawdust to dry the bedding. */
+/** Add sawdust: dries the bedding and scrubs some toxicity (engine.js). */
 function onAddSawdust(liters) {
   if (!gameFarm) return;
   gameFarm = addSawdust(gameFarm, liters);

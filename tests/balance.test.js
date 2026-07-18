@@ -10,6 +10,7 @@ import {
   harvestAndSell,
   drainAndSell,
   buyWormPack,
+  SAWDUST_DRY_PER_LITER,
 } from '../js/sim/engine.js';
 import { getComposter } from '../js/sim/composters.js';
 import { getSpecies, carryingCapacity, HATCH_TICKS, MATURE_TICKS } from '../js/sim/worms.js';
@@ -77,7 +78,13 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
       minMoisture = Math.min(minMoisture, s.env.moisture);
       maxTemp = Math.max(maxTemp, s.env.temperature);
       minPop = Math.min(minPop, total(s.population));
-      if (s.env.moisture > 0.7) s = addSawdust(s, (s.env.moisture - 0.55) / 0.03); // keep it in band
+      // Dose sawdust to land moisture back on 0.55. Solved against the real
+      // constant, never a re-inlined copy of it — otherwise retuning the sawdust
+      // strength silently changes the moisture this scenario actually holds, and
+      // the population/score bounds below would be measuring a different farm.
+      if (s.env.moisture > 0.7) {
+        s = addSawdust(s, (s.env.moisture - 0.55) / SAWDUST_DRY_PER_LITER); // keep it in band
+      }
       if (h === 20) {
         ({ state: s, wallet } = harvestAndSell(s, wallet)); // score + coins
         ({ state: s, wallet } = drainAndSell(s, wallet));
@@ -91,13 +98,33 @@ test('GOOD CARE: californiana survives >= 60 game days with net population growt
   const endPop = total(s.population);
   assert.ok(endPop > startPop, `net population GROWTH: ${startPop} -> ${endPop}`);
   assert.ok(endPop > startPop * 2, `growth is substantial, not marginal: ${endPop}`);
-  // T21 lock: the tuned constants settle this run at a food-supported ~1.5k, not
-  // a marginal survival and not a runaway boom. The window brackets the measured
-  // 1463 so any constant edit that materially shifts the carrying/breeding balance
+  // Lock: the tuned constants settle this run at a food-supported size, not a
+  // marginal survival and not a runaway boom. The window brackets the measured
+  // 2034 so any constant edit that materially shifts the carrying/breeding balance
   // (either starving it down or letting it explode) trips this test.
+  //
+  // Re-measured from 1463 to 2034 when THROUGHPUT_CAP_PER_LITER was tuned to
+  // 0.014. That is not slack — it is the cap's second-order effect, and it is the
+  // reason the assertion below it exists. `ration` is queue / demand, and the cap
+  // lowers DEMAND, so the same standing queue reads as a fuller larder and the
+  // hunger brake on laying releases: a slower-eating colony breeds to a LARGER
+  // equilibrium, not a smaller one.
   assert.ok(
-    endPop > 1150 && endPop < 1800,
-    `settles at a food-supported size (measured ~1463): ${endPop}`,
+    endPop > 1750 && endPop < 2250,
+    `settles at a food-supported size (measured ~2034): ${endPop}`,
+  );
+  // ...and it must still be FOOD that is doing the limiting. Past roughly
+  // active/carryingCapacity = 1.5 (worms.js OVERPOP_STALL) crowding alone stalls
+  // laying, at which point the hunger brake is inert and the colony would pin to
+  // the same ceiling no matter how it were fed — undoing the CP3 boom-bust fix
+  // this scenario exists to defend. Measured 1.31. A lower throughput cap walks
+  // straight into that wall (0.012 measured 1.53), so this is the assertion that
+  // actually bounds how far the cap may be turned down.
+  const endActive = s.population.juveniles + s.population.adults;
+  const crowding = endActive / carryingCapacity(getComposter('tier2'));
+  assert.ok(
+    crowding < 1.5,
+    `the equilibrium is food-limited, not crowding-pinned (measured 1.31): ${crowding.toFixed(2)}`,
   );
   // The colony never crashed on the way: no boom-bust hidden by the end state.
   assert.ok(
@@ -555,7 +582,7 @@ function africanaNightTrough(composterId, wallPosition) {
     for (let h = 0; h < 24; h++) {
       if ((h === 8 || h === 18) && queueVolume(s) < cap * 0.25) s = addFood(s, 'vegetableScraps', cap * 0.06);
       s = tick(s, rng);
-      if (s.env.moisture > 0.7) s = addSawdust(s, (s.env.moisture - 0.55) / 0.03);
+      if (s.env.moisture > 0.7) s = addSawdust(s, (s.env.moisture - 0.55) / SAWDUST_DRY_PER_LITER);
       if (h === 20) {
         ({ state: s, wallet } = harvestAndSell(s, wallet));
         ({ state: s, wallet } = drainAndSell(s, wallet));

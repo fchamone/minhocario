@@ -118,6 +118,16 @@ export const es = {
     queueTitle: 'Residuos descomponiéndose',
     queueEmpty: 'Nada descomponiéndose',
     queueMore: 'más',
+    // Statistics panel (score detail). Labels only — the population, tank and
+    // unit strings are shared with the internals panel and `common` above, so
+    // the two readouts never drift apart in wording.
+    statsTitle: 'Estadísticas',
+    statsScoreTitle: 'Puntuación y saldo',
+    statsNextHarvest: 'Cosechar ahora vale',
+    statsAgeMultiplier: 'Multiplicador de edad',
+    statsDays: 'días',
+    statsFarmDays: 'Días de esta granja',
+    statsQueued: 'Residuos en cola',
     // Run lifecycle (T15): colony death, restart, upgrade feedback
     colonyDeadTitle: 'La colonia murió',
     colonyDeadBody: 'La producción se detuvo. Compra lombrices para repoblar la compostadora.',

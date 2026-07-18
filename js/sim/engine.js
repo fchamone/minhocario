@@ -23,7 +23,20 @@ export const MIN_PORTION_LITERS = 0.25;
 const NEUTRAL_PH = 7; // pH the bin eases back toward when nothing pushes it
 const PH_DRIFT_RATE = 0.02; // fraction of the gap to neutral closed per tick
 const TOX_DECAY_RATE = 0.001; // per-tick toxicity decay — deliberately very slow
-const SAWDUST_DRY_PER_LITER = 0.03; // moisture removed per liter of sawdust added
+
+// Sawdust is the player's ACTIVE remediation lever, against both moisture and
+// toxicity. Exported because the balance scenarios dose sawdust by solving for a
+// target moisture — they must divide by the real constant rather than re-inline
+// it, or a retune here silently changes what those scenarios actually test.
+//
+// The toxicity scrub is deliberately rate-limited by the drying: you cannot
+// spam sawdust to clean a bin without pulling moisture out of the comfort band,
+// so it stays the fine adjustment and the remediating foods (js/sim/foods.js)
+// carry the weight of a real cleanup. Passive TOX_DECAY_RATE alone takes ~58
+// game days to bring a lethal 0.4 back inside the comfort band, which left the
+// player nothing to DO about a poisoned bin; these two levers are the answer.
+export const SAWDUST_DRY_PER_LITER = 0.04; // moisture removed per liter of sawdust
+export const SAWDUST_TOX_PER_LITER = 0.01; // toxicity removed per liter of sawdust
 
 // Passive evaporation (§2.5): a warm bin loses moisture to the air every tick.
 // Without this, moisture is a ONE-WAY ratchet — only food and leachate backup
@@ -44,6 +57,107 @@ const EVAP_COEF = 0.0006; // per-tick moisture lost per °C above the threshold
 // so a bigger, faster colony in a faster composter processes more food, and
 // per-model humus output tracks composter.speed × composter.humusRate.
 const CONSUMPTION_PER_WORM = 0.0005; // liters of food a single active worm eats per tick
+
+// Throughput ceiling (§2.6). The linear term above is unbounded in population,
+// but the bin is not: worms eat at the food/bedding INTERFACE, and that interface
+// is a property of the box, not of how many worms are stacked inside it. Without
+// a ceiling, demand grows with capacity × DENSITY (50 worms/L, worms.js) while
+// the largest portion the UI can serve grows with capacity ALONE — a full 'eco'
+// bin demanded ~84 L/game-day against a 14 L maximum click, so at 5× speed a
+// freshly fed bin emptied within seconds of real time and the player could never
+// keep up by hand.
+//
+// Expressed PER LITER of bin capacity it is deliberately non-binding for small
+// and mid colonies — those stay purely linear, and feeding still visibly matters
+// — and bites only as the colony approaches carrying capacity, which is exactly
+// where the runaway lived.
+//
+// It scales by BOTH speed traits, for the same reason the linear term does. Read
+// the ceiling as "only so many worms fit at the working face": the box bounds HOW
+// MANY worms can be at the interface (capacity × THROUGHPUT_CAP_PER_LITER /
+// CONSUMPTION_PER_WORM = 28 worms/L against DENSITY 50, so the cap engages at 56%
+// of carrying capacity), while the species and the model still set how fast each
+// of those worms works. Dropping species.speed from the ceiling — as the
+// first-pass formula did — made every species eat identically once the cap bound,
+// which silently erased africana's defining trait for any mature colony and broke
+// the species-ordering test. The two speed traits belong on both terms.
+//
+// VALUE (measured; 0.02 was an untested first pass). Swept 0.008..0.02 against
+// three probes, and TWO opposing walls bracket the answer:
+//
+//   UPPER wall — pacing, the reason the cap exists. A max-size portion at full
+//   carrying capacity in the fastest pairing (africana in the electric bin) is
+//   gone in 3.5 real seconds at 5× under 0.02, which is the "devoured in a couple
+//   of seconds" complaint verbatim. 0.014 stretches that to 5.0 s, and the
+//   beginner default (californiana/tier2, a 10 L portion) from 10.4 s to 14.9 s.
+//
+//   LOWER wall — the hunger brake. Capping demand also caps the DENOMINATOR of
+//   `ration`, so a slower cap makes the same standing queue read as a fuller
+//   larder and REPRODUCTION SPEEDS UP. In the good-care season the equilibrium
+//   climbs 1508 -> 1739 (0.016) -> 2034 (0.014) -> 2253 (0.013) -> 2307 (0.012),
+//   and at 0.012 it stops moving: the colony has pinned against the CROWDING
+//   stall (active/carryingCapacity >= 1.5, worms.js OVERPOP_STALL) and the food
+//   brake is no longer binding at all. That would undo the CP3 boom-bust fix —
+//   "the colony settles at a food-supported size" — so anything <= 0.013 is out.
+//
+// 0.014 is the slowest value on the food-limited side of that knee, landing at
+// active/cap = 1.31 with real margin to the 1.5 stall.
+//
+// WHAT THE CAP COSTS (re-measured at the T24 review; the original claim here —
+// "stays inside the DECOMP_TICKS = 48 wastage budget, a 1.3× slowdown against the
+// ~2× budget" — was UNSUPPORTED and has been withdrawn, see below). Entries older
+// than DECOMP_TICKS = 48 are dropped with NO humus and NO leachate credit, so
+// braking eating can push food past its window and convert the economy from
+// "worms process food" into "food rots unpaid". Whether that can happen at all is
+// closed form: an entry only ages out when the 48-tick eating budget cannot cover
+// the standing stock, i.e. when
+//
+//     fill > 48 × K × composter.speed × species.speed      (capacity cancels out)
+//
+// At K = 0.014 with californiana that leak threshold is 0.538 of capacity for
+// tier2, 0.672 for tier3 and buried, 0.806 for tier4, 0.941 for eco, and above
+// 1 for electric — which therefore never wastes a drop at any fill.
+//
+// So the cost is FILL-DEPENDENT, negligible low down and substantial at the top:
+//
+//   - Low-to-moderate fill: free. The good-care season tops the bin toward a
+//     QUARTER full, under every threshold above, so capped and uncapped runs are
+//     indistinguishable — added/eaten/dropped identical at 195.0 / 183.8 / 11.3 L,
+//     humus 91.6 vs 91.9 L, wallet 1326 vs 1329 — and the banked score barely
+//     moves (1962.8 -> 1957.6). That scenario is supply-limited, not throughput-
+//     limited: the cap changes the PACE of eating, not the total eaten.
+//
+//   - High fill: a large share of fed waste now rots unpaid. Population pinned at
+//     carryingCapacity, tray harvested and tank drained every tick, 30 game days,
+//     bin topped back to FULL every tick — tier2 drops 208.1 L of the 465.8 L fed
+//     (44.7%, against 3.8% uncapped); tier3 and buried 31.4% (0% uncapped); tier4
+//     18.4% (0%); eco 5.6% (0%). At 75% fill: tier2 27.1%, tier3/buried 9.8%,
+//     the rest still 0%.
+//
+// WHY THE ORIGINAL HALF-FILL PROBE COULD NOT SEE THIS — do not re-run it and
+// conclude the cap is cheap. It held the bin at HALF capacity, which is below the
+// leak threshold of EVERY model in the catalog (the lowest is tier2's 0.538), so
+// it was structurally incapable of producing a single dropped liter at any K the
+// lower wall above left admissible: half fill only begins to leak below K ≈
+// 0.0130, and K <= 0.013 was already excluded by the crowding-stall knee. It also
+// let the population float rather than pinning it at carrying capacity, so it
+// compared against a linear branch only 1.33× above the ceiling; at carrying
+// capacity the true tier2 ratio is 1.79×. And the "~2× budget" framing was wrong
+// in kind: the budget is not a slowdown ratio at all, it is the fill inequality
+// above. Any re-probe must run at high fill with the population pinned.
+//
+// IS THIS A DEFECT? No — the BEHAVIOUR is coherent and is being kept. Surplus food
+// rotting in an overstuffed bin is precisely the §2.8 overfeeding chain, and the
+// dropped liters are not silently free: they sit in the queue for their full 48
+// ticks loading moisture, pH and toxicity through queueDynamics, so overfeeding
+// still bites exactly as the spec intends. Coin income in supply-limited play is
+// untouched (measured above), because humus is throughput-capped either way. Two
+// things WERE wrong: (a) the justification above was asserted without evidence
+// that could support it, now corrected; and (b) the player gets NO feedback that
+// fed waste is expiring uneaten, so a bin held near full quietly pays less per
+// liter fed with nothing in the UI to say so. (b) is an open follow-up recorded
+// in tasks/t21-balance.md (T24) — it is a UI gap, not a constant to retune.
+const THROUGHPUT_CAP_PER_LITER = 0.014; // liters/tick eaten per liter of bin capacity
 
 // Tray-full chain (§2.8): once the humus tray is full processing halts; the
 // undrained queue then rots anaerobically, raising toxicity in proportion to the
@@ -73,6 +187,32 @@ function clamp01(x) {
 /** Clamp to [lo, hi]. */
 function clamp(x, lo, hi) {
   return x < lo ? lo : x > hi ? hi : x;
+}
+
+/**
+ * Liters of food the colony can eat this tick: linear in the active population
+ * and both speed traits, but capped by what the bin's working surface can turn
+ * over (see THROUGHPUT_CAP_PER_LITER).
+ *
+ * BOTH the `ration` hunger measurement and the actual eating MUST call this —
+ * the sharing is load-bearing, not a tidiness refactor. `ration` is the fraction
+ * of the colony's demand the standing queue covers, and it brakes laying via
+ * RATION_TICKS (worms.js). If demand stayed uncapped while eating was capped, a
+ * throttled colony would compute a demand it is not even allowed to eat, read as
+ * permanently underfed no matter how full the bin, hold the reproduction brake
+ * down forever, and settle at a silently different equilibrium — with every test
+ * still green, because nothing asserts on `ration` directly. Keep them one call.
+ *
+ * @param {number} active juveniles + adults (cocoons do not eat)
+ * @param {import('./worms.js').Species} species
+ * @param {import('./composters.js').Composter} composter
+ * @returns {number} liters of food consumable this tick
+ */
+function eatingThroughput(active, species, composter) {
+  const linear = active * species.speed * composter.speed * CONSUMPTION_PER_WORM;
+  const ceiling =
+    composter.capacity * composter.speed * species.speed * THROUGHPUT_CAP_PER_LITER;
+  return Math.min(linear, ceiling);
 }
 
 /**
@@ -130,6 +270,11 @@ function clamp(x, lo, hi) {
 // are FIRST-PASS: sawdust is dry & mildly acidic, fruit peels wet & acidic, wet
 // cardboard wet & near-neutral — so more sawdust dries the bin, more peels
 // acidify it, more cardboard wets it.
+//
+// NOTE: bedding sawdust carries no toxicity term, unlike the `addSawdust`
+// action. That divergence is deliberate, not an oversight — bedding is mixed
+// once at setup, when toxicity is 0 by definition, so a scrub term here could
+// only ever be a no-op.
 const BEDDING_COMPONENTS = {
   sawdust: { moisture: 0.15, ph: 6.2 },
   peels: { moisture: 0.85, ph: 5.0 },
@@ -255,9 +400,16 @@ export function addFood(state, foodId, liters) {
 }
 
 /**
- * Add sawdust to dry the bin. Lowers moisture deterministically (§2.5 — this is
- * the sawdust action's whole purpose); does not enter the food queue. Ignores a
- * non-positive amount.
+ * Add sawdust to dry the bin AND scrub some accumulated toxicity (§2.5). Both
+ * effects are deterministic and immediate — sawdust does not enter the food
+ * queue, so unlike a food it releases nothing gradually. Ignores a non-positive
+ * amount.
+ *
+ * Both results are clamped here rather than left to the tick: this writes `env`
+ * directly, so it never passes through the clamps in `tick`. Without the
+ * toxicity clamp, sawdust on an already-clean bin would drive `env.toxicity`
+ * negative and that would surface in the UI's internals gauge, which is drawn on
+ * a 0..1 domain.
  * @param {FarmState} state
  * @param {number} liters sawdust volume added
  * @returns {FarmState}
@@ -265,7 +417,8 @@ export function addFood(state, foodId, liters) {
 export function addSawdust(state, liters) {
   if (!(liters > 0)) return state;
   const moisture = clamp01(state.env.moisture - SAWDUST_DRY_PER_LITER * liters);
-  return { ...state, env: { ...state.env, moisture } };
+  const toxicity = clamp01(state.env.toxicity - SAWDUST_TOX_PER_LITER * liters);
+  return { ...state, env: { ...state.env, moisture, toxicity } };
 }
 
 /**
@@ -362,7 +515,7 @@ export function tick(state, rng) {
     // Measured BEFORE this tick's eating, against the same throughput formula
     // used to consume: how many ticks of demand the standing queue covers.
     if (species && active > 0) {
-      const demand = active * species.speed * composter.speed * CONSUMPTION_PER_WORM;
+      const demand = eatingThroughput(active, species, composter);
       const standing = queue.reduce((sum, e) => sum + e.liters, 0);
       ration = demand > 0 ? clamp01(standing / (demand * RATION_TICKS)) : 1;
     }
@@ -371,8 +524,8 @@ export function tick(state, rng) {
     // already zero so `active > 0` also gates this, but the flag makes the
     // "colony-dead ⇒ no consumption/humus/leachate" rule (§2.1) explicit.
     if (species && active > 0 && !trayFull && state.colonyAlive) {
-      // Eating throughput scales with the active colony and both speed traits.
-      let toEat = active * species.speed * composter.speed * CONSUMPTION_PER_WORM;
+      // Same throughput the `ration` demand above was measured against.
+      let toEat = eatingThroughput(active, species, composter);
       let eaten = 0;
       const nextQueue = [];
       for (const entry of queue) {
@@ -447,6 +600,11 @@ export function tick(state, rng) {
   // pH eases back toward neutral then takes the food push; toxicity decays very
   // slowly then takes the food load plus any rot. Evaporation uses the pre-tick
   // temperature (the warmth the bin carried into this hour).
+  //
+  // The food load `dyn.toxicity` is SIGNED — the remediating foods carry a
+  // negative per-liter toxicity, so a queue full of them subtracts here. That
+  // plus `addSawdust` are the only paths that remove toxicity faster than
+  // TOX_DECAY_RATE; the clamp below is what keeps a clean bin pinned at zero.
   const evaporation = EVAP_COEF * Math.max(0, state.env.temperature - EVAP_THRESHOLD);
   let moisture = clamp01(
     state.env.moisture + dyn.moisture + eatenMoisture + spillMoisture - evaporation,

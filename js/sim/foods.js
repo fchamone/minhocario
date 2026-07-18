@@ -16,20 +16,31 @@
 //   moisture  water added to the bin per liter over full decomposition (>= 0)
 //   ph        signed pH influence per liter; NEGATIVE acidifies (citrus/onion),
 //             POSITIVE alkalizes (eggshells), ~0 is neutral
-//   toxicity  toxicity added per liter over full decomposition (>= 0); the
-//             unsuitable foods carry the load, suitable foods are ~0
+//   toxicity  SIGNED toxicity influence per liter over full decomposition; the
+//             unsuitable foods carry a positive load, most benign foods are ~0,
+//             and a couple are NEGATIVE — they scrub accumulated toxicity as
+//             they break down (see below)
 //   heat      fermentation-heat multiplier while the entry is still fresh;
 //             protein/oily foods (meat, dairy, oily) ferment hotter
 // All numbers are FIRST-PASS values for CP1 review / T8 tuning; the SHAPES and
 // relationships (harmful => toxic/acidic/hot, suitable => benign) are what the
 // tests lock down.
+//
+// A negative `toxicity` makes a food a REMEDIATOR — a third class beside
+// harmful and benign, and the player's main way back from a poisoned bin
+// (passive TOX_DECAY_RATE alone takes ~58 game days to walk a lethal 0.4 back
+// into the comfort band). The engine clamps toxicity at 0, so a remediator is
+// simply inert in a clean bin; it can never bank negative headroom against a
+// future bad feeding. Note this keeps the discovery rule intact: remediation is
+// emergent from the numbers, exactly like harm is, and is never labelled.
 
 /**
  * @typedef {object} Food
  * @property {string} id       catalog id (English identifier)
  * @property {number} moisture per-liter moisture released over decomposition
  * @property {number} ph       signed per-liter pH influence (- acid, + alkaline)
- * @property {number} toxicity per-liter toxicity released over decomposition
+ * @property {number} toxicity signed per-liter toxicity influence over
+ *                             decomposition (+ poisons, - remediates)
  * @property {number} heat     fermentation-heat multiplier while fresh
  */
 
@@ -37,10 +48,10 @@
 export const FOODS = [
   { id: 'fruitPeels', moisture: 0.05, ph: -0.02, toxicity: 0.0, heat: 1.0 },
   { id: 'onionGarlic', moisture: 0.04, ph: -0.05, toxicity: 0.03, heat: 1.0 },
-  { id: 'coffeeGrounds', moisture: 0.03, ph: -0.03, toxicity: 0.0, heat: 1.1 },
+  { id: 'coffeeGrounds', moisture: 0.03, ph: -0.03, toxicity: -0.03, heat: 1.1 },
   { id: 'vegetableScraps', moisture: 0.06, ph: 0.0, toxicity: 0.0, heat: 1.0 },
   { id: 'meat', moisture: 0.03, ph: 0.0, toxicity: 0.15, heat: 1.8 },
-  { id: 'eggshells', moisture: 0.0, ph: 0.04, toxicity: 0.0, heat: 0.9 },
+  { id: 'eggshells', moisture: 0.0, ph: 0.04, toxicity: -0.05, heat: 0.9 },
   { id: 'cookedPasta', moisture: 0.05, ph: 0.0, toxicity: 0.06, heat: 1.4 },
   { id: 'citrus', moisture: 0.05, ph: -0.15, toxicity: 0.01, heat: 1.0 },
   { id: 'wetCardboard', moisture: 0.07, ph: 0.0, toxicity: 0.0, heat: 0.8 },
@@ -93,10 +104,15 @@ export function decompositionFraction(ageTicks) {
  * heat-weighted, still-fresh mass at `newTick` (drives fermentation heat).
  * Unknown food ids are skipped. Pure — no mutation, no RNG.
  *
+ * `phPush` and `toxicity` are both SIGNED and returned UNCLAMPED: a queue of
+ * remediating foods yields a negative `toxicity`, and the caller is responsible
+ * for flooring the result (`tick` in js/sim/engine.js does).
+ *
  * @param {import('./engine.js').FoodEntry[]} queue
  * @param {number} prevTick absolute tick before this step
  * @param {number} newTick  absolute tick after this step
  * @returns {{moisture: number, phPush: number, toxicity: number, freshHeatMass: number}}
+ *          `toxicity` may be negative
  */
 export function queueDynamics(queue, prevTick, newTick) {
   let moisture = 0;

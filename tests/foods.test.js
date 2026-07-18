@@ -14,6 +14,7 @@ import {
   addSawdust,
   absoluteTick,
   MIN_PORTION_LITERS,
+  SAWDUST_TOX_PER_LITER,
 } from '../js/sim/engine.js';
 import { getComposter } from '../js/sim/composters.js';
 import { createRng } from '../js/sim/rng.js';
@@ -187,6 +188,92 @@ test('addSawdust reduces moisture deterministically and clamps at zero', () => {
 
   const dry = addSawdust({ ...base, env: { ...base.env, moisture: 0.02 } }, 100);
   assert.equal(dry.env.moisture, 0, 'moisture clamps at zero');
+});
+
+// --- sawdust also scrubs toxicity -------------------------------------------
+
+test('addSawdust scrubs toxicity deterministically and clamps at zero', () => {
+  const base = createInitialFarmState({ seed: 1, composterId: 'tier2' });
+  const toxic = { ...base, env: { ...base.env, moisture: 0.6, toxicity: 0.5 } };
+
+  const a = addSawdust(toxic, 3);
+  const b = addSawdust(toxic, 3);
+  assert.equal(a.env.toxicity, b.env.toxicity, 'same input -> same output (no RNG)');
+  assert.ok(a.env.toxicity < 0.5, 'toxicity reduced');
+  assert.equal(
+    a.env.toxicity,
+    0.5 - SAWDUST_TOX_PER_LITER * 3,
+    'scrub is exactly the per-liter rate x liters',
+  );
+
+  // More sawdust scrubs more — the lever scales with the dose.
+  assert.ok(addSawdust(toxic, 6).env.toxicity < a.env.toxicity, 'a bigger dose scrubs more');
+
+  // addSawdust writes env directly, bypassing tick()'s clamps — so it must floor
+  // toxicity itself. A negative value would leak straight into the UI gauge,
+  // which is drawn on a 0..1 domain.
+  const clean = addSawdust({ ...base, env: { ...base.env, toxicity: 0.01 } }, 100);
+  assert.equal(clean.env.toxicity, 0, 'toxicity clamps at zero, never negative');
+  const spotless = addSawdust(base, 50);
+  assert.equal(spotless.env.toxicity, 0, 'sawdust on an already-clean bin is inert, not negative');
+});
+
+// --- remediating foods (negative toxicity) -----------------------------------
+
+test('eggshells and coffee grounds pull accumulated toxicity back down', () => {
+  // Both carry a negative per-liter toxicity, so they scrub as they decompose.
+  // This is emergent from their catalog numbers alone — nothing labels them.
+  for (const foodId of ['eggshells', 'coffeeGrounds']) {
+    const base = createInitialFarmState({ seed: 1, composterId: 'tier2' });
+    const dirty = { ...base, env: { ...base.env, toxicity: 0.5 } };
+
+    const treated = run(addFood(dirty, foodId, 4), DECOMP_TICKS);
+    const untreated = run(dirty, DECOMP_TICKS);
+
+    assert.ok(
+      treated.env.toxicity < untreated.env.toxicity,
+      `${foodId} beats passive decay: ${treated.env.toxicity} vs ${untreated.env.toxicity}`,
+    );
+    assert.ok(
+      untreated.env.toxicity - treated.env.toxicity > 0.05,
+      `${foodId} scrubs a clearly visible amount: ${untreated.env.toxicity - treated.env.toxicity}`,
+    );
+  }
+});
+
+test('a remediator is inert in a clean bin — it cannot bank negative headroom', () => {
+  // The engine clamps toxicity at 0, so feeding eggshells into a clean bin buys
+  // nothing against a future bad feeding. Remediation only pays when there is
+  // something to remediate.
+  const base = createInitialFarmState({ seed: 1, composterId: 'tier2' });
+
+  const prepped = run(addFood(base, 'eggshells', 8), DECOMP_TICKS);
+  assert.equal(prepped.env.toxicity, 0, 'toxicity stays pinned at the clamp, never negative');
+
+  const afterMeat = run(addFood(prepped, 'meat', 4), DECOMP_TICKS);
+  const plain = run(addFood(base, 'meat', 4), DECOMP_TICKS);
+  assert.ok(
+    Math.abs(afterMeat.env.toxicity - plain.env.toxicity) < 1e-9,
+    'pre-loading eggshells gives no head start against a later toxic feeding',
+  );
+});
+
+test('a remediator roughly offsets a toxic feeding at its catalog ratio', () => {
+  // meat +0.15/L against eggshells -0.05/L => ~3 L of eggshells per liter of
+  // meat. Fed together, the pair should very nearly cancel.
+  const base = createInitialFarmState({ seed: 1, composterId: 'tier4' });
+  const dirty = { ...base, env: { ...base.env, toxicity: 0.3 } };
+
+  let s = addFood(dirty, 'meat', 2);
+  s = addFood(s, 'eggshells', 6);
+  const together = run(s, DECOMP_TICKS);
+  const meatOnly = run(addFood(dirty, 'meat', 2), DECOMP_TICKS);
+
+  assert.ok(meatOnly.env.toxicity > 0.5, `meat alone drives toxicity up: ${meatOnly.env.toxicity}`);
+  assert.ok(
+    Math.abs(together.env.toxicity - 0.3) < 0.05,
+    `the pair roughly cancels near the starting 0.3: ${together.env.toxicity}`,
+  );
 });
 
 // --- fermentation heat wired to real fresh mass ------------------------------

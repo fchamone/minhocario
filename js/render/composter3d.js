@@ -14,7 +14,10 @@
 // centred on x=0, and the bin standing on the ground plane at y=0. scene.js then
 // positions the group at `state.wallPosition` along the wall. The buried model is
 // the deliberate exception: its drum geometry extends BELOW y=0 so it sits into
-// the ground (the opaque floor plane occludes the sunken part from the camera).
+// the ground, and the floor plane occludes the sunken part from the camera —
+// which is exactly the in-ground read we want. The x-ray is the one exception:
+// scene.js's applyXray fades that floor plane to a translucent soil cutaway while
+// x-raying THIS model, since otherwise it would hide everything the x-ray reveals.
 //
 // Silhouettes are intentionally distinct so an upgrade reads at a glance:
 //   electric        appliance body + control panel + power light + vent stack
@@ -262,8 +265,10 @@ export function buildComposterMesh(composterId) {
  *
  * The box is centred on x=0 and z=`z`, spans [`yMin`, `yMax`] vertically, and is
  * `width` (x) by `depth` (z). The buried model is the deliberate exception: its
- * cavity sits mostly below y=0, matching the sunken drum (the opaque floor plane
- * then occludes the underground portion, just as it does the drum itself).
+ * cavity sits mostly below y=0, matching the sunken drum. Nearly all of it is
+ * therefore behind the ground plane, so scene.js's applyXray fades that plane
+ * into a soil cutaway whenever the buried model is x-rayed — without it, the
+ * floor would write depth at y=0 and hide this cavity's contents entirely.
  * @param {string|null} composterId catalog id (js/sim/composters.js)
  * @returns {{yMin: number, yMax: number, width: number, depth: number, z: number}|null}
  */

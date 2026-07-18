@@ -120,6 +120,16 @@ export const ptBR = {
     queueTitle: 'Resíduos em decomposição',
     queueEmpty: 'Nada em decomposição',
     queueMore: 'mais',
+    // Statistics panel (score detail). Labels only — the population, tank and
+    // unit strings are shared with the internals panel and `common` above, so
+    // the two readouts never drift apart in wording.
+    statsTitle: 'Estatísticas',
+    statsScoreTitle: 'Pontuação e saldo',
+    statsNextHarvest: 'Colher agora vale',
+    statsAgeMultiplier: 'Multiplicador de idade',
+    statsDays: 'dias',
+    statsFarmDays: 'Dias desta fazenda',
+    statsQueued: 'Resíduo na fila',
     // Run lifecycle (T15): colony death, restart, upgrade feedback
     colonyDeadTitle: 'A colônia morreu',
     colonyDeadBody: 'A produção parou. Compre minhocas para repovoar a composteira.',

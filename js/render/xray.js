@@ -365,10 +365,61 @@ function updateChunks(chunks, cavity, farm) {
 }
 
 /**
+ * Fade ONE mesh to/from a non-occluding translucent state, remembering its
+ * original look so the restore is exact.
+ *
+ * This is the single stash/restore mechanism for the whole x-ray: turning the
+ * fade ON snapshots `{transparent, opacity, depthWrite}` into
+ * `material.userData.xrayOrig` (only if not already stashed, so repeated ON
+ * calls can never overwrite the snapshot with already-faded values), and turning
+ * it OFF copies that snapshot back and drops it. Idempotent in both directions,
+ * and a no-op when a material was never faded — so callers may reconcile every
+ * frame or on every state change without bookkeeping of their own.
+ *
+ * Everything the x-ray hides behind — the composter shell (see
+ * {@link setShellTransparency}) and the garage floor over the buried model's
+ * sunken drum (scene.js) — goes through HERE rather than reimplementing the
+ * save/restore, so no path can restore a partial or stale original.
+ * @param {import('three').Object3D|null|undefined} mesh target (non-meshes are ignored)
+ * @param {boolean} active true → faded, false → restore the stashed original
+ * @param {{opacity?: number, depthWrite?: boolean}} [opts] fade look; `opacity`
+ *   defaults to {@link SHELL_OPACITY} and `depthWrite` to false (non-occluding)
+ */
+export function setMaterialFade(mesh, active, opts = {}) {
+  if (!mesh || !mesh.isMesh) return;
+  const opacity = opts.opacity === undefined ? SHELL_OPACITY : opts.opacity;
+  const depthWrite = opts.depthWrite === undefined ? false : opts.depthWrite;
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  for (const material of materials) {
+    if (!material) continue;
+    if (active) {
+      if (material.userData.xrayOrig === undefined) {
+        material.userData.xrayOrig = {
+          transparent: material.transparent,
+          opacity: material.opacity,
+          depthWrite: material.depthWrite,
+        };
+      }
+      material.transparent = true;
+      material.opacity = opacity;
+      material.depthWrite = depthWrite; // false → let whatever is behind show through
+      material.needsUpdate = true;
+    } else if (material.userData.xrayOrig) {
+      const orig = material.userData.xrayOrig;
+      material.transparent = orig.transparent;
+      material.opacity = orig.opacity;
+      material.depthWrite = orig.depthWrite;
+      material.needsUpdate = true;
+      delete material.userData.xrayOrig;
+    }
+  }
+}
+
+/**
  * Swap a composter shell to/from its translucent x-ray material. Walks the group's
- * shell meshes (skipping the internals overlay, which is tagged `xrayPart`) and,
- * on the way ON, stashes each material's original transparency so turning the
- * x-ray OFF restores the exact opaque look. Idempotent in both directions.
+ * shell meshes (skipping the internals overlay, which is tagged `xrayPart`) and
+ * hands each one to {@link setMaterialFade}, so turning the x-ray OFF restores the
+ * exact opaque look. Idempotent in both directions.
  * @param {Group|null} group the composter mesh group
  * @param {boolean} active true → translucent shell, false → restore
  */
@@ -376,29 +427,6 @@ export function setShellTransparency(group, active) {
   if (!group) return;
   group.traverse((obj) => {
     if (!obj.isMesh || obj.userData.xrayPart) return;
-    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-    for (const material of materials) {
-      if (!material) continue;
-      if (active) {
-        if (material.userData.xrayOrig === undefined) {
-          material.userData.xrayOrig = {
-            transparent: material.transparent,
-            opacity: material.opacity,
-            depthWrite: material.depthWrite,
-          };
-        }
-        material.transparent = true;
-        material.opacity = SHELL_OPACITY;
-        material.depthWrite = false; // let the internals show through
-        material.needsUpdate = true;
-      } else if (material.userData.xrayOrig) {
-        const orig = material.userData.xrayOrig;
-        material.transparent = orig.transparent;
-        material.opacity = orig.opacity;
-        material.depthWrite = orig.depthWrite;
-        material.needsUpdate = true;
-        delete material.userData.xrayOrig;
-      }
-    }
+    setMaterialFade(obj, active, { opacity: SHELL_OPACITY, depthWrite: false });
   });
 }

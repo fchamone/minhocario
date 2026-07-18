@@ -40,24 +40,80 @@ export const QUEUE_PREVIEW_LIMIT = 6;
 // upgrades: a fixed ladder meant filling the 100 L `eco` took ~25 clicks of its
 // largest button while the 20 L `electric` overflowed on the same click.
 //
-// Everything is anchored on `tier2` (30 L), which keeps its historical
-// 0.25/1/2/4 L ladder and 0.5 L sawdust click exactly. The resulting mid rungs
-// land on the feeding rate the balance suite already exercises (it feeds
-// `cap * 0.06`-`0.07` per feeding), so this moves the UI toward the regime the
-// sim is tuned for rather than away from it.
+// Everything is anchored on `tier2` (30 L): one capacity unit IS a tier2, so the
+// two lowest rungs (0.25 L, 1 L) and the 0.5 L sawdust click are unchanged there.
+// The ladder no longer coincides with the feeding rate the balance suite
+// exercises, and that is worth saying plainly: the suite feeds `cap * 0.06` per
+// feeding, and since the mid rung moved from 2 L to 4 L on tier2 NO rung on any
+// model lands at 6-7% of capacity. The rungs bracket it — the 1-unit rung is
+// 3.1-3.8% of capacity and the 4-unit rung is 12.5-13.8%. Nothing breaks: the
+// balance suite calls `addFood` with explicit liters derived from capacity and
+// never reads this ladder, so rung changes cannot move it.
 //
-// Note the sim environment is ABSOLUTE, not volume-normalised: `queueDynamics`
-// multiplies each food's moisture/pH/toxicity by its liters and never divides by
-// capacity. A bigger bin therefore does NOT dilute a feeding — which is exactly
-// why sawdust has to scale on the same unit. Left fixed at 0.5 L it would no
-// longer offset a (now larger) feeding, and the drying lever would silently
-// weaken with every upgrade.
+// The TOP of the ladder is a different problem, and scaling with capacity alone
+// did not solve it. Food DEMAND scales with capacity × DENSITY (50 worms/L,
+// worms.js) and is then bounded by the engine's per-tick throughput ceiling
+// (`capacity × composter.speed × species.speed × THROUGHPUT_CAP_PER_LITER`) — so
+// a FULL bin's appetite is `capacity × composter.speed × species.speed × 0.336`
+// liters per game day (THROUGHPUT_CAP_PER_LITER 0.014 × 24 ticks), while a
+// portion rung is only `capacity × step / 30`. Capacity cancels out of that
+// ratio entirely, so what a rung is WORTH depends only on the two speed traits.
+// At the old 4-unit top rung it was ~20-28% of a full `eco` game-day (13 L
+// against 47-66 L, species-dependent) and ~16-22% on `electric` — four to six
+// clicks to cover one day of a mature colony. Raising the top rung to 10 units
+// puts it at 44-124% of a full-bin game-day across the catalog: the floor is
+// africana (fastest eater, speed 1.4) in `electric` (fastest bin, speed 1.7) at
+// 44%, the ceiling is californiana (speed 1.0) in `tier2` (speed 0.8) at 124%.
+// One click is now a real meal, not a garnish.
+//
+// Where that actually lands, without varnish: only for africana does the whole
+// catalog stay under one full-bin day (44-89%). For californiana — the BEGINNER
+// DEFAULT, and the pairing a new player has on the 100-coin `tier2` — the rung is
+// 61% (`electric`) to 124% (`tier2`) of a full-bin day, and it exceeds a full day
+// on `tier2` (124%) and `buried` (100%). So a single top-rung click CAN outrun a
+// mature default colony's daily appetite. That is measured, not assumed, and it
+// was checked before the rung was raised: a fresh tier2/californiana farm given
+// one top-rung click across seeds 1/7/42 stays survivable and comes out net
+// beneficial, so the ladder stands as-is. The §2.8 overfeeding chain remains a
+// designed failure the player walks into by sustained choice, not by one press.
+//
+// What still bounds a mis-click is the CAPACITY side, which the speed traits do
+// not touch: the rung lands at 33-35% of capacity on every model, so no single
+// click can take an empty bin past about a third full — which is what keeps it
+// clear of `addFood`'s silent capacity clamp (an over-capacity add is trimmed to
+// the remaining space and still reported as a plain success, so a rung near a
+// whole bin would read as a surprise).
+//
+// SAWDUST STEP stays at 0.5 units, and that is a decision, not an oversight. The
+// sim environment is ABSOLUTE, not volume-normalised: `queueDynamics` multiplies
+// each food's moisture/pH/toxicity by its liters and never divides by capacity,
+// so a bigger bin does NOT dilute a feeding — which is why sawdust must keep
+// scaling on the capacity unit, and it still does. What it does NOT need to
+// track is the top rung's widening, because a wider ladder changes clicks per
+// day, not LITERS fed per day: the daily moisture load is unchanged, so there is
+// nothing new to offset. Sawdust is not a per-feeding moisture neutraliser
+// either — it removes SAWDUST_DRY_PER_LITER (0.04) moisture/L against food's
+// ~0.05 moisture/L released, so cancelling a feeding 1:1 would take ~1.25 L of
+// sawdust per liter of food, past any ratio this ladder offers. Percolation plus
+// draining the tank is the bin's real water out-path (engine.js FIELD_CAPACITY /
+// PERCOLATION_RATE); sawdust is the fine-adjust nudge.
+//
+// What sawdust IS a neutraliser for is toxicity (SAWDUST_TOX_PER_LITER), and the
+// step size is what keeps that lever honest. The scrub is meant to be gated by
+// the drying — you should not be able to clean a bin without paying for it in
+// moisture — so the step must stay small enough that a player cannot chain
+// clicks freely. At 0.5 units one click on `eco` is 1.75 L: -0.07 moisture, or
+// 41% of `azul`'s 0.55-0.72 comfort band. Two presses and azul is out of band,
+// which is exactly the intended cost. Scaling the step 2.5× with the top rung
+// would break that: one `eco` click would become 4 L, -0.16 moisture, swallowing
+// azul's entire band in a single press and handing over a consequence-free
+// toxicity scrub along with it.
 
 /** Bin capacity the portion ladder is anchored on (liters). */
 const PORTION_ANCHOR_CAPACITY = 30;
 
 /** Multipliers on the capacity unit, ascending — the four offered rungs. */
-const PORTION_STEPS = [0.25, 1, 2, 4];
+const PORTION_STEPS = [0.25, 1, 4, 10];
 
 /** Sawdust portion per click, as a multiple of the capacity unit. */
 const SAWDUST_STEP = 0.5;
@@ -141,8 +197,9 @@ function capacityUnit(capacity) {
 /**
  * The waste portions offered for a bin of the given capacity, ascending and
  * deduped. The smallest rung stays at or near MIN_PORTION_LITERS on every bin so
- * precise top-ups remain possible; the largest deliberately sits above the
- * sustainable feeding rate, so a one-click overfeed stays reachable (§2.8's
+ * precise top-ups remain possible; the largest is sized against a full bin's
+ * daily appetite (see the ladder note above), which is well past the rate a
+ * young colony can sustain — so a one-click overfeed stays reachable (§2.8's
  * overfeeding chain is a designed failure the player should be able to walk into).
  * @param {number} capacity bin capacity in liters
  * @returns {number[]} 1-4 ascending liter amounts, all >= MIN_PORTION_LITERS
@@ -157,7 +214,9 @@ export function portionOptions(capacity) {
 
 /**
  * The sawdust volume one "add sawdust" click applies for a bin of the given
- * capacity. Same unit as portionOptions, so it keeps pace with feeding.
+ * capacity. Scales on the same capacity unit as portionOptions, so an upgrade
+ * never weakens the drying lever; it deliberately does NOT track the top rung's
+ * width (see the ladder note above for why).
  * @param {number} capacity bin capacity in liters
  * @returns {number} liters, >= MIN_PORTION_LITERS
  */
@@ -282,6 +341,46 @@ export function internalsSnapshot(farm) {
   };
 }
 
+// --- Internals panel placement -----------------------------------------------
+// The panel overlays the stage, so it can end up on top of the composter itself.
+// The bin's on-screen position is driven entirely by `wallPosition` (0 = pushed
+// to the far left of the usable span, 1 = far right), so the side to dodge to is
+// a pure function of that number — no camera projection needed, and it stays
+// testable under Node. The render layer's camera/canvas/span are module-private
+// by design; reaching for them here would couple UI to render for no gain.
+
+/** Below this the bin is far enough left that the left-anchored panel overlaps. */
+const INTERNALS_FLIP_TO_RIGHT = 0.35;
+
+/** Above this the bin has cleared the left anchor and the panel can come home. */
+const INTERNALS_FLIP_TO_LEFT = 0.5;
+
+/**
+ * Which side of the stage the internals panel should sit on, given where the
+ * player has slid the composter. Pure.
+ *
+ * The two thresholds deliberately do NOT coincide: a single threshold would make
+ * the panel flap left/right on every pointer sample while a drag hovers around
+ * it, since `input` fires continuously. The dead band between
+ * `INTERNALS_FLIP_TO_RIGHT` and `INTERNALS_FLIP_TO_LEFT` resolves to `current`
+ * instead, so the panel only moves once per crossing and then stays put — the
+ * player has to drag meaningfully past the flip point to move it back.
+ *
+ * Callers pass the side the panel is on RIGHT NOW (read back off the DOM), which
+ * is what gives the hysteresis its state; this function keeps none of its own.
+ * @param {number} wallPosition  0..1 slider/drag position of the composter
+ * @param {'left'|'right'} [current='left']  side the panel currently occupies
+ * @returns {'left'|'right'} side the panel should occupy
+ */
+export function internalsSide(wallPosition, current = 'left') {
+  // A non-number (or NaN/Infinity) means we cannot know where the bin is —
+  // fall back to the CSS default rather than pinning the panel somewhere odd.
+  if (typeof wallPosition !== 'number' || !Number.isFinite(wallPosition)) return 'left';
+  if (wallPosition < INTERNALS_FLIP_TO_RIGHT) return 'right';
+  if (wallPosition > INTERNALS_FLIP_TO_LEFT) return 'left';
+  return current === 'right' ? 'right' : 'left';
+}
+
 // --- DOM (not unit-tested) ---------------------------------------------------
 
 /** Format a liter volume for display: at most two decimals, no trailing zeros. */
@@ -339,8 +438,16 @@ function buildGauge(labelKey, g, valueText) {
   return row;
 }
 
-/** Build one `label: value` line for the internals panel. */
-function buildStat(labelKey, valueText) {
+/**
+ * Build one `label: value` line. Exported because the statistics box
+ * (js/ui/stats.js) renders the same `.stat` / `.stat__label` / `.stat__value`
+ * trio — one builder keeps the two panels typographically identical, and the
+ * tabular-nums alignment in particular only holds if both use this markup.
+ * @param {string} labelKey i18n key path
+ * @param {string} valueText pre-formatted display value
+ * @returns {HTMLElement}
+ */
+export function buildStat(labelKey, valueText) {
   const row = document.createElement('div');
   row.className = 'stat';
 
@@ -357,6 +464,21 @@ function buildStat(labelKey, valueText) {
 }
 
 /**
+ * Move the internals panel out from under the composter. Reads the side the
+ * panel is on back off its own class list so `internalsSide`'s hysteresis has
+ * real state to compare against (see the dead-band note there), then writes the
+ * decision back as a class. Called from every path that changes `wallPosition`
+ * so the panel tracks a live drag, not just the next repaint.
+ * @param {number} wallPosition
+ */
+function placeInternals(wallPosition) {
+  const panel = document.getElementById('internals');
+  if (!panel) return;
+  const current = panel.classList.contains('internals--right') ? 'right' : 'left';
+  panel.classList.toggle('internals--right', internalsSide(wallPosition, current) === 'right');
+}
+
+/**
  * Repaint the internals panel from the current state. Cheap enough to call on
  * every tick; a no-op when the panel is hidden or there is no farm.
  * @param {import('../sim/engine.js').FarmState|null} farm
@@ -364,6 +486,8 @@ function buildStat(labelKey, valueText) {
 export function updateInternals(farm) {
   const panel = document.getElementById('internals');
   if (!panel || panel.hidden) return;
+
+  if (farm) placeInternals(farm.wallPosition);
 
   const snap = internalsSnapshot(farm);
   if (!snap) {
@@ -685,12 +809,21 @@ export function initActions(deps) {
   const slider = document.getElementById('wall-position');
   if (slider) {
     const farm = getFarm();
-    if (farm) slider.value = String(farm.wallPosition);
+    if (farm) {
+      slider.value = String(farm.wallPosition);
+      placeInternals(farm.wallPosition);
+    }
     // `input` (not `change`) so the composter tracks the slider live. This is the
     // slider → 3D half of the bidirectional sync (T19): it dispatches the SAME
     // `onMove` action the 3D drag does, and the reverse (3D drag → slider) lands
     // through `syncWallSlider` on the resulting repaint.
-    slider.addEventListener('input', () => onMove(Number(slider.value)));
+    slider.addEventListener('input', () => {
+      const next = Number(slider.value);
+      // Reposition from the slider value directly rather than waiting for the
+      // repaint, so the panel gets out of the way during the drag itself.
+      placeInternals(next);
+      onMove(next);
+    });
   }
 }
 
@@ -707,6 +840,9 @@ function syncWallSlider(farm) {
   if (slider && farm && document.activeElement !== slider) {
     slider.value = String(farm.wallPosition);
   }
+  // Outside the focus guard: a 3D drag moves the bin without touching the
+  // slider, and the panel has to dodge that too.
+  if (farm) placeInternals(farm.wallPosition);
 }
 
 /**

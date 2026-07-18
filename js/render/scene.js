@@ -39,7 +39,12 @@ import {
   Plane,
 } from '../../vendor/three.module.min.js';
 import { buildComposterMesh, disposeComposterMesh } from './composter3d.js';
-import { buildXrayInternals, updateXrayInternals, setShellTransparency } from './xray.js';
+import {
+  buildXrayInternals,
+  updateXrayInternals,
+  setShellTransparency,
+  setMaterialFade,
+} from './xray.js';
 // The ONE sim import the plan sanctions for the render layer: the SAME pure
 // function the temperature model uses for heat (§2.6). Sampling it here to draw
 // the sun patch means the visible bright region and the simulated warm spot are
@@ -58,6 +63,17 @@ export const WALL_WIDTH = 12;
 export const WALL_HEIGHT = 4.5;
 /** Depth of the ground plane (wall at z=0 out toward the camera). */
 export const FLOOR_DEPTH = 8;
+/**
+ * Top face of the soil volume, a hair BELOW the ground plane at y=0 so the two
+ * coplanar surfaces cannot z-fight while the floor is faded over it.
+ */
+const SOIL_TOP_Y = -0.02;
+/**
+ * Thickness of the soil volume. The deepest thing buried in it is the buried
+ * model's drum, which bottoms out at y ≈ -1.44, so 2.2 clears it with margin —
+ * the cross-section must never end above the bin it is meant to embed.
+ */
+const SOIL_DEPTH = 2.2;
 /**
  * Fraction of the wall width the composter may occupy — leaves a margin at each
  * end so a bin at position 0 or 1 still sits fully on the wall rather than
@@ -97,6 +113,11 @@ export function worldXToWallPosition(worldX) {
 const SKY_COLOR = 0x9fb8cc;
 const WALL_COLOR = 0x8f949c;
 const FLOOR_COLOR = 0x5b4a37;
+// Packed earth seen in CROSS-SECTION through the faded floor (see applyXray). A
+// darker, desaturated FLOOR_COLOR: same earth, but reading as the shaded inside
+// of the ground rather than as more of the lit surface — if it matched
+// FLOOR_COLOR the cutaway would look like a second floor, not a section cut.
+const SOIL_COLOR = 0x373028;
 
 // --- Day/night cycle (T18) ---------------------------------------------------
 // Keyframes across the 24h clock, interpolated by the continuous game hour so the
@@ -202,6 +223,24 @@ let composterModelId = null;
 // module-side so renderState can refresh the overlay every frame and a mid-farm
 // upgrade re-applies it to the new mesh.
 
+/**
+ * Ground-plane opacity while x-raying the BURIED model (see applyXray). Kept far
+ * higher than the shell's 0.1: the floor is a single flat plane crossed once per
+ * ray, not a stack of walls/rims/lid, so it never compounds — and at ~0.25 it
+ * still reads as ground (the bin keeps standing on something) while the drum
+ * below it stays legible.
+ *
+ * The cutaway is TWO parts, and both are required. Fading the floor only makes it
+ * see-through; what a ray finds behind it is the second part — the opaque
+ * {@link SOIL_COLOR} volume filling the space under the floor (see buildScene and
+ * the soilMesh gate in applyXray). Without that volume every ray that misses the
+ * sunken drum would fall through to `scene.background`, which applyDayNight drives
+ * to the live SKY colour: in daylight the floor would read as a quarter-strength
+ * brown wash over open sky and the bin would appear to float. Fade + soil together
+ * are what make this a soil cutaway rather than a hole in the garage.
+ */
+const FLOOR_XRAY_OPACITY = 0.25;
+
 /** Whether the x-ray view is currently on. */
 let xrayActive = false;
 /**
@@ -219,6 +258,24 @@ let sunLight = null;
 let hemiLight = null;
 /** @type {AmbientLight|null} floor for shadowed faces. */
 let ambientLight = null;
+/**
+ * The ground plane, retained so applyXray() can fade it into a soil cutaway for
+ * the buried model. It is a scene-ROOT sibling of composterGroup — NOT one of its
+ * children — so setShellTransparency's traversal can never reach it; without this
+ * handle the x-ray would leave it writing depth at y=0 over the sunken drum.
+ * @type {import('three').Mesh|null}
+ */
+let floorMesh = null;
+/**
+ * The opaque earth volume under the floor — what the faded floor actually reveals
+ * (see FLOOR_XRAY_OPACITY). Retained so applyXray() can gate its visibility on the
+ * EXACT condition that fades the floor. That gate is load-bearing, not tidiness:
+ * the camera sits at z=9, outside the floor's z range [0, 8], so the box's near
+ * face would otherwise poke into frame below the floor's front edge during normal
+ * play. Hidden at construction; only the buried x-ray ever shows it.
+ * @type {import('three').Mesh|null}
+ */
+let soilMesh = null;
 /** @type {import('three').BufferAttribute|null} the sun patch's per-vertex colours. */
 let sunPatchColors = null;
 /**
@@ -335,7 +392,25 @@ function buildScene(target) {
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0, FLOOR_DEPTH / 2);
   floor.name = 'garageFloor';
+  floorMesh = floor; // retained like the lights below — see applyXray (soil cutaway)
   target.add(floor);
+
+  // Soil volume: an opaque block of earth filling the space UNDER the floor, so
+  // the buried x-ray's faded floor reveals ground rather than the sky background
+  // (see FLOOR_XRAY_OPACITY). Sized to the floor's own footprint in x/z, with its
+  // top face SOIL_TOP_Y below the plane to avoid z-fighting with it, and deep
+  // enough to bottom out past the buried drum (drum bottom y ≈ -1.44, its x-ray
+  // cavity yMin ≈ -1.32) so no ray that hits the bin's depth range escapes below
+  // the earth. Starts hidden — applyXray is the ONLY thing that ever shows it.
+  const soil = new Mesh(
+    new BoxGeometry(WALL_WIDTH, SOIL_DEPTH, FLOOR_DEPTH),
+    new MeshStandardMaterial({ color: SOIL_COLOR, roughness: 1, metalness: 0 }),
+  );
+  soil.position.set(0, SOIL_TOP_Y - SOIL_DEPTH / 2, FLOOR_DEPTH / 2);
+  soil.name = 'garageSoil';
+  soil.visible = false;
+  soilMesh = soil;
+  target.add(soil);
 
   // Lighting: hemisphere for soft sky/ground bounce, a directional "sun" for
   // shape, and a touch of ambient so shadowed faces never go fully black. All
@@ -582,11 +657,38 @@ export function renderState(state, continuousHour = 0) {
 }
 
 /**
- * Reconcile the current composter mesh with the x-ray state: translucent shell +
- * a visible internals overlay (built lazily on first use) when on; opaque shell +
- * hidden overlay when off. Safe to call with no composter yet.
+ * Reconcile the scene with the x-ray state: translucent shell + a visible
+ * internals overlay (built lazily on first use) when on; opaque shell + hidden
+ * overlay when off, plus the buried model's soil cutaway below. Safe to call with
+ * no composter yet, and idempotent — syncComposter re-runs it on every model
+ * change so the reconciliation is always full, never incremental.
  */
 function applyXray() {
+  // Soil cutaway — the buried model ONLY. Its drum lives at y ∈ [-1.44, 0.06] and
+  // its cavity at y ∈ [-1.32, 0.04], so ~97% of what the x-ray exposes is BELOW
+  // the ground plane. That plane is a scene-root sibling of composterGroup, so
+  // setShellTransparency's traversal never touches it and it would keep writing
+  // depth at y=0 right over the revealed internals. Fading it here is what makes
+  // the buried x-ray show anything at all.
+  //
+  // The other five models sit entirely ABOVE ground, where the floor occludes
+  // nothing of theirs — fading it for them would only dissolve the ground the bin
+  // visibly stands on, so this is gated on the model id and not merely on
+  // xrayActive. Because the condition is re-evaluated in full (never toggled
+  // incrementally), every transition reconciles on its own: x-ray off restores an
+  // opaque floor, and switching buried → tier3 with the x-ray still ON un-fades it.
+  const cutaway = xrayActive && composterModelId === 'buried';
+  setMaterialFade(floorMesh, cutaway, {
+    opacity: FLOOR_XRAY_OPACITY,
+    depthWrite: false, // must not occlude the sunken drum it is drawn in front of
+  });
+  // The soil volume behind the fade — shown on the EXACT same condition, never
+  // independently. Nothing else in the module touches `visible`, so the earth
+  // block simply does not exist outside the buried x-ray; it must not be left
+  // relying on the floor to hide it, since the camera (z=9) sits outside the
+  // floor's z span and would see the block's near face under the front edge.
+  if (soilMesh) soilMesh.visible = cutaway;
+
   if (!composterGroup) return;
   setShellTransparency(composterGroup, xrayActive);
   if (xrayActive) {
@@ -802,6 +904,8 @@ export function disposeScene() {
   sunLight = null;
   hemiLight = null;
   ambientLight = null;
+  floorMesh = null;
+  soilMesh = null;
   sunPatchColors = null;
   sunPatchWallPos = null;
   renderer?.dispose?.();

@@ -6,6 +6,7 @@ import {
   portionOptions,
   sawdustPortion,
   gauge,
+  internalsSide,
   internalsSnapshot,
   QUEUE_PREVIEW_LIMIT,
 } from '../js/ui/actions.js';
@@ -72,12 +73,59 @@ test('portionValid rejects non-numeric input', () => {
 // A fixed ladder meant filling the 100 L `eco` took ~25 clicks of its biggest
 // button. These lock the scaling AND the invariants the dialog relies on.
 
-test('portionOptions preserves the historical ladder on the anchor bin', () => {
-  // tier2 (30 L) is the anchor: its ladder must not move, so an existing
-  // player's muscle memory and the balance suite's feeding regime both hold.
+test('portionOptions is anchored on the tier2 ladder', () => {
+  // tier2 (30 L) is the anchor: one capacity unit IS a tier2, so its ladder is
+  // PORTION_STEPS verbatim, and the balance suite's feeding regime (cap * ~0.06
+  // per feeding) still sits on the mid rung.
   assert.equal(getComposter('tier2').capacity, 30);
-  assert.deepEqual(portionOptions(30), [0.25, 1, 2, 4]);
+  assert.deepEqual(portionOptions(30), [0.25, 1, 4, 10]);
   assert.equal(sawdustPortion(30), 0.5);
+});
+
+test('the smallest rung stays at the engine minimum on the anchor bin', () => {
+  // Precise top-ups are the point of the bottom rung; it may never drift up off
+  // MIN_PORTION_LITERS on the bin the ladder is defined against.
+  assert.equal(portionOptions(30)[0], MIN_PORTION_LITERS);
+});
+
+test('the largest rung is a meaningful fraction of a full bin appetite', () => {
+  // The gap this ladder corrects: food DEMAND scales with capacity x DENSITY
+  // (50 worms/L) and is bounded by the engine's per-tick throughput ceiling, so
+  // a full bin eats roughly `capacity * speed * THROUGHPUT_CAP_PER_LITER * 24`
+  // liters per game day. A rung that scales with capacity ALONE falls behind
+  // that, which is what made the old 4-unit top rung ~19% of an `eco` day.
+  const THROUGHPUT_CAP_PER_LITER = 0.02; // mirrors js/sim/engine.js
+  const TICKS_PER_DAY = 24;
+  for (const composter of listComposters()) {
+    const dailyDemand =
+      composter.capacity * composter.speed * THROUGHPUT_CAP_PER_LITER * TICKS_PER_DAY;
+    const top = portionOptions(composter.capacity).at(-1);
+    const share = top / dailyDemand;
+    assert.ok(share >= 0.35, `${composter.id}: top rung is only ${(share * 100).toFixed(0)}% of a day`);
+    // Still under a full day on every model: walking into the §2.8 overfeeding
+    // chain must stay a choice, not something one mis-click delivers.
+    assert.ok(share < 1, `${composter.id}: one click covers a whole game day`);
+  }
+});
+
+test('the largest rung cannot be silently clamped on a bin under half full', () => {
+  // `addFood` clamps an over-capacity portion to the remaining space and
+  // main.js reports it as a plain success, so a rung close to a whole bin would
+  // read as a surprise. Every top rung lands at 33-35% of capacity (the snap
+  // grid rounds `electric` up), so a click can never be clamped unless the bin
+  // is already past half full — and never at all from empty.
+  const CLAMP_HEADROOM = 0.4; // fraction of capacity the top rung must stay under
+  for (const composter of listComposters()) {
+    const top = portionOptions(composter.capacity).at(-1);
+    assert.ok(
+      top <= composter.capacity * CLAMP_HEADROOM,
+      `${composter.id}: top rung ${top} L is too close to ${composter.capacity} L`,
+    );
+    // And it lands unclamped from empty: what the dialog offered is what arrives.
+    const farm = createInitialFarmState({ composterId: composter.id });
+    const next = addFood(farm, FOODS[0].id, top);
+    assert.equal(next.queue[0].liters, top, `${composter.id}: top rung was clamped from empty`);
+  }
 });
 
 test('portionOptions returns ascending, deduped, engine-valid amounts', () => {
@@ -137,8 +185,8 @@ test('sawdustPortion is always dispatchable, including for tiny bins', () => {
 
 test('portionOptions falls back to the anchor ladder without a composter', () => {
   // The panel can be rendered before a bin exists (capacity resolves to 0).
-  assert.deepEqual(portionOptions(0), [0.25, 1, 2, 4]);
-  assert.deepEqual(portionOptions(undefined), [0.25, 1, 2, 4]);
+  assert.deepEqual(portionOptions(0), [0.25, 1, 4, 10]);
+  assert.deepEqual(portionOptions(undefined), [0.25, 1, 4, 10]);
 });
 
 // --- gauge: an env variable positioned against its comfort band --------------
@@ -174,6 +222,42 @@ test('gauge clamps the ratio to the display domain', () => {
 test('gauge tolerates a degenerate domain without dividing by zero', () => {
   const g = gauge(5, band, { min: 3, max: 3 });
   assert.ok(Number.isFinite(g.ratio));
+});
+
+// --- internalsSide: keeping the panel off the composter ----------------------
+
+test('internalsSide flips the panel away from a bin slid to the far left', () => {
+  assert.equal(internalsSide(0.1), 'right');
+  assert.equal(internalsSide(0), 'right');
+});
+
+test('internalsSide keeps the panel on its default side for a bin on the right', () => {
+  assert.equal(internalsSide(0.9), 'left');
+  assert.equal(internalsSide(1), 'left');
+});
+
+test('internalsSide holds the current side inside the dead band', () => {
+  // 0.4 sits between the two thresholds, so neither side is forced: whichever
+  // side the panel already occupies wins. This is what stops it flapping while
+  // a drag hovers around the flip point.
+  assert.equal(internalsSide(0.4, 'right'), 'right');
+  assert.equal(internalsSide(0.4, 'left'), 'left');
+});
+
+test('internalsSide only flips back once the bin clears the return threshold', () => {
+  // Sweeping right out of the dead band flips home; sweeping back left again
+  // does not flip until past the (lower) rightward threshold.
+  assert.equal(internalsSide(0.55, 'right'), 'left');
+  assert.equal(internalsSide(0.45, 'left'), 'left');
+  assert.equal(internalsSide(0.3, 'left'), 'right');
+});
+
+test('internalsSide falls back to the default side for unusable input', () => {
+  assert.equal(internalsSide(NaN), 'left');
+  assert.equal(internalsSide(undefined), 'left');
+  assert.equal(internalsSide(Infinity), 'left');
+  assert.equal(internalsSide('0.1'), 'left'); // a string is not a position
+  assert.equal(internalsSide(null, 'right'), 'left');
 });
 
 // --- internalsSnapshot: the x-ray data panel's whole model -------------------
