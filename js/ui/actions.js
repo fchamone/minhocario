@@ -68,8 +68,8 @@ function clamp01(x) {
  *
  * Deliberately carries NO suitability signal (§2.7) — no flag, no grouping, no
  * sorting, and no extra fields that could hint at one. The catalog order is
- * already interleaved on purpose (js/sim/foods.js), so it is passed through
- * untouched.
+ * already an irregular suitable/harmful mix on purpose (js/sim/foods.js — not a
+ * strict parity alternation), so it is passed through untouched.
  * @returns {{id: string, name: string}[]}
  */
 export function foodChoices() {

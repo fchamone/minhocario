@@ -22,7 +22,7 @@
 | User-facing literals outside `js/strings.js` + `js/i18n/` | clean — `js/ui/*`, `js/main.js`, `js/render/*` route all text through `t()`; render is canvas-only (no DOM text writes) |
 | Runtime external URLs (CDN / network) | clean — the only URL in shipped files is the version/source header comment in `vendor/three.module.min.js` |
 | Food list suitability signal — names, all 3 locales | clean — each food exposes `{name}` only (labeling guard test); names are neutral in pt-BR / en / es |
-| Food list suitability signal — ordering | see "Audit notes" — catalog order strictly alternates suitable/harmful; flagged for human judgment |
+| Food list suitability signal — ordering | resolved — catalog reshuffled into a non-uniform mix (no parity pattern); guarded by `tests/foods.test.js` "not a strict alternation" |
 | Locale catalog key parity (pt-BR / en / es) | green — parity + no-empty-values tests |
 | `data-string` keys in `index.html` resolve in all 3 locales | green |
 | Ranking record matches spec §2.1 five-field shape | green (locked by test) |
@@ -108,16 +108,16 @@ refactored blind during an audit.
    fraction. Consistent with the plan's own "pure fn — allowed" note for
    `solarGain`. No change recommended; flagged for awareness.
 
-2. **The `FOODS` catalog order strictly alternates suitable/harmful.**
-   Indices 0,2,4,… are benign (`toxicity ≈ 0`) and 1,3,5,… are harmful
-   (`fruitPeels, citrus, coffeeGrounds, meat, vegetableScraps, onionGarlic, …`).
-   The add-waste UI renders foods in raw catalog order, so a player who has
-   already discovered a few foods could infer a position-parity pattern. Names
-   and grouping carry **zero** signal (verified in all three locales); the
-   `foods.js` comment intends "interleaved, not grouped good-then-bad", but a
-   *perfect* alternation is itself a latent ordering regularity. Reordering
-   touches sim data and is a product/design decision, so it is reported rather
-   than changed here — it maps directly to the manual box "food list carries no
-   suitability hint (ordering, grouping, labels)". Recommend the human decide
-   whether to shuffle the catalog order (a non-uniform mix, not strict
-   alternation) before ship.
+2. **The `FOODS` catalog order strictly alternated suitable/harmful.** RESOLVED.
+   Previously indices 0,2,4,… were benign (`toxicity ≈ 0`) and 1,3,5,… harmful,
+   so a player who had discovered a few foods could infer a position-parity
+   pattern. Names and grouping already carried **zero** signal (verified in all
+   three locales), but a *perfect* alternation is itself a latent ordering
+   regularity. The catalog has been reshuffled into a non-uniform mix — adjacent
+   runs of two suitable / two harmful foods break the parity pattern, so index no
+   longer predicts suitability. This is a data-only change (all 14 foods keep
+   their exact effect numbers; only their positions move), so the balance,
+   parity, and labeling-guard tests are unaffected. A new guard test in
+   `tests/foods.test.js` ("not a strict alternation") locks it against regressing
+   to a regular pattern. Closes the manual box "food list carries no suitability
+   hint (ordering, grouping, labels)".

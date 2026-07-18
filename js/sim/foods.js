@@ -3,9 +3,14 @@
 // The add-waste list (§2.7) deliberately mixes SUITABLE and UNSUITABLE foods
 // "without labeling which is which" — discovery is the gameplay. So the data
 // shape carries NO suitability flag: a food's character is emergent from its
-// numbers alone (toxicity, pH push, fermentation heat). The catalog order is
-// intentionally interleaved, not grouped good-then-bad, so nothing downstream
-// can leak suitability by ordering either.
+// numbers alone (toxicity, pH push, fermentation heat). The catalog order is an
+// intentionally IRREGULAR mix — not grouped good-then-bad, and deliberately NOT
+// a strict good/bad alternation either (a perfect parity pattern is itself an
+// ordering hint: it would let a player infer suitability from a food's index).
+// Adjacent runs of two suitable or two unsuitable foods keep the sequence
+// non-uniform, so nothing downstream can leak suitability by ordering. A guard
+// test (tests/foods.test.js) locks down that the order is not strictly
+// alternating.
 //
 // Per-liter effect fields (all released GRADUALLY as an entry decomposes):
 //   moisture  water added to the bin per liter over full decomposition (>= 0)
@@ -28,22 +33,22 @@
  * @property {number} heat     fermentation-heat multiplier while fresh
  */
 
-/** @type {readonly Food[]} interleaved on purpose — order is not a suitability hint */
+/** @type {readonly Food[]} irregular mix on purpose — order is not a suitability hint */
 export const FOODS = [
   { id: 'fruitPeels', moisture: 0.05, ph: -0.02, toxicity: 0.0, heat: 1.0 },
-  { id: 'citrus', moisture: 0.05, ph: -0.15, toxicity: 0.01, heat: 1.0 },
-  { id: 'coffeeGrounds', moisture: 0.03, ph: -0.03, toxicity: 0.0, heat: 1.1 },
-  { id: 'meat', moisture: 0.03, ph: 0.0, toxicity: 0.15, heat: 1.8 },
-  { id: 'vegetableScraps', moisture: 0.06, ph: 0.0, toxicity: 0.0, heat: 1.0 },
   { id: 'onionGarlic', moisture: 0.04, ph: -0.05, toxicity: 0.03, heat: 1.0 },
+  { id: 'coffeeGrounds', moisture: 0.03, ph: -0.03, toxicity: 0.0, heat: 1.1 },
+  { id: 'vegetableScraps', moisture: 0.06, ph: 0.0, toxicity: 0.0, heat: 1.0 },
+  { id: 'meat', moisture: 0.03, ph: 0.0, toxicity: 0.15, heat: 1.8 },
   { id: 'eggshells', moisture: 0.0, ph: 0.04, toxicity: 0.0, heat: 0.9 },
-  { id: 'dairy', moisture: 0.04, ph: -0.02, toxicity: 0.12, heat: 1.6 },
-  { id: 'wetCardboard', moisture: 0.07, ph: 0.0, toxicity: 0.0, heat: 0.8 },
-  { id: 'oilyFood', moisture: 0.02, ph: 0.0, toxicity: 0.13, heat: 1.7 },
-  { id: 'teaLeaves', moisture: 0.04, ph: -0.01, toxicity: 0.0, heat: 1.0 },
-  { id: 'saltyLeftovers', moisture: 0.03, ph: 0.0, toxicity: 0.1, heat: 1.2 },
-  { id: 'pumpkinGuts', moisture: 0.08, ph: 0.0, toxicity: 0.0, heat: 1.1 },
   { id: 'cookedPasta', moisture: 0.05, ph: 0.0, toxicity: 0.06, heat: 1.4 },
+  { id: 'citrus', moisture: 0.05, ph: -0.15, toxicity: 0.01, heat: 1.0 },
+  { id: 'wetCardboard', moisture: 0.07, ph: 0.0, toxicity: 0.0, heat: 0.8 },
+  { id: 'dairy', moisture: 0.04, ph: -0.02, toxicity: 0.12, heat: 1.6 },
+  { id: 'teaLeaves', moisture: 0.04, ph: -0.01, toxicity: 0.0, heat: 1.0 },
+  { id: 'pumpkinGuts', moisture: 0.08, ph: 0.0, toxicity: 0.0, heat: 1.1 },
+  { id: 'oilyFood', moisture: 0.02, ph: 0.0, toxicity: 0.13, heat: 1.7 },
+  { id: 'saltyLeftovers', moisture: 0.03, ph: 0.0, toxicity: 0.1, heat: 1.2 },
 ];
 
 const BY_ID = new Map(FOODS.map((f) => [f.id, f]));

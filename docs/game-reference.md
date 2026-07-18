@@ -111,27 +111,29 @@ per-species; the pH and toxicity bands (§6) are shared by all species.
 ## 4. Food catalog
 
 Source: `js/sim/foods.js` (`FOODS`). **Order below is the catalog order** — it
-is intentionally interleaved and carries no meaning. Each entry's fields are the
-raw per-liter effect numbers released **gradually** as the entry decomposes;
-`heat` is a fermentation-heat multiplier applied while the entry is still fresh.
-No suitability field exists in the data shape.
+is an intentionally irregular mix (not grouped good-then-bad, and deliberately
+not a strict suitable/harmful alternation, so a food's index never predicts its
+suitability) and carries no meaning. Each entry's fields are the raw per-liter
+effect numbers released **gradually** as the entry decomposes; `heat` is a
+fermentation-heat multiplier applied while the entry is still fresh. No
+suitability field exists in the data shape.
 
 | id (catalog order) | moisture /L | ph /L (− acid, + alkaline) | toxicity /L | heat (fresh) |
 |--------------------|-----:|-----:|-----:|-----:|
 | `fruitPeels`      | 0.05 | −0.02 | 0.00 | 1.0 |
-| `citrus`          | 0.05 | −0.15 | 0.01 | 1.0 |
-| `coffeeGrounds`   | 0.03 | −0.03 | 0.00 | 1.1 |
-| `meat`            | 0.03 |  0.00 | 0.15 | 1.8 |
-| `vegetableScraps` | 0.06 |  0.00 | 0.00 | 1.0 |
 | `onionGarlic`     | 0.04 | −0.05 | 0.03 | 1.0 |
+| `coffeeGrounds`   | 0.03 | −0.03 | 0.00 | 1.1 |
+| `vegetableScraps` | 0.06 |  0.00 | 0.00 | 1.0 |
+| `meat`            | 0.03 |  0.00 | 0.15 | 1.8 |
 | `eggshells`       | 0.00 |  0.04 | 0.00 | 0.9 |
-| `dairy`           | 0.04 | −0.02 | 0.12 | 1.6 |
-| `wetCardboard`    | 0.07 |  0.00 | 0.00 | 0.8 |
-| `oilyFood`        | 0.02 |  0.00 | 0.13 | 1.7 |
-| `teaLeaves`       | 0.04 | −0.01 | 0.00 | 1.0 |
-| `saltyLeftovers`  | 0.03 |  0.00 | 0.10 | 1.2 |
-| `pumpkinGuts`     | 0.08 |  0.00 | 0.00 | 1.1 |
 | `cookedPasta`     | 0.05 |  0.00 | 0.06 | 1.4 |
+| `citrus`          | 0.05 | −0.15 | 0.01 | 1.0 |
+| `wetCardboard`    | 0.07 |  0.00 | 0.00 | 0.8 |
+| `dairy`           | 0.04 | −0.02 | 0.12 | 1.6 |
+| `teaLeaves`       | 0.04 | −0.01 | 0.00 | 1.0 |
+| `pumpkinGuts`     | 0.08 |  0.00 | 0.00 | 1.1 |
+| `oilyFood`        | 0.02 |  0.00 | 0.13 | 1.7 |
+| `saltyLeftovers`  | 0.03 |  0.00 | 0.10 | 1.2 |
 
 - **Decomposition:** `DECOMP_TICKS = 48` (`js/sim/foods.js`) — an entry fully
   breaks down over 48 ticks (2 game days). `decompositionFraction(ageTicks)` is

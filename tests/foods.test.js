@@ -52,6 +52,20 @@ test('food data shape carries NO suitability flag (discovery is gameplay)', () =
   }
 });
 
+test('catalog order carries no suitability signal — it is not a strict alternation', () => {
+  // The add-waste UI renders foods in raw catalog order (§2.7), so a *perfectly*
+  // regular good/bad pattern would leak suitability by position: with strict
+  // alternation, a food's index parity predicts whether it is harmful. Discovery
+  // is the gameplay, so the order must stay an irregular mix — at least one pair
+  // of neighbours must share the same suitability, breaking any parity pattern.
+  const harmful = listFoods().map((f) => f.toxicity > 0);
+  const strictlyAlternating = harmful.every((h, i) => i === 0 || h !== harmful[i - 1]);
+  assert.ok(
+    !strictlyAlternating,
+    'FOODS must not alternate suitable/harmful by index — that leaks suitability by position',
+  );
+});
+
 test('getFood returns the model by id and null for an unknown id', () => {
   assert.equal(getFood('meat').id, 'meat');
   assert.equal(getFood('nope'), null);
