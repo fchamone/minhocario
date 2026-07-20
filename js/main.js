@@ -48,6 +48,28 @@ const newFarmDraft = { composterId: null };
 /** localStorage key holding the language preference — never in the game save. */
 const LANG_STORAGE_KEY = 'minhocario.lang';
 
+/** localStorage key holding the dev-scaffolding opt-in — never in the game save. */
+const DEV_STORAGE_KEY = 'minhocario.dev';
+
+/**
+ * Is developer scaffolding (the screen-jump nav) switched on? Off for players:
+ * `?dev=1` enables it and sticks, `?dev=0` turns it back off. Lives in its own
+ * key like the language preference, so it stays outside the frozen save schema.
+ * @returns {boolean}
+ */
+function devModeEnabled() {
+  try {
+    const requested = new URLSearchParams(location.search).get('dev');
+    if (requested === '1' || requested === '0') {
+      localStorage.setItem(DEV_STORAGE_KEY, requested);
+      return requested === '1';
+    }
+    return localStorage.getItem(DEV_STORAGE_KEY) === '1';
+  } catch {
+    return false; // storage blocked (private mode): stay off, never break boot
+  }
+}
+
 /**
  * Read the persisted language preference, tolerating storage being unavailable.
  * @returns {string|null}
@@ -679,6 +701,16 @@ function init() {
   // Continuous game hour for the render layer's day/night interpolation (T18);
   // readable from devtools too.
   window.getContinuousHour = () => continuousHour;
+
+  // Drop the dev nav from the DOM entirely for players — leaving it hidden
+  // would still expose the screen-jump buttons to anyone poking at the markup.
+  const devNav = document.getElementById('dev-nav');
+  if (devModeEnabled()) {
+    devNav?.removeAttribute('hidden');
+    document.body.classList.add('dev-mode'); // screens pay the nav's clearance
+  } else {
+    devNav?.remove();
+  }
 
   applyStrings();
   wireNavigation();

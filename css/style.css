@@ -68,14 +68,20 @@ h1, h2 { margin: 0 0 0.4em; }
   background: rgba(0, 0, 0, 0.35);
   font-size: 0.8rem;
 }
+/* `display: flex` above outranks the UA `[hidden]` rule, so state it here —
+   same guard as `.screen[hidden]` below. Keeps the bar down until main.js
+   decides, so players never see it flash. */
+.dev-nav[hidden] { display: none; }
 .dev-nav__label { color: var(--ink-dim); margin-right: 4px; }
 .dev-nav button { padding: 4px 10px; }
 
 /* --- Screens --- */
 .screen {
   min-height: 100vh;
-  padding: 56px 24px 24px; /* top padding clears the fixed dev-nav */
+  padding: 24px;
 }
+/* Only dev mode shows the fixed nav, so only dev mode pays the clearance. */
+body.dev-mode .screen { padding-top: 56px; }
 .screen[hidden] { display: none; }
 
 .screen__header { max-width: 900px; margin: 0 auto 16px; }
@@ -217,10 +223,12 @@ h1, h2 { margin: 0 0 0.4em; }
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  padding: 44px 16px 10px; /* clears dev-nav */
+  padding: 10px 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--panel-2);
 }
+/* Same clearance deal as `.screen` — only dev mode has a bar to clear. */
+body.dev-mode .hud { padding-top: 44px; }
 .hud__item { color: var(--ink-dim); }
 .hud__item span:last-child { color: var(--ink); font-weight: 600; }
 

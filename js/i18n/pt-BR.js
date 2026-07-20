@@ -10,8 +10,8 @@
 export const ptBR = {
   appTitle: 'Minhocário',
 
-  // Temporary developer navigation (removed before release; used to jump
-  // between screens while individual screens are still being built).
+  // Developer navigation — jumps between screens without playing through the
+  // flow. Gated behind `?dev=1`; players never see it (see main.js).
   devNav: {
     label: 'Navegação (dev)',
     home: 'Início',

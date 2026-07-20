@@ -8,9 +8,10 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <!-- Temporary developer navigation: lets us switch screens while each
-       screen is still being built. Text filled from strings.js by main.js. -->
-  <nav id="dev-nav" class="dev-nav" aria-label="dev">
+  <!-- Developer navigation: jumps between screens without playing through the
+       flow. Hidden by default and removed from the DOM for players; main.js
+       reveals it only under `?dev=1`. Text filled from strings.js by main.js. -->
+  <nav id="dev-nav" class="dev-nav" aria-label="dev" hidden>
     <span class="dev-nav__label" data-string="devNav.label"></span>
     <button type="button" data-nav="home" data-string="devNav.home"></button>
     <button type="button" data-nav="shop" data-string="devNav.shop"></button>
