@@ -291,7 +291,7 @@
 ## Phase D — 3D richness
 
 - [x] **V14** ACES tone mapping + retire `LIGHT_GAIN` + `toneMapped:false` opt-outs (M) — deps: V5
-      **Code complete; the 3D visual matrix is NOT walked — see "Owed before CPV4".**
+      **Code complete; the 3D visual matrix was walked and approved at CPV4, 2026-07-20.**
       `outputColorSpace` left alone (finding #4 in the plan was right: r170 already defaults it).
       Four corrections, all found by checking the task's numbers **before** implementing:
       **(1) The mitigation missed a material, inside the layer it exists to protect.** The plan
@@ -462,9 +462,29 @@
       throttled every 4th frame (forced on drag/upgrade/x-ray), `mapSize` 1024, tight ortho,
       slope bias. Sun patch / soil / sky / blob excluded from casting by name. 10 guards broken
       first. Suite 388 → **398**.
-- [ ] **CPV4** — full 3D pass. **NOT yet walked — the 3D visual matrix is owed (see Open items).**
-      Review: x-ray legibility (most at risk from ACES), day/night readability, **the shadow perf-gate
-      decision** (measure with `?dev=1` vs `?dev=1&shadows=0`, varying model + x-ray, not speed).
+- [x] **CPV4 — APPROVED by the maintainer, 2026-07-20.** Full 3D pass walked; Phase D signed off,
+      Phase E (V20) unblocked.
+      **Recorded as the blanket confirmation it was given as** — "it seems fine" across the set —
+      not itemised, on the CPV3 precedent: the maintainer walked it, and inventing per-model
+      findings they did not report is the dressed-up record CPV2/CPV3 were careful to avoid. The
+      set put to them is the one written under "Owed before CPV4" below: the dawn/noon/dusk/midnight
+      × x-ray × 6-model matrix, x-ray legibility under ACES, the sky gradient and fog match, the six
+      models still distinct, and the shadow interaction.
+      **The one load-bearing DECISION inside this gate — the shadow perf gate — resolved to KEEP
+      SHADOWS ON.** The maintainer engaged the A/B (`?dev=1` vs `?dev=1&shadows=0`) and found it
+      fine, so `SHADOWS_DEFAULT` stays `true` and V19 ships rather than being dropped for V16's blob
+      alone. No frame-time figure is recorded because none was reported — the gate was a "fine / not
+      fine" call at the readout, and writing a millisecond number I was not given would be the same
+      fabrication the itemising rule forbids. Reversing it is still one line (`SHADOWS_DEFAULT =
+      false`) if the budget is revisited on other hardware.
+      **Nothing in `js/sim/` was touched by any Phase-D task** — the scoring formula and save schema
+      are unchanged since the CP9 freeze. CPV5 re-asserts this at the ship gate; noted here to keep
+      the claim continuous.
+      **Not reachable by `node --test` and therefore genuinely closed only by this walk:** everything
+      about a tone curve, a gradient, a shadow and a silhouette. Unlike CPV1 there was no
+      computed-value-diff analogue to review in its place — the matrix itself was the artifact, and
+      the guards only ever held *structure* (the fold's invisibility, the footprint↔silhouette tie,
+      the x-ray `castShadow` protocol), never *appearance*.
 
 ## Phase E — Release
 
@@ -526,7 +546,10 @@
         way. If the track does not shrink on collapse, the layout still looks fine.
       - **One §2.8 failure chain at 20×**, to confirm the panel still narrates it after the
         groups were re-flowed (V13's AC).
-- [ ] **Owed before CPV4 — the 3D visual matrix for V14.** Nothing about a tone curve is
+- [x] **RESOLVED at CPV4, 2026-07-20 — the 3D visual matrix, walked by the maintainer.** The
+      questions below are kept as the record of *what* was put to the walk; the answer across the
+      set was "fine", and the shadow perf gate resolved to keep shadows on (see the CPV4 entry
+      above). Nothing about a tone curve is
       reachable from a green suite, and unlike CPV1 there is no computed-value-diff analogue to
       review in its place. The matrix **is** the artifact: dawn / noon / dusk / midnight ×
       x-ray on/off × each of the 6 composters, recorded in `tasks/visual-overhaul-playtest.md`.
@@ -588,6 +611,12 @@
           x-rayed, buried↔tier3 while x-rayed), and the shadow **direction must track the sun**
           across the day. A solid slab beside a see-through bin means the mesh-level `castShadow`
           stash did not fire.
+- [ ] **V20 candidate — `disposeScene` leaves scene-root geometry/materials unfreed.** It frees
+      the composter group and the renderer but not the wall / floor / soil / sun-patch / sky-backdrop
+      **geometries and materials** (V15 closed it for its three textures; V17's backdrop added one
+      more unfreed root mesh). Not a leak in the single-page happy path — the scene lives for the
+      page's lifetime — but `disposeScene`'s own JSDoc claims a tidy teardown that is now further
+      from true. Fold into V20's audit sweep, or leave with eyes open.
 - [ ] Decide whether C-0003 warrants a formal `.harn/devy/changes/C-0003-*/spec.md`. The decisions
       are captured in the plan's "Decisions locked" table; a spec was not written because this
       started as a design interview rather than a feature request.
@@ -601,18 +630,18 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phases A–C approved — Phase D code-complete (V14–V19 landed, matrix owed)
+## Status: Phases A–D approved — Phase E (release) is all that remains
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
 V8, V9, V10, V11 landed and **CPV2 approved 2026-07-20**.
 V12, V13 landed and **CPV3 approved 2026-07-20**. Suite 289 → **338 green**.
 
-**All of Phase D's code has landed — V14, V15, V16, V17, V18, V19 —**
-suite **338 → 398 green**. What is NOT done is **CPV4**: the 3D visual
-matrix has not been walked, and the shadow perf-gate decision has not been
-made. Both need a real browser and are the maintainer's; the code exists
-to make them answerable, not to pre-empt them. See the "Owed before CPV4"
-open item, which now covers all six Phase-D tasks in one walk.
+**All of Phase D has landed and CPV4 is approved (2026-07-20)** — V14, V15,
+V16, V17, V18, V19, suite **338 → 398 green**. The maintainer walked the 3D
+matrix and found it fine; the shadow perf gate resolved to **keep shadows
+on** (`SHADOWS_DEFAULT` stays `true`). The only C-0003 work left is **Phase
+E: V20** (audits + spec §6 checklist + deploy dry run) and **CPV5** (ship
+gate). V20 is now unblocked — its deps were V13 (done) and V19 (done).
 
 Landed in this session, in dependency order:
 - **V15** (surfaces + dispose leak) — 344 → 365, three commits.
@@ -626,7 +655,7 @@ Landed in this session, in dependency order:
   below is still open but did not bite, since V18 adds nothing to the root.
 - **V19** (shadow maps) — 388 → 398. Made the perf gate answerable
   (built the readout, added `?shadows=`, parented `sunLight.target`, fixed
-  the "at 1×" axis) without making the call.
+  the "at 1×" axis); the call was then made at CPV4 — **shadows kept on**.
 
 **Still open, carried forward from V15's note:** `disposeScene` frees the
 composter group and the renderer but NOT the scene-root wall / floor / soil
