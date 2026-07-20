@@ -109,6 +109,20 @@ function addCyl(group, rTop, rBottom, height, pos, color, segments = 8) {
   return mesh;
 }
 
+/**
+ * Tag the mesh (or meshes) that physically ENCLOSE the x-ray cavity — the body
+ * shell, not the lids, rims, legs or trim that only extend the silhouette.
+ *
+ * This is what `tests/composter3d.test.js` measures the cavity against. Checking
+ * against the group's overall bounding box is near-vacuous: the lid and vent
+ * stack alone keep it large enough to satisfy almost any drift. Tagging the
+ * enclosing volume explicitly is what makes the containment test able to fail.
+ * @param {...Mesh} meshes
+ */
+function markBody(...meshes) {
+  for (const mesh of meshes) mesh.userData.shellBody = true;
+}
+
 /** Four corner legs inside a [width × depth] footprint. */
 function addLegs(group, width, depth, legH, legW, color) {
   const xs = [-width / 2 + legW * 0.7, width / 2 - legW * 0.7];
@@ -127,19 +141,63 @@ function baseDims(capacity) {
   return { t, width: 1.1 + 1.2 * t, depth: 0.9 + 0.8 * t };
 }
 
+/**
+ * Structural dimensions for one model, in the composter group's LOCAL frame.
+ *
+ * SINGLE SOURCE OF TRUTH for the shell's load-bearing measurements: the builder
+ * below and `composterCavity` both read this, so the x-ray fill volumes cannot
+ * drift away from the silhouette they are supposed to sit inside. These numbers
+ * used to be written out twice — once in each builder and again in the matching
+ * `composterCavity` branch — linked only by `// see buildElectric` comments and
+ * guarded by no test at all, so any silhouette edit silently misplaced the x-ray
+ * internals. Change a dimension here and both sides follow.
+ * @param {{kind: string, trays?: number}} spec entry from MODEL_SPEC
+ * @param {{width: number, depth: number}} dims footprint from baseDims
+ * @returns {object|null} kind-specific structural dims, or null for an unknown kind
+ */
+function structureOf(spec, dims) {
+  const w = dims.width;
+  const d = dims.depth;
+
+  switch (spec.kind) {
+    case 'electric': {
+      const footH = 0.1;
+      const bodyH = 1.5;
+      return { w, d, zc: d / 2, footH, bodyH, topY: footH + bodyH };
+    }
+    case 'tray': {
+      const legH = 0.34;
+      const baseH = 0.42;
+      const trayH = 0.42;
+      const trays = spec.trays;
+      const trayBottom = legH + baseH;
+      return { w, d, zc: d / 2, legH, baseH, trayH, trays, trayBottom, lidY: trayBottom + trays * trayH };
+    }
+    case 'buried': {
+      // `top` is where the sunken drum breaks the ground plane; the body hangs
+      // `underH` below it, which is why the cavity is mostly at negative y.
+      const r = w * 0.45;
+      return { r, zc: r, underH: 1.5, top: 0.06 };
+    }
+    case 'eco': {
+      const r = w * 0.5;
+      const legH = 0.16;
+      const bodyH = 1.7;
+      return { r, zc: r, legH, bodyH, topY: legH + bodyH };
+    }
+    default:
+      return null;
+  }
+}
+
 // --- Model builders ----------------------------------------------------------
 
 /** Heated appliance: distinct machine silhouette (panel, light, vent stack). */
-function buildElectric(group, dims) {
-  const w = dims.width;
-  const d = dims.depth;
-  const zc = d / 2;
-  const footH = 0.1;
-  const bodyH = 1.5;
-  const topY = footH + bodyH;
+function buildElectric(group, s) {
+  const { w, d, zc, footH, bodyH, topY } = s;
 
   addLegs(group, w, d, footH, 0.14, APPLIANCE_DARK);
-  addBox(group, [w, bodyH, d], [0, footH + bodyH / 2, zc], APPLIANCE_BODY);
+  markBody(addBox(group, [w, bodyH, d], [0, footH + bodyH / 2, zc], APPLIANCE_BODY));
 
   // Front control panel + a glowing power light.
   addBox(group, [w * 0.7, 0.42, 0.05], [0, footH + bodyH * 0.7, d + 0.02], APPLIANCE_DARK);
@@ -152,45 +210,35 @@ function buildElectric(group, dims) {
 }
 
 /** Stacked-tray composter: `spec.trays` visible tiers over a collector + spigot. */
-function buildTrayStack(group, dims, spec) {
-  const w = dims.width;
-  const d = dims.depth;
-  const zc = d / 2;
-  const legH = 0.34;
-  const baseH = 0.42;
-  const trayH = 0.42;
-  const trays = spec.trays;
+function buildTrayStack(group, s, spec) {
+  const { w, d, zc, legH, baseH, trayH, trays, trayBottom, lidY } = s;
 
   addLegs(group, w, d, legH, 0.12, RIM_DARK);
 
   // Collector base (holds leachate) with a front drain spigot.
-  addBox(group, [w * 0.9, baseH, d * 0.92], [0, legH + baseH / 2, zc], spec.body);
+  markBody(addBox(group, [w * 0.9, baseH, d * 0.92], [0, legH + baseH / 2, zc], spec.body));
   const spigot = addCyl(group, 0.05, 0.05, 0.2, [0, legH + 0.12, d + 0.03], SPIGOT, 6);
   spigot.rotation.x = Math.PI / 2;
 
   // The stack: one box per tray, each capped by a darker rim line so the tier
   // count is unmistakable.
-  const trayBottom = legH + baseH;
   for (let i = 0; i < trays; i += 1) {
     const cy = trayBottom + i * trayH + trayH / 2;
-    addBox(group, [w, trayH, d], [0, cy, zc], spec.body);
+    markBody(addBox(group, [w, trayH, d], [0, cy, zc], spec.body));
     addBox(group, [w + 0.05, 0.07, d + 0.05], [0, trayBottom + (i + 1) * trayH - 0.02, zc], RIM_DARK);
   }
 
   // Lid + handle.
-  const lidY = trayBottom + trays * trayH;
   addBox(group, [w + 0.08, 0.16, d + 0.08], [0, lidY + 0.08, zc], RIM_DARK);
   addBox(group, [w * 0.3, 0.08, 0.12], [0, lidY + 0.2, zc], RIM_DARK);
 }
 
 /** In-ground bin: the drum sinks below y=0; only a collar + domed lid show. */
-function buildBuried(group, dims) {
-  const r = dims.width * 0.45;
-  const zc = r;
-  const underH = 1.5;
+function buildBuried(group, s) {
+  const { r, zc, underH, top } = s;
 
   // Drum, mostly below ground (top just breaks the surface).
-  addCyl(group, r, r, underH, [0, 0.06 - underH / 2, zc], BURIED_BODY, 8);
+  markBody(addCyl(group, r, r, underH, [0, top - underH / 2, zc], BURIED_BODY, 8));
   // Raised collar at the surface + a domed (truncated-cone) lid + handle.
   addCyl(group, r * 1.06, r * 1.06, 0.18, [0, 0.09, zc], BURIED_RIM, 8);
   addCyl(group, r * 0.55, r * 1.0, 0.24, [0, 0.3, zc], BURIED_LID, 8);
@@ -198,19 +246,15 @@ function buildBuried(group, dims) {
 }
 
 /** Largest model: a peaked barrel/drum on feet with a front access hatch. */
-function buildEco(group, dims) {
-  const r = dims.width * 0.5;
-  const zc = r;
-  const legH = 0.16;
-  const bodyH = 1.7;
-  const topY = legH + bodyH;
+function buildEco(group, s) {
+  const { r, zc, legH, bodyH, topY } = s;
 
   // Feet around the drum base.
   const xs = [-r * 0.6, r * 0.6];
   const zs = [r - r * 0.6, r + r * 0.6];
   for (const x of xs) for (const z of zs) addBox(group, [0.16, legH, 0.16], [x, legH / 2, z], ECO_DARK);
 
-  addCyl(group, r, r, bodyH, [0, legH + bodyH / 2, zc], ECO_BODY, 8);
+  markBody(addCyl(group, r, r, bodyH, [0, legH + bodyH / 2, zc], ECO_BODY, 8));
   // Front hatch door.
   addBox(group, [r * 0.8, bodyH * 0.4, 0.1], [0, legH + bodyH * 0.4, zc + r * 0.86], ECO_DARK);
   // Lid rim + a peaked cone lid (the gabled top is the eco's tell).
@@ -232,22 +276,24 @@ export function buildComposterMesh(composterId) {
   const spec = composterId ? MODEL_SPEC[composterId] : null;
   if (!composter || !spec) return null;
 
+  const s = structureOf(spec, baseDims(composter.capacity));
+  if (!s) return null;
+
   const group = new Group();
   group.name = `composter:${composterId}`;
-  const dims = baseDims(composter.capacity);
 
   switch (spec.kind) {
     case 'electric':
-      buildElectric(group, dims);
+      buildElectric(group, s);
       break;
     case 'tray':
-      buildTrayStack(group, dims, spec);
+      buildTrayStack(group, s, spec);
       break;
     case 'buried':
-      buildBuried(group, dims);
+      buildBuried(group, s);
       break;
     case 'eco':
-      buildEco(group, dims);
+      buildEco(group, s);
       break;
     default:
       return null;
@@ -277,38 +323,22 @@ export function composterCavity(composterId) {
   const spec = composterId ? MODEL_SPEC[composterId] : null;
   if (!composter || !spec) return null;
 
-  const dims = baseDims(composter.capacity);
-  const w = dims.width;
-  const d = dims.depth;
+  const s = structureOf(spec, baseDims(composter.capacity));
+  if (!s) return null;
 
   switch (spec.kind) {
-    case 'electric': {
-      // Body: footH..footH+bodyH (see buildElectric).
-      const footH = 0.1;
-      const bodyH = 1.5;
-      return { yMin: footH + 0.12, yMax: footH + bodyH - 0.12, width: w * 0.82, depth: d * 0.82, z: d / 2 };
-    }
-    case 'tray': {
-      // Collector base up through the last tray (see buildTrayStack).
-      const legH = 0.34;
-      const baseH = 0.42;
-      const trayH = 0.42;
-      const top = legH + baseH + spec.trays * trayH;
-      return { yMin: legH + 0.04, yMax: top - 0.05, width: w * 0.82, depth: d * 0.82, z: d / 2 };
-    }
-    case 'buried': {
-      // Sunken drum, mostly below y=0 (see buildBuried).
-      const r = w * 0.45;
-      const underH = 1.5;
-      return { yMin: 0.06 - underH + 0.12, yMax: 0.04, width: r * 1.7, depth: r * 1.7, z: r };
-    }
-    case 'eco': {
-      // Drum on short feet (see buildEco).
-      const r = w * 0.5;
-      const legH = 0.16;
-      const bodyH = 1.7;
-      return { yMin: legH + 0.12, yMax: legH + bodyH - 0.12, width: r * 1.7, depth: r * 1.7, z: r };
-    }
+    case 'electric':
+      // Inset into the appliance body.
+      return { yMin: s.footH + 0.12, yMax: s.topY - 0.12, width: s.w * 0.82, depth: s.d * 0.82, z: s.zc };
+    case 'tray':
+      // Collector base up through the last tray.
+      return { yMin: s.legH + 0.04, yMax: s.lidY - 0.05, width: s.w * 0.82, depth: s.d * 0.82, z: s.zc };
+    case 'buried':
+      // Sunken drum, mostly below y=0.
+      return { yMin: s.top - s.underH + 0.12, yMax: 0.04, width: s.r * 1.7, depth: s.r * 1.7, z: s.zc };
+    case 'eco':
+      // Drum on short feet.
+      return { yMin: s.legH + 0.12, yMax: s.topY - 0.12, width: s.r * 1.7, depth: s.r * 1.7, z: s.zc };
     default:
       return null;
   }

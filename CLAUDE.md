@@ -32,7 +32,7 @@ Three layers with a **hard boundary**:
 - `js/ui/` — DOM screens/controls (home, shop, setup, hud, actions, speed). Reads sim state.
 - `js/render/` — Three.js layer (scene with day/night lighting, per-model composter meshes, x-ray view). Reads sim state.
 
-Only `js/main.js` orchestrates between layers. Tests (`tests/`, using `node:test` + `node:assert`) cover `js/sim/*` only.
+Only `js/main.js` orchestrates between layers. Tests (`tests/`, using `node:test` + `node:assert`) cover `js/sim/*`, `js/storage.js` and the i18n catalogs. One deliberate exception: `tests/composter3d.test.js` covers `js/render/composter3d.js`, because its mesh builders and `composterCavity` share structural dimensions whose drift is otherwise silent (the x-ray internals just render outside the shell). Three.js core imports fine under Node — geometry needs no WebGL — so render-layer *geometry* is testable; anything needing a renderer, a canvas or the DOM is not.
 
 Cross-cutting modules: `js/strings.js` (ALL pt-BR user-facing strings — single source for future i18n) and `js/storage.js` (localStorage save/load, versioned save format `{ v: 1, ... }` with migrations).
 
