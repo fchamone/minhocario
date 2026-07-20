@@ -178,6 +178,79 @@ export const DAY_CYCLE = [
 // left standing next to the curve it says is unnecessary.
 const TONE_MAPPING_EXPOSURE = 1.0;
 
+// --- Gradient sky backdrop (V17) ---------------------------------------------
+// A backdrop mesh with per-vertex colours lerped each frame — exactly the
+// technique sunPatch already uses, which is why it costs a few dozen vertices and
+// no new concepts. Deliberately NOT a ShaderMaterial or a PMREM environment map:
+// the camera is fixed and non-orbiting, so an environment map would be almost
+// entirely wasted, and a custom shader is a maintenance surface this does not need.
+//
+// `scene.background` keeps tracking the sky colour underneath it, as the fallback
+// for any aspect ratio wide enough to see past the plane's edges.
+
+/** Camera placement, lifted out of initScene so the backdrop can derive from it. */
+const CAMERA_Y = 3.2;
+const CAMERA_Z = 9;
+/** Distance behind the wall. Inside `fog.near` (22), and the material opts out anyway. */
+const BACKDROP_Z = -12;
+/** Generously oversized: it only has to cover the frustum at any sane aspect. */
+const BACKDROP_WIDTH = 70;
+const BACKDROP_HEIGHT = 44;
+const BACKDROP_Y = 12;
+/** Vertical segments. Enough that the clamped gradient reads smooth, not banded. */
+const BACKDROP_ROWS = 32;
+
+/**
+ * Peak deviation from the authored sky colour, as a MULTIPLIER in linear space:
+ * the horizon reads `sky * 1.15` and the zenith `sky * 0.85`.
+ *
+ * Multiplicative rather than additive because Three works in linear space, where
+ * the night keyframes are tiny (0x1c → 0.011 linear). A fixed additive delta that
+ * looked reasonable at noon would clamp to black across the whole night sky and
+ * the gradient would simply vanish for half the day — silently, since nothing
+ * about a flat night sky looks broken.
+ */
+const SKY_GRADIENT = 0.15;
+
+/**
+ * World Y, at the backdrop's depth, where the top edge of the garage wall
+ * projects from the camera — i.e. the lowest sky the player can actually see.
+ *
+ * The gradient is anchored HERE, not at the plane's centre, and that is the whole
+ * design. The wall occludes the bottom of the backdrop, so a gradient centred on
+ * the plane would put its neutral point out of sight and every visible pixel of
+ * sky would read darker than the flat colour it replaces — a global sky change
+ * dressed up as a gradient, and one more variable for a tone-curve review that is
+ * already owed. Anchored here, the first sky above the wall is exactly today's
+ * authored colour and it deepens from there, so the change IS the gradient.
+ *
+ * Derived rather than typed, so it follows the camera and the wall.
+ * @returns {number} world Y at BACKDROP_Z
+ */
+export function skyNeutralY() {
+  const toWall = CAMERA_Z; // camera z → wall plane at z=0
+  const toBackdrop = CAMERA_Z - BACKDROP_Z;
+  return CAMERA_Y + (WALL_HEIGHT - CAMERA_Y) * (toBackdrop / toWall);
+}
+
+/**
+ * How far a point on the backdrop deviates from the authored sky colour: +1 at
+ * the horizon end of the ramp, 0 at {@link skyNeutralY}, -1 at the zenith end.
+ * Smoothstepped so the clamp at each end does not read as a crease.
+ * @param {number} worldY
+ * @returns {number} -1..1
+ */
+export function skyGradientFactor(worldY) {
+  const span = 9; // world units from neutral to full zenith depth
+  const t = Math.min(1, Math.max(-1, (worldY - skyNeutralY()) / span));
+  const s = Math.abs(t);
+  const eased = s * s * (3 - 2 * s);
+  // Branch rather than `-Math.sign(t) * eased`, which yields -0 exactly at the
+  // anchor. Harmless in the shader, but a helper whose neutral value is not
+  // strictly 0 is a wart that its own test trips over.
+  return t > 0 ? -eased : eased;
+}
+
 // Directional-light arc: the "sun" rises on the left, peaks overhead at noon, and
 // sets on the right — matching the sun patch, which sweeps wallPosition 0 → 1.
 const SUN_ARC_X = 7; // horizontal travel each side of centre (world units)
@@ -301,6 +374,14 @@ let floorMesh = null;
  * @type {import('three').Mesh|null}
  */
 let soilMesh = null;
+/** @type {import('three').BufferAttribute|null} the sky backdrop's per-vertex colours. */
+let skyColors = null;
+/**
+ * Precomputed gradient factor per backdrop vertex (derived once from its world Y),
+ * so per-frame updates only scale the live sky colour and write it out.
+ * @type {Float32Array|null}
+ */
+let skyFactors = null;
 /** @type {import('three').BufferAttribute|null} the sun patch's per-vertex colours. */
 let sunPatchColors = null;
 /**
@@ -400,6 +481,41 @@ function buildScene(target) {
   // them toward the (at night, near-black) sky colour. Starting at 22 keeps the
   // depth cue for the far edges while leaving the composter unfogged.
   target.fog = new Fog(SKY_COLOR, 22, 45);
+
+  // Sky backdrop (V17): behind the wall, filling the frustum. Colours start black
+  // and applyDayNight fills them per frame, exactly as the sun patch does.
+  const skyGeom = new PlaneGeometry(BACKDROP_WIDTH, BACKDROP_HEIGHT, 1, BACKDROP_ROWS);
+  const skyPos = skyGeom.getAttribute('position');
+  skyFactors = new Float32Array(skyPos.count);
+  for (let i = 0; i < skyPos.count; i += 1) {
+    // Plane vertices are in the mesh's local frame; the mesh sits at BACKDROP_Y.
+    skyFactors[i] = skyGradientFactor(skyPos.getY(i) + BACKDROP_Y);
+  }
+  const skyColorAttr = new Float32BufferAttribute(new Float32Array(skyPos.count * 3), 3);
+  skyColorAttr.setUsage(DynamicDrawUsage);
+  skyGeom.setAttribute('color', skyColorAttr);
+  skyColors = skyColorAttr;
+
+  const backdrop = new Mesh(
+    skyGeom,
+    new MeshBasicMaterial({
+      vertexColors: true,
+      // No fog: the plane's corners sit ~42 units out, well inside fog's 22..45
+      // range, so fogging would wash the gradient back toward flat at the edges —
+      // dissolving the one thing this mesh exists to show.
+      fog: false,
+      // No tone mapping, and this one is load-bearing. `scene.background` as a
+      // plain Color is written as a clear colour and is NOT tone-mapped, so the
+      // sky the player sees today is the authored value. A tone-mapped backdrop
+      // would push those same values through ACES's midtone LIFT (0.2 → 0.30) and
+      // the whole sky would jump brighter — a global change that has nothing to
+      // do with adding a gradient, arriving in the same commit as one.
+      toneMapped: false,
+    }),
+  );
+  backdrop.position.set(0, BACKDROP_Y, BACKDROP_Z);
+  backdrop.name = 'skyBackdrop';
+  target.add(backdrop);
 
   // Garage wall: a vertical plane at z=0, its base on the ground, facing +z
   // (toward the camera). A thin box would also work; a plane keeps it cheap.
@@ -687,6 +803,25 @@ function updateSunPatch(hour) {
 }
 
 /**
+ * Repaint the sky backdrop from the live sky colour: each vertex is that colour
+ * scaled by `1 + SKY_GRADIENT * factor`, so the horizon end lifts and the zenith
+ * end deepens around the authored value. Runs after `_skyColor` is resolved for
+ * the frame, so the gradient always tracks the day/night table rather than
+ * carrying a second, independently-authored palette that could drift from it.
+ */
+function updateSkyBackdrop() {
+  if (!skyColors || !skyFactors) return;
+  const colors = skyColors.array;
+  for (let i = 0; i < skyFactors.length; i += 1) {
+    const scale = 1 + SKY_GRADIENT * skyFactors[i];
+    colors[i * 3] = _skyColor.r * scale;
+    colors[i * 3 + 1] = _skyColor.g * scale;
+    colors[i * 3 + 2] = _skyColor.b * scale;
+  }
+  skyColors.needsUpdate = true;
+}
+
+/**
  * Drive the whole day/night look from the continuous game hour: sky/fog colour,
  * the three light intensities, the sun's colour + direction, and the sun patch.
  * Called once per rendered frame so the transition is smooth between discrete
@@ -715,6 +850,7 @@ function applyDayNight(hour) {
     ambientLight.intensity = lerp(k0.ambI, k1.ambI, t);
   }
 
+  updateSkyBackdrop();
   updateSunPatch(hour);
 }
 
@@ -995,6 +1131,8 @@ export function disposeScene() {
   // left to renderer.dispose(), which frees the renderer's own resources and not
   // textures it happens to have uploaded.
   disposeSurfaceTextures();
+  skyColors = null;
+  skyFactors = null;
   sunPatchColors = null;
   sunPatchWallPos = null;
   renderer?.dispose?.();

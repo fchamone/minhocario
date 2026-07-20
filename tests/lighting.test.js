@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DAY_CYCLE } from '../js/render/scene.js';
+import { DAY_CYCLE, WALL_HEIGHT, skyNeutralY, skyGradientFactor } from '../js/render/scene.js';
 
 /**
  * Guards over the day/night lighting table and the x-ray palette's tone-mapping
@@ -233,4 +233,76 @@ test('the material-literal walker actually detects a violation', () => {
   // Nested braces must not end the literal early.
   const nested = 'new MeshStandardMaterial({ a: { b: 1 }, emissive: 2 })';
   assert.match(standardMaterialLiterals(nested)[0], /emissive/);
+});
+
+// --- Gradient sky backdrop (V17) ---------------------------------------------
+// The backdrop derives its whole palette from DAY_CYCLE's `sky` column by
+// scaling it, so it cannot carry a second set of authored colours that drift
+// from the first. What CAN go wrong is arithmetic, and all of it silently.
+
+test('the sky gradient is anchored where the wall top projects, not at the plane centre', () => {
+  // If the neutral point drifts off the wall line, every visible pixel of sky
+  // shifts away from its authored colour — a global sky change wearing a
+  // gradient's clothes. Recomputed here from the scene's own geometry contract.
+  const CAMERA_Y = 3.2;
+  const CAMERA_Z = 9;
+  const BACKDROP_Z = -12;
+  const expected = CAMERA_Y + (WALL_HEIGHT - CAMERA_Y) * ((CAMERA_Z - BACKDROP_Z) / CAMERA_Z);
+
+  assert.ok(
+    Math.abs(skyNeutralY() - expected) < 1e-9,
+    `sky neutral height ${skyNeutralY()} is not the wall-top projection ${expected}`,
+  );
+  assert.equal(skyGradientFactor(skyNeutralY()), 0, 'the anchor must be exactly neutral');
+});
+
+test('the sky gradient deepens upward and lifts downward, and saturates', () => {
+  const neutral = skyNeutralY();
+  assert.ok(skyGradientFactor(neutral + 4) < 0, 'sky must DEEPEN toward the zenith');
+  assert.ok(skyGradientFactor(neutral - 4) > 0, 'sky must LIFT toward the horizon');
+
+  // Monotonic across the visible band, so no row reverses the ramp.
+  for (let y = neutral; y < neutral + 12; y += 0.5) {
+    assert.ok(
+      skyGradientFactor(y) >= skyGradientFactor(y + 0.5) - 1e-12,
+      `gradient reverses direction at y=${y}`,
+    );
+  }
+  // Clamped, so the oversized plane's far corners cannot run past the palette.
+  assert.equal(skyGradientFactor(neutral + 400), -1, 'zenith end must saturate at -1');
+  assert.equal(skyGradientFactor(neutral - 400), 1, 'horizon end must saturate at +1');
+});
+
+test('no sky keyframe clips when scaled to the horizon end of the gradient', () => {
+  // The multiplicative form is what keeps the gradient alive at night, but it
+  // means a bright enough keyframe would push the horizon past 1.0 and clip flat
+  // — losing the gradient exactly where the sky is brightest, with nothing to
+  // show for it. Checked in LINEAR space, which is where Three does the scaling.
+  const SKY_GRADIENT = 0.15;
+  const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+
+  for (const k of DAY_CYCLE) {
+    for (const shift of [16, 8, 0]) {
+      const channel = toLinear(((k.sky >> shift) & 0xff) / 255);
+      const horizon = channel * (1 + SKY_GRADIENT);
+      assert.ok(
+        horizon <= 1,
+        `h:${k.h} sky 0x${k.sky.toString(16)} channel ${channel.toFixed(3)} scales to ` +
+          `${horizon.toFixed(3)} at the horizon — it clips, so the gradient flattens there.`,
+      );
+    }
+  }
+});
+
+test('the sky backdrop opts out of tone mapping and fog', () => {
+  // Both silent, both global. `scene.background` is a clear colour and is NOT
+  // tone-mapped, so a tone-mapped backdrop would push the whole sky through
+  // ACES's midtone lift and brighten it — a change with nothing to do with the
+  // gradient, arriving in the same commit as one. Fog would wash the plane's
+  // corners back toward flat, dissolving what it exists to show.
+  const src = read('../js/render/scene.js');
+  const block = src.slice(src.indexOf('const backdrop = new Mesh('), src.indexOf("backdrop.name"));
+  assert.match(block, /toneMapped:\s*false/, 'the sky backdrop must not be tone-mapped');
+  assert.match(block, /fog:\s*false/, 'the sky backdrop must not be fogged');
+  assert.match(block, /vertexColors:\s*true/, 'the gradient is carried by vertex colours');
 });
