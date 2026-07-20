@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   SPEEDS,
   DEFAULT_SPEED,
@@ -24,6 +25,38 @@ test('isValidSpeed accepts catalog speeds and rejects everything else', () => {
   for (const s of SPEEDS) assert.equal(isValidSpeed(s), true);
   for (const bad of [0, -1, 2, 10, 'fast', null, undefined, NaN]) {
     assert.equal(isValidSpeed(bad), false);
+  }
+});
+
+// --- the bar's buttons agree with the catalog --------------------------------
+// initSpeed reads Number(btn.dataset.speed) and bails on anything isSelectableSpeed
+// rejects. That is the right guard at runtime and a silent one in practice: a
+// typo'd or retired data-speed leaves a button that looks live, highlights
+// nothing and does nothing, with no error anywhere. The bar is hand-written in
+// index.html, so nothing else connects the two lists.
+
+test('every [data-speed] button in index.html is a speed the control accepts', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const declared = [...html.matchAll(/\bdata-speed="([^"]*)"/g)].map((m) => m[1]);
+
+  assert.equal(
+    declared.length,
+    SPEEDS.length + 1,
+    'the bar should offer the five spec multipliers plus pause',
+  );
+
+  for (const raw of declared) {
+    assert.ok(
+      isSelectableSpeed(Number(raw)),
+      `data-speed="${raw}" is neither a catalog multiplier nor pause — initSpeed ` +
+        'will ignore the click and the button will look live but do nothing',
+    );
+  }
+
+  // ...and the other direction: every multiplier is actually reachable.
+  const offered = new Set(declared.map(Number));
+  for (const speed of [...SPEEDS, PAUSED]) {
+    assert.ok(offered.has(speed), `${speed}× is in the catalog but has no button`);
   }
 });
 

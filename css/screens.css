@@ -221,20 +221,53 @@
     'speed   speed';
 }
 
+/* An instrument strip: hairline-divided cells rather than free-floating chips.
+   The rules are what make it read as one panel of six gauges instead of six
+   unrelated labels, and they cost nothing but a border. */
 .hud {
   grid-area: hud;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
+  padding: 0 var(--space-2);
   background: var(--surface-1);
   border-bottom: 1px solid var(--surface-2);
 }
 /* Same clearance deal as `.screen` — only dev mode has a bar to clear, and 44px
-   is measured off that bar rather than picked from the scale. */
+   is measured off that bar rather than picked from the scale. Vertical padding
+   lives on the cells, so this stays a pure top offset. */
 body.dev-mode .hud { padding-top: 44px; }
-.hud__item { color: var(--ink-dim); }
-.hud__item span:last-child { color: var(--ink); font-weight: 600; }
+.hud__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  color: var(--ink-dim);
+  border-right: 1px solid var(--surface-2);
+}
+.hud__item:last-child { border-right: 0; }
+.hud__label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+/* Carried by every field updateHud writes — tests/markup.test.js derives that
+   list from hud.js and fails if one is missing the class.
+
+   `min-width` reserves four digits so a score crossing 99 -> 100 does not shove
+   every cell to its right. Tabular numerals alone only stop digits from
+   shifting WITHIN a number; the strip still re-flowed each time one grew. Past
+   four digits it re-flows once more, which is a rare event rather than the
+   per-tick twitch this exists to stop. */
+.hud__value {
+  min-width: 4ch;
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* The nickname is set once and never ticks, so it needs neither the reserved
+   width nor the alignment that reservation implies. */
+.hud__item--player .hud__value { min-width: 0; text-align: left; }
 
 .stage {
   grid-area: stage;
@@ -261,17 +294,32 @@ body.dev-mode .hud { padding-top: 44px; }
 .actions__slider { display: grid; gap: var(--space-1); color: var(--ink-dim); font-size: var(--text-sm); }
 .actions__slider-head { display: flex; align-items: center; gap: var(--space-2); }
 
+/* The clock control, matching the HUD it sits opposite: a tracked micro-label
+   and a segmented ladder of multipliers. */
 .speed {
   grid-area: speed;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   background: var(--surface-1);
   border-top: 1px solid var(--surface-2);
+  color: var(--ink-dim);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
 }
-.speed__buttons { display: flex; gap: var(--space-2); }
-.speed__buttons button { padding: var(--space-2) var(--space-3); }
+.speed__buttons { display: flex; gap: var(--space-1); }
+/* The multipliers are numbers, not copy: they opt back out of the strip's
+   uppercasing and tracking, and take tabular figures so 0.25x/0.5x/1x line up
+   as a ladder rather than drifting with their digit widths. */
+.speed__buttons button {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: normal;
+}
 
 .actions__feedback {
   margin: var(--space-1) 0 0;

@@ -152,6 +152,15 @@ Plus `--leading-tight` 1.2, `--leading-body` 1.4, `--tracking-caps` .04em.
 **Every numeric readout uses `font-variant-numeric: tabular-nums`.** Values change
 every tick; proportional digits make the whole panel jitter as they do.
 
+> **Tabular numerals are only half of "stops jittering".** They fix the width of
+> each digit, so a value never reflows *within itself* — but a number that gains
+> a digit still gets wider, and in a flex row that shoves everything after it.
+> The HUD score crossing 99 → 100 moved four cells. `.hud__value` therefore also
+> reserves `min-width: 4ch`, which absorbs the common growth; past four digits
+> the strip re-flows once more, which is a rare event rather than a per-tick
+> twitch. Anywhere a readout sits in a row with neighbours, the reservation is
+> part of the requirement, not a refinement of it.
+
 ---
 
 ## Space, radius, elevation
@@ -240,7 +249,12 @@ Rules:
    > `currentColor` inheritance — the actual point of the original rule — is
    > unchanged.
 
-4. **Parametric glyphs are not sprite symbols.** The portion chooser's volume
+4. **A glyph that shows in more than one state must be neutral about the state.**
+   The HUD's `ico-status` is a dial, not a tick or a warning triangle: the same
+   symbol shows for "tudo certo" and for a dead colony, so the label and its
+   colour carry the state. An icon that agreed with only one of the two would be
+   worse than no icon at all — it would be actively wrong half the time.
+5. **Parametric glyphs are not sprite symbols.** The portion chooser's volume
    glyph and the queue's decomposition ring are drawn from a number, so they are
    built element-by-element in `js/ui/icons.js` and coloured from CSS (their
    colours *have* to change with the value, so they cannot live in the symbol).

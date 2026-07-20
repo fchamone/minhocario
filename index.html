@@ -109,6 +109,57 @@
         </g>
       </symbol>
 
+      <!-- --- HUD: one glyph per instrument on the top strip ---
+           Neutral by design. `ico-status` is a dial rather than a tick or a
+           warning triangle, because the same glyph shows for "tudo certo" and
+           for a dead colony — the label and its colour carry the state, and an
+           icon that contradicted them would be worse than none. -->
+      <symbol id="ico-player" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8.5" r="3.5"/>
+          <path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/>
+        </g>
+      </symbol>
+      <symbol id="ico-score" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3.5 17.5 9 12l3.5 3.5L20.5 7"/>
+          <path d="M16 7h4.5v4.5"/>
+        </g>
+      </symbol>
+      <symbol id="ico-money" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="8.5"/>
+          <path d="M12 7v10"/>
+          <path d="M14.6 9.8c-.6-.8-5.2-1.3-5.2 1.3 0 2.4 5.2.7 5.2 3.1 0 2.3-4.6 1.8-5.2 1"/>
+        </g>
+      </symbol>
+      <symbol id="ico-day" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 3v2"/>
+          <path d="M12 19v2"/>
+          <path d="M3 12h2"/>
+          <path d="M19 12h2"/>
+          <path d="m5.9 5.9 1.4 1.4"/>
+          <path d="m16.7 16.7 1.4 1.4"/>
+          <path d="m18.1 5.9-1.4 1.4"/>
+          <path d="m7.3 16.7-1.4 1.4"/>
+        </g>
+      </symbol>
+      <symbol id="ico-time" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="8.5"/>
+          <path d="M12 7.2V12l3.2 2"/>
+        </g>
+      </symbol>
+      <symbol id="ico-status" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3.8 17.5a8.2 8.2 0 0 1 16.4 0"/>
+          <path d="M12 17.5 15.6 11.8"/>
+          <circle cx="12" cy="17.5" r="1"/>
+        </g>
+      </symbol>
+
       <!-- --- Foods (catalog order) ---
            Frame, viewBox and stroke weight are IDENTICAL across all 14 by rule.
            Do not "improve" one icon's weight or radius in isolation. -->
@@ -341,15 +392,50 @@
 
     <!-- GAME -->
     <section id="screen-game" class="screen screen--game" data-screen="game" hidden>
+      <!-- An instrument strip, not a row of chips: one glyph, one tracked
+           micro-label and one tabular value per readout, divided by hairlines.
+           The ":" text nodes are gone — a bare text node in a flex row becomes
+           its own flex item, so each colon floated between two gaps.
+
+           Every value written by updateHud carries `.hud__value`, which is what
+           gives it tabular numerals; tests/markup.test.js derives that list from
+           hud.js itself, so a seventh readout cannot be added without one.
+
+           Icons are SIBLINGS of the [data-string] spans (see the note on the
+           actions panel below) — applyStrings() would otherwise wipe them on
+           every language switch. -->
       <header class="hud" id="hud">
         <!-- Player identity: no `data-string` — the nickname is player data, not
              translatable copy (it stays pt-BR-flavored in every locale). -->
-        <span class="hud__item hud__item--player"><span id="hud-nickname">—</span></span>
-        <span class="hud__item"><span data-string="game.hudScore"></span>: <span id="hud-score">0</span></span>
-        <span class="hud__item"><span data-string="game.hudMoney"></span>: <span id="hud-money">0</span></span>
-        <span class="hud__item"><span data-string="game.hudDay"></span>: <span id="hud-day">1</span></span>
-        <span class="hud__item"><span data-string="game.hudTime"></span>: <span id="hud-time">00h</span></span>
-        <span class="hud__item"><span data-string="game.hudStatus"></span>: <span id="hud-status" data-string="game.statusOk"></span></span>
+        <span class="hud__item hud__item--player">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-player"/></svg>
+          <span class="hud__value" id="hud-nickname">—</span>
+        </span>
+        <span class="hud__item">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-score"/></svg>
+          <span class="hud__label" data-string="game.hudScore"></span>
+          <span class="hud__value" id="hud-score">0</span>
+        </span>
+        <span class="hud__item">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-money"/></svg>
+          <span class="hud__label" data-string="game.hudMoney"></span>
+          <span class="hud__value" id="hud-money">0</span>
+        </span>
+        <span class="hud__item">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-day"/></svg>
+          <span class="hud__label" data-string="game.hudDay"></span>
+          <span class="hud__value" id="hud-day">1</span>
+        </span>
+        <span class="hud__item">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-time"/></svg>
+          <span class="hud__label" data-string="game.hudTime"></span>
+          <span class="hud__value" id="hud-time">00h</span>
+        </span>
+        <span class="hud__item">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-status"/></svg>
+          <span class="hud__label" data-string="game.hudStatus"></span>
+          <span class="hud__value" id="hud-status" data-string="game.statusOk"></span>
+        </span>
       </header>
 
       <div class="stage" id="stage">

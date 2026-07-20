@@ -108,6 +108,47 @@ test('every data-action in index.html is wired to something', () => {
   }
 });
 
+// --- The HUD readouts don't jitter ------------------------------------------
+// DESIGN.md: "every numeric readout uses font-variant-numeric: tabular-nums —
+// values change every tick, and proportional digits make the whole panel jitter
+// as they do." The HUD is where that bites hardest: six readouts on one strip,
+// three of them repainted every tick.
+//
+// The failure mode is a seventh readout added later without the class. Nothing
+// would throw, no test would fail, and the strip would simply twitch once per
+// tick in a way that is easy to see and hard to attribute. So the class list is
+// derived from the ids updateHud actually writes, rather than hardcoded here —
+// adding a readout to hud.js and forgetting the markup is the case this catches.
+//
+// This reaches into css/screens.css, which is otherwise css.test.js's territory:
+// the invariant is one thing (a readout is tagged AND the tag means something),
+// and splitting it across two files is how half of it gets deleted later.
+
+test('every HUD readout is tagged for tabular numerals', () => {
+  const source = html();
+  const hudJs = read('../js/ui/hud.js');
+  const screensCss = read('../css/screens.css');
+
+  const written = [...hudJs.matchAll(/\bset\(\s*'(hud-[\w-]+)'/g)].map((m) => m[1]);
+  assert.ok(written.length >= 5, 'updateHud should paint the HUD readouts by id');
+
+  for (const id of written) {
+    const tag = new RegExp(`<[a-z]+[^>]*\\bid="${id}"[^>]*>`).exec(source)?.[0];
+    assert.ok(tag, `#${id} is written by updateHud but is not in index.html`);
+    assert.match(
+      tag,
+      /class="[^"]*\bhud__value\b/,
+      `#${id} is a HUD readout but carries no .hud__value — it will jitter as it ticks`,
+    );
+  }
+
+  assert.match(
+    screensCss,
+    /\.hud__value\b[^{]*\{[^}]*font-variant-numeric:\s*tabular-nums/,
+    '.hud__value must actually declare tabular-nums, or tagging the readouts means nothing',
+  );
+});
+
 // --- Every getElementById target exists -------------------------------------
 
 test('every literal getElementById id exists in index.html or is created in js/', () => {
