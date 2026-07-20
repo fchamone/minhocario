@@ -153,7 +153,7 @@ No npm install, no bundler, no transpiler. Node is needed only to run tests loca
 ## 4. Project structure
 
 ```
-D:\FABIANO\minhocario\
+D:\FABIANO\projects\minhocario\
 ├── index.html              # single page; screens are DOM sections (home/shop/setup/game)
 ├── css/
 │   └── style.css

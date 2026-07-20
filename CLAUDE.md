@@ -11,7 +11,7 @@ Minhocário — a browser-based vermicomposting (worm farm) simulator game. Full
 | Task | Command |
 |------|---------|
 | Run locally | `npx serve .` or `python -m http.server 8000` (ES modules don't load via `file://`) |
-| Run all tests | `node --test tests/` |
+| Run all tests | `node --test tests/*.test.js` (the bare `tests/` directory form fails on Node ≥ v24) |
 | Run a single test file | `node --test tests/<file>.test.js` |
 | Deploy | FTP-upload the project folder (minus `tests/`, `.harn/`) — no build step |
 
