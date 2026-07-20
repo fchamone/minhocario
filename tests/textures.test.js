@@ -13,6 +13,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { RepeatWrapping, SRGBColorSpace } from '../vendor/three.module.min.js';
 import {
@@ -177,6 +178,18 @@ test('every surface reports a grain mean below 1, so it MUST be compensated', ()
       mean < 0.97,
       `${name}: grain mean ${mean.toFixed(4)} is so close to 1 the grain must be invisible`,
     );
+    // Upper bound on how far scene.js has to lift an albedo to cancel the grain.
+    // A tripwire, not a proof: the real constraint is that the LIFTED albedo stays
+    // under 1.0 in linear space, and the albedo constants live in scene.js. Today
+    // the widest lift is soil's 1.39x on a very dark brown, landing at 0.05 — three
+    // orders of margin. A retune that pushed a grain past this bound would be the
+    // point at which that margin needs checking rather than assuming, so it stops
+    // here and asks instead of silently pushing a bright surface toward clipping.
+    assert.ok(
+      mean > 0.7,
+      `${name}: grain mean ${mean.toFixed(4)} needs a ${(1 / mean).toFixed(2)}x albedo lift to ` +
+        'cancel. Check the lifted albedo still lands below 1.0 in linear space before raising this.',
+    );
   }
 });
 
@@ -310,6 +323,61 @@ test('an unknown surface yields nothing rather than a broken texture', () => {
     assert.equal(grainRepeat(name), null, `grainRepeat(${JSON.stringify(name)})`);
     assert.equal(buildSurfaceTexture(name, stubCanvas()), null, `buildSurfaceTexture(${JSON.stringify(name)})`);
   }
+});
+
+// --- How scene.js consumes them ----------------------------------------------
+// Static source reads, the pattern this project already uses where the runtime is
+// out of reach (tests/markup.test.js, tests/css.test.js). `buildScene` needs a
+// WebGL context, so nothing here can be exercised — but the two ways this wiring
+// goes wrong are both silent and both permanent, so they are worth a tripwire
+// even a weak one: an uncompensated map darkens the whole garage, and a texture
+// nobody frees is the leak V15 was partly written to close.
+
+const SCENE_SRC = readFileSync(new URL('../js/render/scene.js', import.meta.url), 'utf8');
+
+test('scene.js compensates every grain map by its measured mean', () => {
+  assert.match(
+    SCENE_SRC,
+    /multiplyScalar\(1 \/ grainMean\(/,
+    'scene.js attaches grain maps without dividing the albedo by grainMean — every ' +
+      'dressed surface is 5-13% darker, which reads as an exposure shift under V14’s ' +
+      'tone curve rather than as the texture change it is.',
+  );
+});
+
+test('scene.js routes every textured surface through the one compensating builder', () => {
+  // The realistic regression is not removing the division — it is adding a fourth
+  // textured surface next to the three and assigning `.map` directly, which skips
+  // the compensation for that surface alone. That is harder to spot than a global
+  // shift, because only one surface moves.
+  const outside = SCENE_SRC
+    // Drop the builder itself; it is the sanctioned place to assign a map.
+    .replace(/function surfaceMaterial[\s\S]*?\n}\n/, '')
+    .split('\n')
+    // Any `<something>map =` or `map:` assignment, on any object and in any slot
+    // (`normalMap`, `roughnessMap`, …). Written this wide after a narrower version
+    // matched only a bare `map` and let a planted `extra.map = grain.soil` through
+    // — the exact regression the test is for. `.map(` never matches, since a call
+    // is followed by `(` rather than `:` or `=`.
+    .filter((line) => /(?:^|[\s.])[a-zA-Z]*[Mm]ap\s*[:=](?!=)/.test(line) && !line.trim().startsWith('*') && !line.trim().startsWith('//'));
+
+  assert.deepEqual(
+    outside,
+    [],
+    'a texture map is assigned in scene.js outside surfaceMaterial(), so it skips the ' +
+      'grainMean compensation and that surface alone shifts brightness.',
+  );
+});
+
+test('scene.js frees the surface grain on teardown', () => {
+  // The wall, floor and soil are scene-ROOT meshes; disposeComposterMesh never
+  // traverses them, so these three textures have no other owner.
+  const dispose = SCENE_SRC.slice(SCENE_SRC.indexOf('export function disposeScene'));
+  assert.match(
+    dispose,
+    /disposeSurfaceTextures\(\)/,
+    'disposeScene does not free the surface textures — nothing else owns them.',
+  );
 });
 
 test('a missing canvas degrades to no texture, not to a throw', () => {

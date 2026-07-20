@@ -56,16 +56,26 @@ export const TILE_WORLD_SIZE = 2;
  * detail at 2x and 4x that. `grainMin` is the darkest the grain multiplies an
  * albedo by (the brightest is always 1.0) — so it sets the amplitude, and a
  * bigger spread reads as a rougher material.
+ *
+ * The three `grainMin` values are the one judgement in this file, and they are
+ * set CONSERVATIVELY on purpose. Read them in linear space, not as they look:
+ * sRGB 0.92 is a linear 0.83, so the wall's grain already varies its albedo by
+ * 17%, the floor's by 25% and the soil's by 36%. A first pass set them a step
+ * stronger and described the result as "faint" in the same breath — the numbers
+ * said 25/36/49%, which is mottling, not a surface cue. Nothing in this repo can
+ * see them, so they start where the intent and the arithmetic agree and the
+ * 3D visual matrix decides whether to push them. Raising one is a single edit:
+ * `grainMean` re-measures and scene.js's compensation follows automatically.
  */
 export const SURFACES = {
   // Garage wall: plaster. The finest and faintest of the three — it is the
   // largest area on screen and the backdrop for the sun patch, so pattern here
   // would compete with the one gradient that carries information.
-  wall: { seed: 0x7a11, world: [12, 4.5], lattice: 10, octaves: 3, grainMin: 0.88 },
+  wall: { seed: 0x7a11, world: [12, 4.5], lattice: 10, octaves: 3, grainMin: 0.92 },
   // Garage floor: concrete. Coarser and a touch stronger than the wall; it is
   // seen at a grazing angle, which compresses the grain vertically, so a wall
   // amplitude would nearly vanish here.
-  floor: { seed: 0xc0c2, world: [12, 8], lattice: 7, octaves: 3, grainMin: 0.82 },
+  floor: { seed: 0xc0c2, world: [12, 8], lattice: 7, octaves: 3, grainMin: 0.88 },
   // Packed earth in cross-section (buried x-ray only). The coarsest and
   // strongest: this one is meant to read as clods rather than as a finish.
   //
@@ -81,7 +91,7 @@ export const SURFACES = {
   // ~3.6x vertically as a result. That sliver is the only place it shows, and the
   // alternative — splitting the box into per-face materials — buys a barely
   // visible strip at the cost of six materials to build and free.
-  soil: { seed: 0x501a, world: [12, 8], lattice: 5, octaves: 2, grainMin: 0.74 },
+  soil: { seed: 0x501a, world: [12, 8], lattice: 5, octaves: 2, grainMin: 0.82 },
 };
 
 /**
@@ -183,7 +193,11 @@ function grainByte(v, grainMin) {
  * This exists because of a trap the plan does not mention. A colour `map`
  * MULTIPLIES the material's albedo, and a grain that ramps up to 1.0 necessarily
  * averages below it, so simply attaching these textures would darken the wall,
- * floor and soil by 5-13%. That is not a texture change, it is a LIGHTING change:
+ * floor and soil by 14%, 19% and 28% respectively — far more than the ramps look
+ * like they should, because the mean has to be taken in LINEAR space and sRGB
+ * compresses the darks (a 0.88 sRGB floor is only 0.75 linear). Measuring this in
+ * sRGB would under-compensate every surface and leave a residual shift behind.
+ * That is not a texture change, it is a LIGHTING change:
  * it would land as an apparent exposure shift on top of V14's ACES curve — whose
  * visual matrix is still owed and unwalked. V14 went to some length to leave that
  * matrix exactly one variable to judge (the curve and its exposure); shipping an

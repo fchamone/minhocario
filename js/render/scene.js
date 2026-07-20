@@ -40,6 +40,7 @@ import {
   Plane,
 } from '../../vendor/three.module.min.js';
 import { buildComposterMesh, disposeComposterMesh } from './composter3d.js';
+import { surfaceTextures, grainMean, disposeSurfaceTextures } from './textures.js';
 import {
   buildXrayInternals,
   updateXrayInternals,
@@ -359,8 +360,40 @@ let dragListeners = null;
  * renderer/DOM access, so it is trivial to extend in later tasks.
  * @param {Scene} target
  */
+/**
+ * Build a matte surface material dressed with its procedural grain (V15).
+ *
+ * The grain is a colour map, so it MULTIPLIES the albedo — and a grain that ramps
+ * up to 1.0 necessarily averages below it. Attaching one uncompensated would
+ * darken the surface by 14-28%, which is not a texture change but a LIGHTING one:
+ * it reads as an exposure shift sitting on top of V14's ACES curve, whose visual
+ * matrix is still owed. Dividing the albedo by the grain's measured linear mean
+ * leaves mean radiance exactly where V14 tuned it, so the map adds variation
+ * without moving brightness — and the matrix still has one variable in it.
+ *
+ * Degrades to the flat colour when no canvas exists (see textures.js), which is
+ * precisely how these surfaces looked before V15.
+ * @param {number} color flat albedo (the pre-V15 value, unchanged)
+ * @param {number} roughness the surface's pre-V15 roughness, also unchanged
+ * @param {keyof import('./textures.js').SURFACES} surface grain to dress it with
+ * @param {import('three').Texture|null} map
+ * @returns {MeshStandardMaterial}
+ */
+function surfaceMaterial(color, roughness, surface, map) {
+  const material = new MeshStandardMaterial({ color, roughness, metalness: 0 });
+  if (map) {
+    material.map = map;
+    material.color.multiplyScalar(1 / grainMean(surface));
+  }
+  return material;
+}
+
 function buildScene(target) {
   target.background = new Color(SKY_COLOR);
+  // Procedural surfaces (V15). Generated once and cached; a few milliseconds at
+  // init and nothing per frame. Untextured planes under a tone curve still read
+  // as planes, so this is what makes V14's curve legible on the garage itself.
+  const grain = surfaceTextures();
   // A little distance fog softens the wall edges and reads as garage depth. The
   // near plane must stay BEYOND the subject: the camera sits at z=9 and the wall
   // at z=0, so a near of 14 was fogging the wall and bin themselves — pulling
@@ -372,7 +405,7 @@ function buildScene(target) {
   // (toward the camera). A thin box would also work; a plane keeps it cheap.
   const wall = new Mesh(
     new PlaneGeometry(WALL_WIDTH, WALL_HEIGHT),
-    new MeshStandardMaterial({ color: WALL_COLOR, roughness: 0.95, metalness: 0 }),
+    surfaceMaterial(WALL_COLOR, 0.95, 'wall', grain.wall),
   );
   wall.position.set(0, WALL_HEIGHT / 2, 0);
   wall.name = 'garageWall';
@@ -424,7 +457,7 @@ function buildScene(target) {
   // wall (z=0) out toward the camera.
   const floor = new Mesh(
     new PlaneGeometry(WALL_WIDTH, FLOOR_DEPTH),
-    new MeshStandardMaterial({ color: FLOOR_COLOR, roughness: 1, metalness: 0 }),
+    surfaceMaterial(FLOOR_COLOR, 1, 'floor', grain.floor),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0, FLOOR_DEPTH / 2);
@@ -441,7 +474,13 @@ function buildScene(target) {
   // the earth. Starts hidden — applyXray is the ONLY thing that ever shows it.
   const soil = new Mesh(
     new BoxGeometry(WALL_WIDTH, SOIL_DEPTH, FLOOR_DEPTH),
-    new MeshStandardMaterial({ color: SOIL_COLOR, roughness: 1, metalness: 0 }),
+    // Grain sized to the box's TOP face — the cutaway surface the buried x-ray
+    // exists to show. Its other visible face (the front sliver below the floor's
+    // leading edge) takes the same repeat over a 2.2-unit span instead of 8, so
+    // its grain stretches ~3.6x. See the DEVIATION note in textures.js: a box's
+    // faces cannot share one correct repeat, and per-face materials would buy
+    // that sliver at the cost of six materials to build and free.
+    surfaceMaterial(SOIL_COLOR, 1, 'soil', grain.soil),
   );
   soil.position.set(0, SOIL_TOP_Y - SOIL_DEPTH / 2, FLOOR_DEPTH / 2);
   soil.name = 'garageSoil';
@@ -950,6 +989,12 @@ export function disposeScene() {
   ambientLight = null;
   floorMesh = null;
   soilMesh = null;
+  // The surface grain (V15) belongs to the scene root, not to composterGroup, so
+  // disposeComposterMesh never reaches it — these three textures are the only
+  // things in the render layer with no owner at teardown. Freed here rather than
+  // left to renderer.dispose(), which frees the renderer's own resources and not
+  // textures it happens to have uploaded.
+  disposeSurfaceTextures();
   sunPatchColors = null;
   sunPatchWallPos = null;
   renderer?.dispose?.();
