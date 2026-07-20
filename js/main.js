@@ -48,23 +48,27 @@ const newFarmDraft = { composterId: null };
 /** localStorage key holding the language preference — never in the game save. */
 const LANG_STORAGE_KEY = 'minhocario.lang';
 
-/** localStorage key holding the dev-scaffolding opt-in — never in the game save. */
+/** sessionStorage key holding the dev-scaffolding opt-in — never in the game save. */
 const DEV_STORAGE_KEY = 'minhocario.dev';
 
 /**
- * Is developer scaffolding (the screen-jump nav) switched on? Off for players:
- * `?dev=1` enables it and sticks, `?dev=0` turns it back off. Lives in its own
- * key like the language preference, so it stays outside the frozen save schema.
+ * Is developer scaffolding (the screen-jump nav, the console locale hook)
+ * switched on? Off for players: `?dev=1` enables it, `?dev=0` turns it back off.
+ *
+ * Deliberately `sessionStorage`, not `localStorage`: it needs to survive the
+ * reloads of a working session without the URL, but must NOT strand someone who
+ * once opened a `?dev=1` link with a nav bar they cannot discover how to remove.
+ * Closing the tab always clears it. Outside the frozen save schema either way.
  * @returns {boolean}
  */
 function devModeEnabled() {
   try {
     const requested = new URLSearchParams(location.search).get('dev');
     if (requested === '1' || requested === '0') {
-      localStorage.setItem(DEV_STORAGE_KEY, requested);
+      sessionStorage.setItem(DEV_STORAGE_KEY, requested);
       return requested === '1';
     }
-    return localStorage.getItem(DEV_STORAGE_KEY) === '1';
+    return sessionStorage.getItem(DEV_STORAGE_KEY) === '1';
   } catch {
     return false; // storage blocked (private mode): stay off, never break boot
   }
@@ -109,8 +113,9 @@ function applyStrings() {
 
 /**
  * Switch the active locale: update runtime state, persist the choice, reflect
- * it on `<html lang>`, and re-render every static `[data-string]` node. Exposed
- * on `window.setLang` so a language can be swapped from the devtools console.
+ * it on `<html lang>`, and re-render every static `[data-string]` node. Driven by
+ * the home-screen selector, and under `?dev=1` also exposed on `window.setLang`
+ * so a language can be swapped from the devtools console.
  * @param {string} tag a supported canonical tag.
  */
 function switchLang(tag) {
@@ -355,8 +360,8 @@ let loopRunning = false;
 let currentScreen = null;
 /**
  * Continuous (fractional) game hour: `hour + sub-tick fraction`. The render layer
- * (T18 day/night) samples this for smooth interpolation between whole ticks.
- * Exposed on `window.getContinuousHour` alongside the `window.setLang` dev hook.
+ * (T18 day/night) samples this for smooth interpolation between whole ticks —
+ * passed to `renderState` directly, not read off any global.
  */
 let continuousHour = 0;
 
@@ -696,18 +701,16 @@ function init() {
   setLang(lang);
   document.documentElement.lang = lang;
 
-  // Let a developer swap the chrome from the console: `setLang('en')`.
-  window.setLang = switchLang;
-  // Continuous game hour for the render layer's day/night interpolation (T18);
-  // readable from devtools too.
-  window.getContinuousHour = () => continuousHour;
-
   // Drop the dev nav from the DOM entirely for players — leaving it hidden
   // would still expose the screen-jump buttons to anyone poking at the markup.
   const devNav = document.getElementById('dev-nav');
   if (devModeEnabled()) {
     devNav?.removeAttribute('hidden');
     document.body.classList.add('dev-mode'); // screens pay the nav's clearance
+    // Console locale switch: `setLang('en')`. The home selector is the real
+    // control (see `onSwitchLang`); this is the devtools shortcut, so it rides
+    // the same gate rather than sitting on `window` for everyone.
+    window.setLang = switchLang;
   } else {
     devNav?.remove();
   }
