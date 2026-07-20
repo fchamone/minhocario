@@ -39,10 +39,15 @@
 - [x] **T16** Vendor Three.js + minimal scene (S/M) — deps: T1 (∥ early spike, run alongside Phase 1/2)
 - [x] **T17** Procedural composter meshes, all 6 models (M) — deps: T16, T3 (∥ Phase 2)
 - [x] **T18** Day/night lighting + sun patch via solarGain (M) — deps: T16, T3, T13
-- [ ] **CP7** — 3D + meshes + day/night + sun patch. Review: placement-mechanic readability
+- [x] **CP7** — 3D + meshes + day/night + sun patch. Review: placement-mechanic readability
+      Approved 2026-07-20. Placement mechanic reads correctly: sun patch sweeps the
+      wall and the sunny-centre vs shaded-end temperature delta is legible in the
+      internals panel. Automated portion re-verified at `15b2f34` (282 green).
 - [x] **T19** Drag-move via raycast + slider sync (M) — deps: T17, T14
 - [x] **T20** 3D x-ray view (M) — deps: T17, T14
-- [ ] **CP8** — full feature set; manual playtest of spec §6 checklist on desktop
+- [x] **CP8** — full feature set; manual playtest of spec §6 checklist on desktop
+      Approved 2026-07-20. Full spec §6 checklist walked; sign-off and the
+      re-run audit table in `tasks/cp8-playtest.md`.
 
 ## Phase 4 — Tuning, polish, release
 
@@ -87,15 +92,33 @@
 - [x] **T25b** `docs/game-reference-pt.md` — pt-BR counterpart of the reference doc (S/M) — deps: T25
       Matched pair with the English original: same structure, same numbers, different prose.
       Sync is convention-enforced via a rule in `CLAUDE.md` (update both or neither).
-- [ ] **CP9** — ship gate: human sign-off vs spec acceptance criteria; scoring + save schema freeze
+- [x] **CP9** — ship gate: human sign-off vs spec acceptance criteria; scoring + save schema freeze
+      Approved 2026-07-20 — **v1 is shipped**. The scoring formula
+      (`js/sim/scoring.js`) and the save schema (`{v:1,...}` in `js/storage.js`)
+      are now **FROZEN**: any change to either requires explicit user approval and
+      ships with a migration. The `minhocario.lang` key stays outside the schema
+      and is exempt. Release checklist: `tasks/release-checklist.md`.
 
 ## Change C-0002 — Multi-language (i18n): pt-BR / en / es
 
 > Interleaves with the phases above (spec `.harn/devy/changes/C-0002-multilanguage-selector/spec.md`). Land **I1 next** (∥ T6–T8) so Phase-2 UI is built i18n-native. Cross-cutting: T10–T15 and T20 must use `t()` + `catalog.*` (no hardcoded strings); the T22 audit adds catalog parity + the food-labeling guard. Language pref lives in its own `minhocario.lang` key, outside the save schema.
 
 - [x] **I1** i18n runtime + locale catalogs + browser detection (M) — deps: T1 (∥ T6–T8; blocks all UI tasks)
-- [ ] **CP-i18n** — i18n suite green; default pt-BR unchanged; console `setLang` swaps chrome. Review: en/es copy
+- [x] **CP-i18n** — i18n suite green; default pt-BR unchanged; console `setLang` swaps chrome. Review: en/es copy
+      Approved 2026-07-20. The human en/es copy review is complete, closing the
+      note below.
 - [x] **I3** Catalog display-name namespaces + worm `latin` field (M) — deps: I1 (blocks T11/T12/T14)
 - [x] **I2** Home-page language selector (S) — deps: I1, T10
 
-> Note: an automated en/es copy review was applied to the locale catalogs (punctuation, bedding term, upgrade phrasing); the human CP-i18n copy review is still pending.
+> Note: an automated en/es copy review was applied to the locale catalogs (punctuation, bedding term, upgrade phrasing); the human CP-i18n copy review followed and signed off on 2026-07-20.
+
+---
+
+## Status: v1 complete
+
+All 23 tasks and all 9 checkpoints are closed as of 2026-07-20 (`15b2f34`, suite
+282 green). **CP9 froze the scoring formula and the save schema** — changing
+either from here needs explicit approval and a migration, per `CLAUDE.md`.
+
+Out of scope for v1 and not started: the global ranking backend (spec phase 2),
+which begins only when explicitly requested.

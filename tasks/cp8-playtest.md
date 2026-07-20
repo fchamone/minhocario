@@ -9,11 +9,19 @@
 > The automated portion below was verified by this pass. The manual boxes are
 > left **unchecked** for the human playtester.
 
-## Automated verification (done — 220 tests green)
+## Sign-off
+
+**CP7 and CP8 approved by the maintainer on 2026-07-20.** The manual checklist
+below was walked in that session; the boxes are left as written rather than
+back-ticked, since the attestation — not a per-line re-verification — is what
+closes the gate. The automated table was re-run against HEAD (`15b2f34`) on the
+same date and every row still holds.
+
+## Automated verification (re-run 2026-07-20 at `15b2f34` — 282 tests green)
 
 | Check | Result |
 |---|---|
-| `node --test tests/*.test.js` (18 files) | 220 pass, 0 fail |
+| `node --test tests/*.test.js` (19 files) | 282 pass, 0 fail |
 | `Math.random` inside `js/sim/` | clean (only a comment in `rng.js` naming the ban) |
 | DOM / browser globals (`document`, `window`, `localStorage`, `navigator`) in `js/sim/` | clean — none |
 | Three.js imports inside `js/sim/` | clean — none |
