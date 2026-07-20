@@ -375,12 +375,96 @@
       11 guards broken deliberately first. `DESIGN.md` gains a surface-grain section (one
       physical scale, linear-space amplitude, never change brightness) and two deviation rows.
       Suite 344 → **365**.
-- [ ] **V16** Contact-shadow blob (S) — deps: V6, V15
-- [ ] **V17** Gradient sky backdrop via `vertexColors` (S/M) — deps: V14 (∥ V15/V16)
-- [ ] **V18** Lathe / Extrude silhouettes (M) — deps: V6
-- [ ] **V19** Real shadow maps + x-ray `castShadow` protocol — **gated at 2 ms, droppable** (M) — deps: V14, V16
-- [ ] **CPV4** — full 3D pass.
-      Review: x-ray legibility (most at risk from ACES), day/night readability, shadow gate decision
+- [x] **V16** Contact-shadow blob (S) — deps: V6, V15
+      **Code complete; browser walk folded into the CPV4 matrix.** One blended plane per
+      above-ground model, sized from its footprint, one draw call, zero per-frame work.
+      **DEVIATION: built in `composter3d.js`, not `scene.js` as the plan files it.** Everything
+      about the blob is a property of the model — sized from its footprint, parented to its
+      group, freed with it — and building it there put it where a **real `Raycaster`** could
+      test it, which is what caught the one non-obvious bug: **the blob silently joined the drag
+      grab target.** `raycastComposter` intersects `composterGroup` recursively, so a pickable
+      blob let the bin be grabbed from bare floor up to 1.6× its footprint away, with the hover
+      cursor reading `grab` over empty ground — a change to a T19 interaction re-verified at V12,
+      made by a decoration. `blob.raycast` is now a no-op, guarded by a real ray **plus** a
+      companion proving that ray would otherwise hit it (the V6 vacuity check).
+      The plan asks for both "one soft radial-gradient CanvasTexture" **and** "disposed including
+      its texture" — incompatible, because the blob hangs off `composterGroup` and V15 made
+      `disposeComposterMesh` free textures, so a shared one would be **dead for every model after
+      the first upgrade**. Each blob owns its own; a 128² gradient built once per upgrade.
+      `composterFootprint()` reads `structureOf`, like `composterCavity`, so the blob tracks the
+      silhouette — which **caught the V18 lathe-segment bug two tasks later**. Tagged `xrayPart`
+      so the x-ray sweep leaves it opaque; skipped for buried. The V15 map-compensation guard
+      fired on arrival and was answered with an argued allowlist entry (`SANCTIONED_MAPS`), since
+      the blob is an unlit `MeshBasicMaterial` with no albedo to preserve. 8 guards broken first.
+      Suite 365 → **380**.
+- [x] **V17** Gradient sky backdrop via `vertexColors` (S/M) — deps: V14 (∥ V15/V16)
+      **Code complete; the gradient is in the CPV4 matrix.** A backdrop mesh behind the wall,
+      per-vertex colours lerped each frame from the live sky colour — the exact `sunPatch`
+      technique, 66 vertices, no `ShaderMaterial`/`PMREM` (the camera is fixed). The gradient
+      **scales `DAY_CYCLE`'s own `sky` column** rather than carrying a second palette, so it
+      cannot drift from V14's folded table.
+      Three numbers reasoned about rather than picked, all failing silently otherwise:
+      **(1)** anchored where the **wall top projects** to the backdrop, not the plane centre —
+      the wall occludes the plane's bottom, so a centred gradient hides its own neutral point and
+      every visible sky pixel reads darker than the colour it replaces, a global sky change in a
+      gradient's clothing. Derived from the camera and `WALL_HEIGHT`.
+      **(2)** the deviation is **multiplicative**, because Three works in linear space where the
+      night keyframes are ~0.01 — a fixed additive delta tuned at noon clamps the whole night sky
+      to black and the gradient vanishes for half the day. That then needs the **opposite** guard
+      (a bright keyframe clipping the horizon past 1.0), and both are tested.
+      **(3)** `toneMapped: false`, load-bearing: `scene.background` is a clear colour and is not
+      tone-mapped, so a tone-mapped backdrop pushes the same values through ACES's midtone lift
+      and jumps the whole sky brighter. `fog: false` likewise. Also fixed `skyGradientFactor`
+      returning `-0` at its anchor rather than loosening the test. 4 guards broken first.
+      Suite 380 → **384**.
+- [x] **V18** Lathe / Extrude silhouettes (M) — deps: V6
+      **Code complete; distinctness + upgrade-leak walks are in the CPV4 matrix.** Eco barrel →
+      ribbed lathe, buried collar/dome → lathes, tray rims/lids → extruded rounded rectangles.
+      Flat shading and low segment counts kept (DESIGN.md identity).
+      **The V16 footprint guard earned its keep immediately.** The lathes first shipped at **10
+      segments**, and a lathe puts vertices at `j·2π/N`, so its bounding box reaches the profile
+      radius on a ground axis only if `N` is divisible by 4. At 10 the widest vertex sits at 72°,
+      so the eco barrel was `1.902r` across in X while `composterFootprint` reported `2r` — and
+      the contact shadow **silently stopped matching the silhouette**. Segment count is now 12
+      with the constraint asserted directly. The same coupling forced the eco ribs **inward** as
+      grooves, not outward as protrusions (a rib past `r` widens the real silhouette while the
+      shadow keeps the old size).
+      **DEVIATION:** "one lathe replaces three cylinders" for buried became **three lathes**,
+      because the three parts carry three different colours and one lathe is one material —
+      merging them collapses the colour break at the ground line, which is the main "in the
+      ground" read and this task's own AC. Geometry win kept where it matters (capped drum,
+      flared collar, genuinely curved dome).
+      New guards: lathe segments reach full radius on both axes; the reshaped models actually use
+      lathes/extrusions (else a revert to primitives is invisible, since cavity/footprint tests
+      were written to survive the reshape); tier counts still read in geometry; every surface
+      still flat-shaded. Failure labels spelled out because the vendored Three is minified and
+      `Ctor.name` reads `"hu"`. **Process note:** a `git checkout` while breaking a guard
+      discarded V18's uncommitted source once; redone and committed immediately. 5 guards broken
+      first. Suite 384 → **388**.
+- [x] **V19** Real shadow maps + x-ray `castShadow` protocol — **gated at 2 ms, droppable** (M) — deps: V14, V16
+      **Code complete; shadows default ON. THE PERF-GATE DECISION IS OWED — see below.** The gate
+      as written could not be evaluated, for the four reasons the checklist Status section already
+      flagged plus one. This task makes it **answerable** rather than making the call:
+      **(1)** the `?dev=1` frame-time readout the gate is "measured via" **did not exist** — built
+      it (`renderStats()` + a dev-nav readout of ms/fps/calls/tris/shadow-state, throttled ~4Hz);
+      **(2)** the gate is a **delta** ("more than 2 ms"), unmeasurable from one number — added
+      `?shadows=0/1` so the same scene is measured both ways in one session;
+      **(3)** "at 1×" is the wrong axis — `renderState` runs every rAF regardless of speed, so
+      cost is **caster-count** dependent (model + x-ray), not speed; the readout comment says so;
+      **(4)** `sunLight.target` was **never in the scene graph**, so V19's core mitigation
+      (re-target each frame for a tight shadow camera) was a documented no-op — parented in
+      `buildScene`.
+      X-ray protocol (the plan's named risk): the shadow pass ignores opacity, so a faded shell
+      keeps casting solid; `setShellTransparency` now also stashes/restores each **mesh's**
+      `castShadow`, kept apart from `setMaterialFade` because it lives on the Mesh not the
+      material, and restoring the **actual** prior value (not blanket `true`) so the contact blob
+      never starts casting after a toggle. Beyond the plan: `autoUpdate=false` with `needsUpdate`
+      throttled every 4th frame (forced on drag/upgrade/x-ray), `mapSize` 1024, tight ortho,
+      slope bias. Sun patch / soil / sky / blob excluded from casting by name. 10 guards broken
+      first. Suite 388 → **398**.
+- [ ] **CPV4** — full 3D pass. **NOT yet walked — the 3D visual matrix is owed (see Open items).**
+      Review: x-ray legibility (most at risk from ACES), day/night readability, **the shadow perf-gate
+      decision** (measure with `?dev=1` vs `?dev=1&shadows=0`, varying model + x-ray, not speed).
 
 ## Phase E — Release
 
@@ -478,6 +562,32 @@
       - **Wall grain must not compete with the sun patch.** The patch's gradient is the one thing
         on that wall carrying information; if the plaster reads as pattern, the amplitude is wrong
         regardless of how it looks on its own.
+      **V16–V19 join the same single walk** — every one of them changes the same 3D frame, so they
+      are judged together across the same dawn/noon/dusk/midnight × x-ray × 6-model matrix, not in
+      four separate passes. What each adds to the questions:
+      - **V16 contact shadow** — the bin must read as sitting ON the floor at every wall position,
+        and the blob must **survive the x-ray toggle** (it is tagged `xrayPart`, so it should stay
+        while the shell fades; if it vanishes the tag was lost). No leak cycling models via the shop.
+      - **V17 sky gradient** — a visible gradient at every hour, dawn/dusk still perceivable at 1×,
+        and **fog still matching the sky** (the backdrop opts out of fog, the scene does not, so a
+        mismatch at the far edges is the thing to look for). No brightness jump vs the old flat sky —
+        if the whole sky moved, the `toneMapped:false` or the wall-top anchor is wrong.
+      - **V18 silhouettes** — all 6 models still read as **distinct at a glance** (tier counts
+        visible, buried in-ground, electric distinct), and **upgrade still swaps the mesh live with
+        no leak**, x-ray on and off. `tests/composter3d.test.js` now *means* something here since it
+        fails on cavity drift.
+      - **V19 shadows — TWO judgements, one of them the perf gate:**
+        - **The perf-gate DECISION is owed and is the maintainer's.** Load `?dev=1`, read the ms
+          figure, reload `?dev=1&shadows=0`, compare. **> 2 ms of shadow cost → set
+          `SHADOWS_DEFAULT = false` and ship V16's blob alone.** Vary the **composter model and the
+          x-ray toggle** while measuring, NOT the game speed — shadow cost is caster-count
+          dependent and speed-independent (`renderState` runs every rAF regardless of the clock).
+          The eco (most triangles) with x-ray off is the worst case to check.
+        - **The x-ray shadow interaction**, which the plan calls the risk: x-rayed bins must cast
+          **no solid shadow** (walk the full x-ray matrix — toggle ≥3× per model, upgrade while
+          x-rayed, buried↔tier3 while x-rayed), and the shadow **direction must track the sun**
+          across the day. A solid slab beside a see-through bin means the mesh-level `castShadow`
+          stash did not fire.
 - [ ] Decide whether C-0003 warrants a formal `.harn/devy/changes/C-0003-*/spec.md`. The decisions
       are captured in the plan's "Decisions locked" table; a spec was not written because this
       started as a design interview rather than a feature request.
@@ -491,40 +601,43 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phases A–C approved — Phase D underway (V14 + V15 landed, matrix owed)
+## Status: Phases A–C approved — Phase D code-complete (V14–V19 landed, matrix owed)
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
 V8, V9, V10, V11 landed and **CPV2 approved 2026-07-20**.
 V12, V13 landed and **CPV3 approved 2026-07-20**. Suite 289 → **338 green**.
 
-All three chrome/layout phases are signed off and every browser item carried
-out of them is closed, including the V5 drag re-walk that survived two gates.
-**Phase D starts from a clean ledger** — nothing owed, nothing deferred.
+**All of Phase D's code has landed — V14, V15, V16, V17, V18, V19 —**
+suite **338 → 398 green**. What is NOT done is **CPV4**: the 3D visual
+matrix has not been walked, and the shadow perf-gate decision has not been
+made. Both need a real browser and are the maintainer's; the code exists
+to make them answerable, not to pre-empt them. See the "Owed before CPV4"
+open item, which now covers all six Phase-D tasks in one walk.
 
-**V14 landed 2026-07-20**; suite **344 green**. It depends only on V5 ✅, so it
-was never actually blocked by Phase C — Phase D has been available since V5
-landed and was simply sequenced behind the serial spine.
+Landed in this session, in dependency order:
+- **V15** (surfaces + dispose leak) — 344 → 365, three commits.
+- **V16** (contact shadow) — 365 → 380. Built in `composter3d.js` not
+  `scene.js`, which is what let a real `Raycaster` catch the blob joining
+  the drag grab target.
+- **V17** (sky gradient) — 380 → 384. Multiplicative deviation off
+  `DAY_CYCLE`'s own sky column, anchored at the wall-top projection.
+- **V18** (lathe/extrude) — 384 → 388. The V16 footprint guard caught the
+  10→12 segment bug; the whole `js/render/scene.js` teardown gap noted
+  below is still open but did not bite, since V18 adds nothing to the root.
+- **V19** (shadow maps) — 388 → 398. Made the perf gate answerable
+  (built the readout, added `?shadows=`, parented `sunLight.target`, fixed
+  the "at 1×" axis) without making the call.
 
-**V15 landed 2026-07-20**; suite **365 green**. Three commits, one per
-slice (dispose leak / generator / scene wiring), so each is independently
-revertable — the generator is additive and touches nothing that renders.
+**Still open, carried forward from V15's note:** `disposeScene` frees the
+composter group and the renderer but NOT the scene-root wall / floor / soil
+/ sun-patch / **sky-backdrop** geometries and materials. V15 closed it for
+its three textures and V19 added nothing to the root, but V17's backdrop is
+one more unfreed root mesh. Not a leak in the single-page happy path (the
+scene lives for the page's lifetime), but the tidy-teardown claim in
+`disposeScene`'s own JSDoc is now further from true. A candidate for V20's
+audit sweep.
 
-Next: **V16** (contact-shadow blob), which V15 unblocks and which the plan
-calls the best value-per-risk in the phase; and **V18** (lathe/extrude
-silhouettes), which only ever needed V6 and has been available all along.
-**V17** (gradient sky) is also open and independent of V15/V16.
-
-**A note for V16 and V18, learned here.** Both add meshes to a scene whose
-teardown was, until this task, incomplete: `disposeScene` freed the
-composter group and the renderer and nothing else, so every scene-root
-mesh it built was unowned. V15 closed that for the three surfaces it
-added, but the wall, floor, soil and sun-patch **geometries and materials
-are still never disposed**. V16's blob is parented to `composterGroup`
-(so `disposeComposterMesh` reaches it, and its texture now too, as of this
-task's first commit) — but anything either task hangs off the scene root
-needs its own line in `disposeScene`, because nothing generic will find it.
-
-**V19 is NOT ready to start, for a reason found the same way as V14's four.**
+**V19's gate was NOT ready when this session began, for a reason found the same way as V14's four.**
 Its gate — "if shadows cost more than 2 ms per frame at 1×, drop V19" — is to be
 "measured via a `?dev=1` frame-time readout". **That readout does not exist.**
 `?dev=1` toggles a nav bar and `window.setLang`; `renderer.info` is read nowhere;

@@ -28,6 +28,25 @@ shortcut**. A smooth, high-segment lathe breaks this register more than it
 improves it. Anyone tempted to raise segment counts for "quality" should read
 that as a departure from the art direction, not an upgrade to it.
 
+One caveat the segment count is NOT free to ignore (V18): every lathe uses **12
+segments, and the count must stay a multiple of 4.** A lathe places vertices at
+`j · 2π/N`, so its bounding box only reaches the profile's radius on a ground
+axis when a vertex lands there. At the tempting "8–12, pick anything" reading, 10
+segments leave the eco barrel `1.902r` wide in X while the contact shadow and the
+footprint contract both assume `2r` — and the shadow silently stops matching the
+silhouette. The look wants low; the geometry wants ÷4; 12 is the only value that
+satisfies both.
+
+Two related shape rules the same coupling forces:
+- **Lathe profiles cut inward, never outward.** A rib or bulge past the
+  structural radius widens the real silhouette while the footprint-derived shadow
+  keeps the old size. The eco barrel's corrugation is grooves, not ribs, for
+  exactly this reason — and it reads as corrugation just as well.
+- **The contact shadow (V16) is sized from the model's footprint**, which is read
+  from the same `structureOf` the mesh is, so the two cannot drift. A shadow of
+  the wrong size is not a visible bug — it still looks like a shadow — so this is
+  enforced by test, not by eye.
+
 #### Surface grain (V15)
 
 The stage's three fixed surfaces — wall plaster, floor concrete, packed earth —
@@ -61,6 +80,53 @@ Three rules hold it to the "matte, tactile, never decorative" register:
 Anyone swapping a surface to a real image asset inherits all three obligations —
 and loses the seam guarantee, which here is one character (the noise lattice is
 indexed modulo its own size, so the field is continuous across its own edge).
+
+#### Light and atmosphere (V14, V17, V19)
+
+The stage is lit by a day/night cycle interpolated from a 10-keyframe table across
+the 24h clock, through **ACES filmic tone mapping** (V14). ACES is a deliberate
+choice over Neutral: it rolls the highlights off instead of clipping them (the
+scene is a genuine HDR range, ~4.8 at noon against ~1.45 at midnight) and adds a
+warm contrast curve the diorama wants. Its one free knob is
+`TONE_MAPPING_EXPOSURE`; everything else about the cycle is a measured value, not
+a taste call.
+
+Two rules the tone curve imposes on everything else on the stage, both learned by
+something breaking silently:
+
+- **Anything hand-calibrated for legibility opts OUT of tone mapping.** The x-ray
+  internals palette is lifted well above realistic compost browns *because no
+  light reaches inside the shell*, and ACES would compress exactly those values —
+  so every emissive x-ray material sets `toneMapped: false`. Same for the sun
+  patch (its gradient is information, and a curved gradient is a distorted one)
+  and the **sky backdrop** (below).
+- **Nothing may change scene brightness while pretending to add detail.** A
+  texture map multiplies albedo (see the surface grain); a tone-mapped backdrop
+  would push the sky through ACES's midtone lift. Both are *lighting* changes
+  wearing a feature's clothes, and both are banned — the grain compensates its own
+  darkening, the backdrop opts out of the curve.
+
+The **sky gradient** (V17) is a backdrop plane behind the wall whose colour is
+`DAY_CYCLE`'s own sky value scaled per-vertex — the horizon end lifted, the zenith
+deepened. It scales the existing palette rather than carrying a second one, so it
+can never drift from the lighting table. Two non-obvious rules:
+- The gradient is **anchored where the wall's top edge projects** onto the
+  backdrop, not at the plane's centre — the wall hides the plane's lower half, so
+  a centred gradient would put its neutral point out of sight and darken every
+  visible pixel of sky. Anchored at the wall line, the first sky above the wall is
+  exactly the authored colour and deepens from there, so *the change is the
+  gradient* and nothing else.
+- The deviation is **multiplicative**, because the engine works in linear space
+  where the night keyframes are tiny (~0.01). A fixed additive delta would clamp
+  the whole night sky to black and the gradient would vanish for half the day.
+
+**Shadows** (V19) are real `PCFSoftShadowMap` shadows from the sun, but they are
+**perf-gated and droppable**: if they cost more than ~2 ms/frame they are dropped
+in favour of V16's contact-shadow blob, which already carries the "bin sits on the
+floor" read on its own. Measured with the `?dev=1` frame readout against
+`?dev=1&shadows=0`. While x-rayed, a shell's `castShadow` is suppressed and
+restored — the shadow pass ignores opacity, so a see-through bin would otherwise
+keep a fully solid shadow.
 
 ### The chrome (the DOM)
 
@@ -422,3 +488,8 @@ in `tasks/plan-c0003-visual-redesign.md`.
 | `--space-05` half-step added | The densest readouts are sub-4px by nature. |
 | V15 soil grain is sized to the box's top face only | The plan assumed all three surfaces were planes ("only `repeat` needs setting"). The soil is a `BoxGeometry` whose faces span three different world sizes, so one `repeat` cannot serve them all; the top face is the cutaway the x-ray exists to show. |
 | V15 compensates each surface albedo by the grain's measured mean | Not in the plan at all. Without it the maps darken the stage 14–28%, which would land as an exposure shift under V14's curve — whose visual matrix was still unwalked. |
+| V16 contact shadow built in `composter3d.js`, not `scene.js` | Everything about it is a property of the model (sized from its footprint, parented to its group, freed with it), and building it there let a real `Raycaster` test that it stays out of the drag grab target. |
+| V16 each blob owns its texture rather than sharing one cached texture | The plan asks for one texture *and* for it to be disposed with the group; incompatible once V15 made `disposeComposterMesh` free textures, since a shared one would be dead after the first upgrade. |
+| V18 buried model uses three lathes, not "one lathe replaces three cylinders" | The three parts carry three different colours and one lathe is one material; merging them collapses the colour break at the ground line, which is the main "in the ground" read and the task's own AC. |
+| V18 lathes are 12 segments (not free within 8–12) | A lathe's bounding box only reaches its radius on a ground axis when the segment count is a multiple of 4; 10 desynchronises the model from its footprint-derived contact shadow. |
+| V19 adds `?shadows=0/1` and a `?dev=1` frame readout not in the plan | The perf gate is a *delta* ("more than 2 ms") measured "via a `?dev=1` readout" that did not exist — a delta needs an A/B switch and an instrument, or it cannot be evaluated at all. |
