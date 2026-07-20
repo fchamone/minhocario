@@ -305,6 +305,10 @@
     <button type="button" data-nav="shop" data-string="devNav.shop"></button>
     <button type="button" data-nav="setup" data-string="devNav.setup"></button>
     <button type="button" data-nav="game" data-string="devNav.game"></button>
+    <!-- Frame-time readout (V19). The instrument the shadow perf-gate is measured
+         with; carries no user-facing string, so it is exempt from the i18n
+         catalog like the other dev-only scaffolding. Filled each frame by main.js. -->
+    <span id="dev-perf" class="dev-nav__perf" aria-hidden="true"></span>
   </nav>
 
   <main id="app">

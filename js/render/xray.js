@@ -451,5 +451,39 @@ export function setShellTransparency(group, active) {
   group.traverse((obj) => {
     if (!obj.isMesh || obj.userData.xrayPart) return;
     setMaterialFade(obj, active, { opacity: SHELL_OPACITY, depthWrite: false });
+    setCastShadow(obj, active);
   });
+}
+
+/**
+ * Stash/restore a MESH's `castShadow` across an x-ray toggle (V19).
+ *
+ * This lives apart from {@link setMaterialFade}, whose JSDoc otherwise claims to
+ * be the single stash/restore mechanism, and the reason is structural rather
+ * than stylistic: `castShadow` is a property of the **Mesh**, not of the
+ * material, so it cannot travel through a function that only ever sees
+ * materials. One mesh's flag would have to be written once while its (possibly
+ * shared) materials are written N times.
+ *
+ * Why it has to happen at all: the shadow pass renders depth only and ignores
+ * material opacity entirely. A shell faded to 0.1 alpha therefore keeps casting a
+ * FULLY OPAQUE shadow — so x-raying a bin would leave a solid black slab on the
+ * floor beside a bin you can see straight through. The internals overlay is
+ * skipped by the caller's `xrayPart` check, so it never casts in the first place.
+ *
+ * Idempotent in both directions, and a no-op for a mesh that was never stashed —
+ * matching setMaterialFade's contract, so callers can reconcile at will.
+ * @param {import('three').Object3D} mesh
+ * @param {boolean} active true → suppress the shadow, false → restore
+ */
+function setCastShadow(mesh, active) {
+  if (active) {
+    if (mesh.userData.xrayCastShadow === undefined) {
+      mesh.userData.xrayCastShadow = mesh.castShadow;
+    }
+    mesh.castShadow = false;
+  } else if (mesh.userData.xrayCastShadow !== undefined) {
+    mesh.castShadow = mesh.userData.xrayCastShadow;
+    delete mesh.userData.xrayCastShadow;
+  }
 }

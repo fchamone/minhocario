@@ -21,6 +21,7 @@ import {
   PerspectiveCamera,
   WebGLRenderer,
   ACESFilmicToneMapping,
+  PCFSoftShadowMap,
   Color,
   Fog,
   HemisphereLight,
@@ -177,6 +178,195 @@ export const DAY_CYCLE = [
 // N·L and three summed lights all sit in between. It is deleted rather than
 // left standing next to the curve it says is unnecessary.
 const TONE_MAPPING_EXPOSURE = 1.0;
+
+// --- Real shadow maps (V19) --------------------------------------------------
+// PERF-GATED AND DROPPABLE. The plan's gate — "if shadows cost more than 2 ms per
+// frame at 1x, ship V16's blob and drop V19" — could not be evaluated as written,
+// for three reasons found before implementing:
+//
+//   1. The `?dev=1` frame-time readout it is measured with DID NOT EXIST. `?dev=1`
+//      toggled a nav bar and `window.setLang`; `renderer.info` was read nowhere.
+//      Building that instrument is a prerequisite no task owned, so V19 builds it
+//      (see `renderStats`).
+//   2. "at 1x" is not the axis that matters. `renderState` runs every rAF
+//      regardless of game speed, so shadow cost is speed-INDEPENDENT. What moves
+//      it is caster count — which composter, and whether the x-ray is on — and
+//      the gate names neither. Measure across models, not across speeds.
+//   3. A 2 ms budget is a DELTA, not an absolute, so it cannot be read off a
+//      single number: it needs the same scene measured with shadows on and off,
+//      on the same hardware, in the same session. Hence `?shadows=0`, which is
+//      the only way the gate is answerable at all.
+//
+// Dropping V19 after measurement is a one-line change: SHADOWS_DEFAULT to false.
+// V16's contact blob already banks the grounding read, so the drop costs depth,
+// not correctness.
+
+/**
+ * Whether shadows are on unless the URL says otherwise. Defaults ON so the CPV4
+ * matrix judges the real thing; the gate decision is the maintainer's, made with
+ * the readout this task adds, and is recorded as owed in the checklist.
+ */
+const SHADOWS_DEFAULT = true;
+/** Shadow map resolution. 1024, not 2048 — the plan's own mitigation. */
+const SHADOW_MAP_SIZE = 1024;
+/**
+ * Half-extent of the ortho shadow camera around the bin. Big enough for the
+ * largest model (the eco is 2.3 across and ~2.5 tall), small enough that 1024
+ * texels land on the bin rather than being spread over the 12-unit wall — which
+ * is the entire point of re-targeting the light each frame.
+ */
+const SHADOW_EXTENT = 3;
+/**
+ * Frames between shadow-map refreshes while nothing has moved (V19).
+ *
+ * The sun sweeps a full day in one real minute at 1x, so it turns about 3° per
+ * second; over 4 frames that is 0.2° of movement, which no one can see. This is
+ * the middle option between paying full cost every frame and dropping the feature
+ * — the plan's mitigation list did not consider it. Anything that moves the bin
+ * (a drag, an upgrade) forces an immediate refresh, so the staleness is only ever
+ * in the sun's own creep.
+ */
+const SHADOW_UPDATE_INTERVAL = 4;
+
+/** Whether shadows are active this session. Resolved once in initScene. */
+let shadowsEnabled = SHADOWS_DEFAULT;
+/** Frame counter driving the throttle. */
+let shadowFrame = 0;
+/** Set when the bin moves or swaps, forcing the next frame to refresh the map. */
+let shadowDirty = true;
+/** Last composter placement the shadow map was rendered for. */
+let shadowLastX = null;
+
+/**
+ * Read the shadow override from the URL: `?shadows=0` disables, `?shadows=1`
+ * forces on. Exists so the plan's 2 ms delta can actually be measured — you
+ * cannot subtract two numbers you cannot both obtain.
+ * @returns {boolean}
+ */
+function resolveShadowsEnabled() {
+  try {
+    const flag = new URLSearchParams(globalThis.location?.search || '').get('shadows');
+    if (flag === '0') return false;
+    if (flag === '1') return true;
+  } catch {
+    // No URL (tests, odd embeddings) — fall through to the default.
+  }
+  return SHADOWS_DEFAULT;
+}
+
+/**
+ * Point the sun's shadow camera at a tight box around the bin.
+ * @param {DirectionalLight} light
+ */
+function configureSunShadow(light) {
+  light.castShadow = shadowsEnabled;
+  light.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+  const cam = light.shadow.camera;
+  cam.left = -SHADOW_EXTENT;
+  cam.right = SHADOW_EXTENT;
+  cam.top = SHADOW_EXTENT;
+  cam.bottom = -SHADOW_EXTENT;
+  cam.near = 1;
+  // The light travels a wide arc and the bin slides along 12 units of wall, so
+  // the two can be ~20 units apart at the extremes; 40 clears that with room.
+  cam.far = 40;
+  cam.updateProjectionMatrix();
+  // Slope-scaled bias: without it, a low sun grazing the floor stipples the whole
+  // ground plane with shadow acne, which reads as dirt rather than as a bug.
+  light.shadow.bias = -0.0006;
+  light.shadow.normalBias = 0.02;
+}
+
+/**
+ * Keep the shadow camera centred on the bin and refresh the map when it is
+ * actually worth refreshing. Called once per frame from applyDayNight.
+ */
+function updateShadows() {
+  if (!renderer || !sunLight || !shadowsEnabled) return;
+
+  // Re-target to the bin so the ortho box stays tight around it rather than
+  // spanning the whole wall. Works only because sunLight.target is in the scene.
+  const binX = composterGroup ? composterGroup.position.x : 0;
+  sunLight.target.position.set(binX, 0.6, composterGroup ? composterGroup.position.z : 0);
+  sunLight.target.updateMatrixWorld();
+
+  if (binX !== shadowLastX) {
+    shadowDirty = true;
+    shadowLastX = binX;
+  }
+
+  shadowFrame += 1;
+  const due = shadowDirty || shadowFrame % SHADOW_UPDATE_INTERVAL === 0;
+  renderer.shadowMap.needsUpdate = due;
+  if (due) shadowDirty = false;
+}
+
+/**
+ * Mark every mesh in the scene as a shadow caster or receiver (V19).
+ *
+ * Three things must NOT cast, and each would be a distinct visible bug:
+ *   - the sun patch, a flat additive overlay a hair off the wall, which would
+ *     cast a full-wall slab of shadow onto the wall behind it;
+ *   - the soil volume, which encloses the buried bin and would shadow it from
+ *     the inside;
+ *   - the sky backdrop and the contact-shadow blob, neither of which is a solid.
+ * @param {Scene} target
+ */
+function applyShadowFlags(target) {
+  target.traverse((obj) => {
+    if (!obj.isMesh) return;
+    const opaqueSolid =
+      obj.name !== 'sunPatch' &&
+      obj.name !== 'garageSoil' &&
+      obj.name !== 'skyBackdrop' &&
+      obj.name !== 'contactShadow';
+    obj.castShadow = shadowsEnabled && opaqueSolid;
+    // The floor and wall receive; so does the bin, so its own parts shade each
+    // other and the silhouette reads as solid rather than as flat panels.
+    obj.receiveShadow = shadowsEnabled && obj.name !== 'sunPatch' && obj.name !== 'skyBackdrop';
+  });
+}
+
+// --- Frame instrumentation (V19) ---------------------------------------------
+// The measuring device the plan's perf gate assumed already existed.
+
+/** Rolling frame-time samples, newest last. */
+const frameSamples = [];
+const FRAME_SAMPLE_SIZE = 60;
+let lastFrameStart = 0;
+
+/**
+ * Render statistics for the dev overlay: mean frame time over the last second,
+ * plus the draw-call and triangle counts that explain it.
+ *
+ * `shadows` is reported so an A/B measurement cannot be misread — the whole point
+ * of the readout is comparing two runs, and a run whose shadow state you have to
+ * remember is a run you will eventually mislabel.
+ * @returns {{ms: number, fps: number, calls: number, triangles: number, shadows: boolean}|null}
+ */
+export function renderStats() {
+  if (!ready || !renderer) return null;
+  const ms = frameSamples.length
+    ? frameSamples.reduce((a, b) => a + b, 0) / frameSamples.length
+    : 0;
+  return {
+    ms,
+    fps: ms > 0 ? 1000 / ms : 0,
+    calls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles,
+    shadows: shadowsEnabled,
+  };
+}
+
+/** Record one frame's wall-clock duration into the rolling window. */
+function sampleFrame() {
+  const now = globalThis.performance?.now?.() ?? 0;
+  if (lastFrameStart > 0) {
+    frameSamples.push(now - lastFrameStart);
+    if (frameSamples.length > FRAME_SAMPLE_SIZE) frameSamples.shift();
+  }
+  lastFrameStart = now;
+}
 
 // --- Gradient sky backdrop (V17) ---------------------------------------------
 // A backdrop mesh with per-vertex colours lerped each frame — exactly the
@@ -616,6 +806,16 @@ function buildScene(target) {
   sunLight.position.set(5, 8, 6);
   sunLight.name = 'sun';
   target.add(sunLight);
+  // The light's target MUST be in the scene graph (V19). Three only updates
+  // `matrixWorld` for objects it can reach from the scene root, so an unparented
+  // target is a documented no-op — it has worked so far purely because it sat at
+  // the origin with an identity matrix and nothing ever moved it. V19 moves it
+  // every frame to keep the shadow camera tight around the bin, and without this
+  // line that retarget would silently do nothing: the shadow camera would stay
+  // centred on the world origin while the bin slid along the wall, and the
+  // shadows would simply fade out toward the ends of the slider.
+  target.add(sunLight.target);
+  configureSunShadow(sunLight);
 
   ambientLight = new AmbientLight(0xffffff, 0.25);
   target.add(ambientLight);
@@ -656,12 +856,22 @@ export function initScene(canvas) {
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = TONE_MAPPING_EXPOSURE;
 
+  // Shadows (V19), resolved before buildScene so the light is configured once.
+  shadowsEnabled = resolveShadowsEnabled();
+  renderer.shadowMap.enabled = shadowsEnabled;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+  // Manual refresh, throttled by updateShadows. The sun moves every frame, so
+  // the default (re-render the map on every single frame) is the whole cost the
+  // plan's gate is about.
+  renderer.shadowMap.autoUpdate = false;
+
   scene = new Scene();
   camera = new PerspectiveCamera(45, 1, 0.1, 100);
   camera.position.set(0, 3.2, 9);
   camera.lookAt(0, 1.6, 2);
 
   buildScene(scene);
+  applyShadowFlags(scene);
   sceneCanvas = canvas;
   ready = true;
 
@@ -729,7 +939,14 @@ function syncComposter(state) {
     composterModelId = desiredId;
     if (desiredId) {
       composterGroup = buildComposterMesh(desiredId);
-      if (composterGroup) scene.add(composterGroup);
+      if (composterGroup) {
+        scene.add(composterGroup);
+        // The new mesh arrives with castShadow unset; flag it before anything
+        // reads it, and force a shadow refresh so the old model's silhouette
+        // does not linger on the floor for up to SHADOW_UPDATE_INTERVAL frames.
+        applyShadowFlags(composterGroup);
+        shadowDirty = true;
+      }
     }
     // Re-apply the x-ray to the freshly built mesh so an upgrade stays x-rayed.
     if (xrayActive) applyXray();
@@ -852,6 +1069,7 @@ function applyDayNight(hour) {
 
   updateSkyBackdrop();
   updateSunPatch(hour);
+  updateShadows();
 }
 
 /**
@@ -871,6 +1089,7 @@ export function renderState(state, continuousHour = 0) {
   if (xrayActive && xrayOverlay) updateXrayInternals(xrayOverlay, state);
   applyDayNight(continuousHour);
   renderer.render(scene, camera);
+  sampleFrame();
 }
 
 /**
@@ -932,6 +1151,7 @@ export function setXrayView(active) {
   if (!ready) return false;
   xrayActive = Boolean(active);
   applyXray();
+  shadowDirty = true; // caster count just changed
   return xrayActive;
 }
 
@@ -1133,6 +1353,11 @@ export function disposeScene() {
   disposeSurfaceTextures();
   skyColors = null;
   skyFactors = null;
+  frameSamples.length = 0;
+  lastFrameStart = 0;
+  shadowDirty = true;
+  shadowLastX = null;
+  shadowFrame = 0;
   sunPatchColors = null;
   sunPatchWallPos = null;
   renderer?.dispose?.();

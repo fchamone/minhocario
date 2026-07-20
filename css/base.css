@@ -101,3 +101,12 @@ body.dev-mode .screen { padding-top: 56px; }
 
 .screen__header { max-width: 900px; margin: 0 auto var(--space-4); }
 .screen__back { margin-top: var(--space-4); }
+
+/* Frame-time readout in the dev bar (V19) — the instrument the shadow perf gate
+   is measured with. Dev-only: `main.js` removes the whole nav for players. */
+.dev-nav__perf {
+  margin-left: auto;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
+}

@@ -21,7 +21,7 @@ import {
   DEFAULT_SPEED,
 } from './ui/speed.js';
 import { load, save, LOAD_STATUS } from './storage.js';
-import { initScene, renderState, resizeScene, enableDragMove, setXrayView } from './render/scene.js';
+import { initScene, renderState, resizeScene, enableDragMove, setXrayView, renderStats } from './render/scene.js';
 import {
   STARTING_WALLET,
   createInitialFarmState,
@@ -352,6 +352,10 @@ let speedBeforeColonyDeath = DEFAULT_SPEED;
 let accumulatorMs = 0;
 /** Timestamp of the previous frame, or null to start a fresh delta. */
 let lastFrameTs = null;
+/** Dev perf readout element (V19), or null when not in dev mode. */
+let perfEl = null;
+/** Frames until the next perf-readout DOM write (throttle). */
+let perfNextWrite = 0;
 /** requestAnimationFrame handle for the running loop, or null when stopped. */
 let rafId = null;
 /** Whether the loop is currently ticking. */
@@ -560,8 +564,39 @@ function frame(now) {
   // scene stays smooth and live even while the clock is paused. renderState is a
   // no-op when WebGL is unavailable, so this is safe regardless of sceneEnabled.
   renderState(gameFarm, continuousHour);
+  updatePerfReadout();
 
   rafId = requestAnimationFrame(frame);
+}
+
+/**
+ * Dev-only frame-time readout (V19) — the instrument the shadow perf gate is
+ * measured with, which did not exist when that gate was written.
+ *
+ * Read the gate as a DELTA: load with `?dev=1`, note the figure, reload with
+ * `?dev=1&shadows=0`, and compare. A single number cannot answer "do shadows cost
+ * more than 2 ms". Vary the COMPOSTER MODEL and the x-ray toggle rather than the
+ * game speed while measuring — `renderState` runs every animation frame no matter
+ * what the clock is doing, so shadow cost is speed-independent and caster-count
+ * dependent.
+ *
+ * Throttled to ~4 Hz: the DOM write is far more expensive than the numbers, and a
+ * readout updating 60 times a second is unreadable anyway.
+ *
+ * Carries no translatable copy — digits and the unit symbols ms/fps — so it needs
+ * no `strings.js` key and the three locale catalogs stay untouched.
+ */
+function updatePerfReadout() {
+  if (!perfEl) return;
+  perfNextWrite -= 1;
+  if (perfNextWrite > 0) return;
+  perfNextWrite = 15;
+  const stats = renderStats();
+  if (!stats) return;
+  perfEl.textContent =
+    `${stats.ms.toFixed(1)} ms · ${Math.round(stats.fps)} fps · ` +
+    `${stats.calls} calls · ${(stats.triangles / 1000).toFixed(1)}k tris · ` +
+    `shadows ${stats.shadows ? 'on' : 'off'}`;
 }
 
 /** Start the clock (idempotent). Resets the delta so no elapsed gap is caught up. */
@@ -711,6 +746,10 @@ function init() {
     // control (see `onSwitchLang`); this is the devtools shortcut, so it rides
     // the same gate rather than sitting on `window` for everyone.
     window.setLang = switchLang;
+    // The frame-time readout (V19) lives inside the dev nav, so it only exists
+    // for players who opted into dev mode — the shadow perf gate is a maintainer
+    // measurement, not a player-facing HUD.
+    perfEl = document.getElementById('dev-perf');
   } else {
     devNav?.remove();
   }
