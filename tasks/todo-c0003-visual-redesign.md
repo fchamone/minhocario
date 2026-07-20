@@ -101,8 +101,41 @@
 
 ## Phase B — Chrome
 
-- [ ] **V8** Icon sprite + `js/ui/icons.js` + `index.html` `data-string` restructure (M) — deps: V3
-- [ ] **V9** `js/ui/components.js` — consolidate shared UI primitives (M) — deps: V2 (∥ V8)
+- [x] **V8** Icon sprite + `js/ui/icons.js` + `index.html` `data-string` restructure (M) — deps: V3
+      23 symbols (9 chrome + 14 food) inlined at the top of `<body>`; `createElementNS` confined to
+      `icons.js` and tested. **Finding #1's tripwire is no longer vacuous** — every action button, the
+      slider label and the colony-dead CTA now carry the icon as a *sibling* of an inner
+      `[data-string]` span, and `tests/markup.test.js` was re-broken to confirm it fires on real icons.
+      Keys unchanged, so the three locales and the i18n suite never moved.
+      **Most of the food discipline turned out to be measurable**, so it is enforced rather than
+      trusted: one shared `viewBox`, a byte-identical frame circle, exactly one `stroke-width` across
+      the set, `currentColor`/`none` only, stroke-only (no fill-density differences), one symbol per
+      catalog food and no symbol without a food.
+      **DEVIATION, recorded in `DESIGN.md`:** the set is stroke-based, not `fill="currentColor"` as
+      rule 3 said. The line register is what `DESIGN.md` already describes, and — the deciding
+      reason — stroke weight is a single scalar per icon, so "all 14 at one optical weight" becomes
+      testable; with fills, uniform density is taste and nothing can enforce it.
+      Also landed: the proportional volume glyph (scaled against the largest rung offered for *this*
+      bin, so the four buttons read as a ladder) and the decomposition rings, driven by the same
+      `decomposed` fraction the percentage beside them prints — one source, so they cannot disagree.
+      Both are parametric, hence built element-wise rather than put in the sprite.
+      Ten violations planted, each caught by the right guard. **Added beyond the plan:** a path-data
+      guard — a malformed `d` renders nothing and reports nothing, and with 81 hand-typed paths that
+      is the likeliest way an icon silently disappears. Suite 313 → 327.
+- [x] **V9** `js/ui/components.js` — consolidate shared UI primitives (M) — deps: V2 (∥ V8)
+      `clamp01`, `WARN_FILL`, `fillOf`, `formatLiters`, `formatPercent`, `fill`, `buildStat`,
+      `buildGauge`, `buildFillBar`, `buildGroup`, `markFillLevel`. `actions.js` re-exports
+      `buildStat`/`fillOf`/`markFillLevel`/`WARN_FILL` for one release, so **no test file moved**.
+      Two judgement calls: the AC's "one gauge builder" shipped as two thin variants over one private
+      `gaugeRow` skeleton — the duplication was the row/label/value/track markup, now authored once,
+      and the variants differ in what goes in the track and how the row's state is marked, which is a
+      real difference rather than a flag. `buildGroup` takes the BEM block as a parameter, since
+      namespacing (`internals__group` / `stats__group`) was the *only* thing that differed between the
+      two copies and is exactly why `actions.js` inlined its own four times instead of reusing it.
+      New `tests/components.test.js` (13): helper behaviour plus static guards that the duplication
+      cannot grow back — no module but `components.js` may build a `.gauge` row, a `.stat` row or a
+      group section, and `formatLiters` must have exactly one definition. All broken first.
+      Suite 300 → 313.
 - [ ] **V10** Home / shop / setup restyle (M) — deps: V2, V7, V8, V9
 - [ ] **V11** HUD + speed bar restyle (S/M) — deps: V2, V8
 - [ ] **CPV2** — chrome restyled in all three locales.
@@ -168,20 +201,35 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phase A COMPLETE and approved — Phase B open
+## Status: Phase A approved — Phase B underway (V8, V9 landed)
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
-Suite 289 → **300 green**.
+V8 and V9 landed 2026-07-20. Suite 289 → **327 green**.
 
-Next: **V8** (icon sprite + `index.html` restructure) and **V9** (shared UI
-primitives), which can run in parallel — V8 owns `index.html`/`icons.js`, V9 owns
-`actions.js`/`stats.js`. V10 and V11 follow both.
+V9 went first despite being nominally parallel: V8 adds decomposition rings to
+the internals queue rows that V9 relocates, so landing V9 first kept V8 a clean
+diff against a shared `buildStat` instead of a merge against a moving one.
+
+Next: **V10** (home/shop/setup restyle) and **V11** (HUD + speed bar), both now
+unblocked. V11 is the last gate before V12's layout rebuild.
 
 Carried into Phase B, unclosed by CPV1:
 - The **V5 browser check** — correctness, not aesthetics; due before V12.
 - The **`--surface-3` contrast gap** — `--ink-faint` is only 3.5:1 against it, so
   the day V8/V10 gives `--surface-3` a user, `tests/css.test.js` must gain that
-  pairing and one of the two values must move.
+  pairing and one of the two values must move. **V8 did not give it a user**
+  (icons colour from `--ink-dim`, `--accent` and `--surface-2`), so this is still
+  open and now falls to V10.
+
+**Owed from V8 — browser verification, not yet done.** These need a real browser
+and are the V8 verify step, carried until someone runs it:
+- Switch pt-BR/en/es on the game screen and confirm no icon is wiped
+  (finding #1's failure mode is a language switch, not first paint).
+- **Lay all 14 food icons out in the chooser grid and confirm they do not
+  cluster into two families.** This is the CPV2 review item and the one
+  anti-spoiler rule no test can enforce — the guards cover the frame, the weight,
+  the canvas and the palette, but not whether the 14 *glyphs* inside those
+  identical frames read as organic-vs-manufactured.
 
 CPV1 has been restated in the plan: its original "zero visual change except the
 typeface" described a Phase A that no longer exists, since splitting V2b put a
