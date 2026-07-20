@@ -85,10 +85,19 @@
       Cascade is now six files (`font.css` at position 2 — it selects nothing, like `tokens.css`).
       New guard: no stylesheet may reference an external URL (broken first with a `fonts.gstatic.com`
       `src` fallback — the exact mistake that would work in dev and fail offline). Suite 299 → 300.
-- [ ] **CPV1** — suites green. V1/V2a/V3/V4 invisible by construction; **V2b visible by design**,
-      V7 changes the typeface. (Restated — the original "zero visual change except the typeface"
-      predates the V2a/V2b split and would point the reviewer at the wrong thing.)
-      Review, in order: `tasks/v2b-computed-value-diff.md` → `DESIGN.md` → `css/tokens.css`
+- [x] **CPV1 — APPROVED by the maintainer, 2026-07-20.** Phase A signed off; Phase B unblocked.
+      **Machine-verified at the gate:** 300 tests green; V1 and V2a proved to change no computed
+      value (resolved-equivalence against the frozen baseline); every text colour ≥ WCAG AA on the
+      surfaces it occupies; no colour literal outside `tokens.css`; no external URL in any sheet;
+      the shipped font decoded from the served CSS and confirmed tabular at wght 400/600/700.
+      **Accepted on the maintainer's judgement, not measured:** the surface-ramp read (lifted vs
+      greener), the type-ramp density, the two adjacent reds in a gauge, and the typeface across the
+      four screens. These are the items no test in this project can reach.
+      **Cheap to revisit if any of them reads wrong in use:** V2b's colour and scale decisions are
+      confined to `css/tokens.css`, which is exactly why V2 was split — a reversal is a value edit in
+      one file, not a redesign across four.
+      **Not closed by this approval:** the V5 browser check below. It is a *correctness* item (drag
+      raycast accuracy), not an aesthetic one, and it still requires a real browser before V12.
 
 ## Phase B — Chrome
 
@@ -159,10 +168,20 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phase A COMPLETE — CPV1 is the next gate
+## Status: Phase A COMPLETE and approved — Phase B open
 
-V1, V2a, V2b, V3, V4, V5, V6, V7 all landed. Suite 289 → **300 green**.
-Nothing in Phase A is outstanding; **CPV1 needs human review before Phase B**.
+V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
+Suite 289 → **300 green**.
+
+Next: **V8** (icon sprite + `index.html` restructure) and **V9** (shared UI
+primitives), which can run in parallel — V8 owns `index.html`/`icons.js`, V9 owns
+`actions.js`/`stats.js`. V10 and V11 follow both.
+
+Carried into Phase B, unclosed by CPV1:
+- The **V5 browser check** — correctness, not aesthetics; due before V12.
+- The **`--surface-3` contrast gap** — `--ink-faint` is only 3.5:1 against it, so
+  the day V8/V10 gives `--surface-3` a user, `tests/css.test.js` must gain that
+  pairing and one of the two values must move.
 
 CPV1 has been restated in the plan: its original "zero visual change except the
 typeface" described a Phase A that no longer exists, since splitting V2b put a

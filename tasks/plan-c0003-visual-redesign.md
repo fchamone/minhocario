@@ -321,6 +321,15 @@ unsubsetted face is 100KB+ of base64. Ships as `css/font.css` with
 >
 > **Already settled, no longer open at this gate:** the `--state-alert` contrast failure, resolved by
 > the fill/ink split and now guarded by a permanent contrast test.
+>
+> ### ✅ APPROVED — 2026-07-20
+> Phase A signed off by the maintainer; Phase B unblocked. The visual judgement calls (surface-ramp
+> read, type-ramp density, the two adjacent reds in a gauge, the typeface across four screens) were
+> accepted rather than measured — no test in this project can reach them. They stay cheap to revisit:
+> V2b's decisions live in `css/tokens.css` alone, which is the whole reason V2 was split.
+>
+> **The V5 browser check is NOT closed by this approval** — it is drag-raycast correctness, not
+> appearance, and remains due before V12.
 
 ## Phase B — Chrome
 
