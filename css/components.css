@@ -63,9 +63,11 @@
   border: 1px solid var(--surface-2);
   border-radius: var(--radius);
 }
-.shop-card h3 { margin: 0; }
+.shop-card h3 { margin: 0; font-size: var(--text-base); }
 .shop-card__desc { color: var(--ink-dim); font-size: var(--text-md); margin: 0; }
-.shop-card__stats { font-size: var(--text-sm); margin: 0; }
+/* Capacity and price are the two numbers a player compares across cards, so they
+   line up column-wise down the grid rather than drifting with the digit widths. */
+.shop-card__stats { font-size: var(--text-sm); margin: 0; font-variant-numeric: tabular-nums; }
 .shop-card__buy { margin-top: auto; background: var(--accent); color: var(--accent-ink); }
 .shop-card--disabled { opacity: 0.6; }
 .shop-card--disabled .shop-card__buy { background: var(--surface-2); color: var(--ink); }

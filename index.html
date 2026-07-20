@@ -270,8 +270,11 @@
         </div>
         <h1 class="home__title" data-string="home.title"></h1>
         <p class="home__subtitle" data-string="home.subtitle"></p>
+        <!-- No ":" text node between label and value. In a flex row a bare text
+             node becomes its own flex item, so the colon floated between two
+             gaps ("Apelido : Nome"); the layout separates them instead. -->
         <p class="home__nickname">
-          <span data-string="home.nicknameLabel"></span>:
+          <span data-string="home.nicknameLabel"></span>
           <strong id="home-nickname">—</strong>
           <button type="button" id="btn-reroll" data-string="home.reroll"></button>
         </p>
@@ -286,8 +289,8 @@
             <thead>
               <tr>
                 <th data-string="home.rankingHeaderNick"></th>
-                <th data-string="home.rankingHeaderScore"></th>
-                <th data-string="home.rankingHeaderDays"></th>
+                <th class="ranking__num" data-string="home.rankingHeaderScore"></th>
+                <th class="ranking__num" data-string="home.rankingHeaderDays"></th>
               </tr>
             </thead>
             <tbody id="ranking-body"></tbody>
@@ -303,7 +306,7 @@
         <h1 data-string="shop.title"></h1>
         <!-- Swapped to the upgrade copy by initShop when reached mid-farm. -->
         <p id="shop-subtitle" data-string="shop.subtitle"></p>
-        <p class="wallet"><span data-string="shop.walletLabel"></span>: <span id="shop-wallet">—</span></p>
+        <p class="wallet"><span data-string="shop.walletLabel"></span><span id="shop-wallet">—</span></p>
       </header>
       <div id="shop-list" class="shop__list"></div>
       <button type="button" class="screen__back" data-nav="home" data-string="shop.back"></button>

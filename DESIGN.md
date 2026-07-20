@@ -60,7 +60,7 @@ flat.
 | `--surface-0` | `#1b2a1b` | 22% / 14% | page, gauge tracks, stage floor |
 | `--surface-1` | `#232e25` | 14% / 16% | panels, HUD, chooser, cards |
 | `--surface-2` | `#2d3830` | 11% / 20% | controls, borders, stats box |
-| `--surface-3` | `#38423a` | 8% / 24% | raised / hover — reserved for Phase B |
+| `--surface-3` | `#38423a` | 8% / 24% | raised / hover — hovered species row, language rung |
 
 `--surface-0` is deliberately **unchanged** from v1. It is the deepest note of
 the field-notebook register and the colour the whole screen is keyed to; the
@@ -88,6 +88,17 @@ real copy. It was lightened before shipping. It is used on exactly two elements,
 both over `--surface-0`/`--surface-1`; it measures 4.1 on `--surface-2` and 3.5
 on `--surface-3`, so **faint text must not be placed on those two surfaces**
 without moving one of the values.
+
+`--surface-3` got its first users in V10 (the hovered species row and language
+rung), which is what finally forced its contrast to be measured. **Only three
+inks may sit on it:** `--ink` (9.2), `--ink-dim` (5.3) and `--accent` (4.75).
+`--state-alert-ink` measures **4.3** there and `--ink-faint` **3.5** — both below
+AA. That constraint decided a design question rather than merely recording one:
+the shop card raises its *border* on hover instead of its fill, because the card
+carries a "cannot afford" line in `--state-alert-ink` that a raised fill would
+have pushed under the floor. `tests/css.test.js` now fails on any surface painted
+in the sheets that no ink has been measured against, so the next `--surface-N`
+cannot sit unmeasured the way this one did for four tasks.
 
 ### Why each state tier splits into a fill and an ink
 
@@ -155,7 +166,18 @@ the instrument.
 
 Two values stay literal on purpose: `44px` and `56px` dev-mode clearances are
 **measured off the dev nav bar's own height**, not chosen from the scale. They
-track that bar, so a token would misrepresent them.
+track that bar, so a token would misrepresent them. They are the entire allowlist
+in `tests/css.test.js`, which since V10 fails on any `px`/`rem` literal in a
+`padding`, `margin`, `gap` or `font-size` — the same enforcement the colours get,
+applied to the other two scales.
+
+That guard is deliberately narrow. It polices the properties the **scales** cover
+and nothing else: widths, heights, offsets, hairlines and radii are the
+dimensions of specific components rather than steps on a ramp, and forcing them
+onto a 4px grid would be cargo-culting the rule instead of applying it. Negative
+values are exempt for the same reason — the spacing scale has no negative steps,
+so a negative margin is always a geometry nudge (`.gauge__marker` centring itself
+on its own position), never a missed token.
 
 Radius: `--radius-sm` 4 / `--radius` 8 / `--radius-lg` 12 (dialog and banner —
 the two largest floating surfaces).

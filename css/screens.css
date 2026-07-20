@@ -13,86 +13,185 @@
   text-align: center;
 }
 
-/* Language selector: a native-name button group. Home-only (spec fork 2). */
+/* The micro-label: uppercase, tracked, one step below the workhorse. It is the
+   field-instrument register's smallest voice — a caption on a dial, not a
+   sentence — and it recurs on every screen, so it is written once here. */
+.lang-select__label,
+.ranking h2,
+.ranking__table th,
+.wallet,
+.setup legend {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--ink-dim);
+}
+
+/* Language selector: a native-name button group. Home-only (spec fork 2).
+   A segmented control — one hairline box with rules BETWEEN the rungs, rather
+   than a border around each: three separate buttons read as three decisions,
+   one segmented box reads as a single choice with three positions. */
 .lang-select {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-  font-size: var(--text-sm);
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
 }
-.lang-select__label { color: var(--ink-dim); }
-.lang-select__options { display: flex; gap: var(--space-2); }
+.lang-select__options {
+  display: flex;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
 .lang-select__btn {
   padding: var(--space-1) var(--space-3);
-  font-size: var(--text-sm);
-  background: var(--surface-2);
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--surface-2);
+  border-radius: 0;
 }
+.lang-select__btn:first-child { border-left: 0; }
+/* The base `button:hover` lights the whole border accent, which here would draw
+   a green line down the middle of the control. The fill carries the hover. */
+.lang-select__btn:hover { background: var(--surface-3); color: var(--ink); border-color: var(--surface-2); }
 .lang-select__btn.is-active { background: var(--accent); color: var(--accent-ink); }
-.home__subtitle { color: var(--ink-dim); }
+
+.home__title { margin-bottom: var(--space-1); }
+.home__subtitle { color: var(--ink-dim); font-size: var(--text-md); margin: 0; }
 .home__actions {
   display: flex;
-  gap: var(--gap);
+  gap: var(--space-3);
   justify-content: center;
   margin: var(--space-6) 0;
 }
 .home__actions button { background: var(--accent); color: var(--accent-ink); }
 
+/* The nickname reads as a stamped identity plate rather than a sentence — it is
+   the one piece of player data on the screen. */
 .home__nickname {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  color: var(--ink-dim);
+  gap: var(--space-3);
   margin-top: var(--space-5);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  color: var(--ink-dim);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  background: var(--surface-1);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
 }
-.home__nickname strong { color: var(--ink); }
-.home__nickname button { padding: var(--space-1) var(--space-3); font-size: var(--text-sm); }
+.home__nickname strong {
+  color: var(--ink);
+  font-size: var(--text-md);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.home__nickname button { padding: var(--space-1) var(--space-3); font-size: var(--text-2xs); }
 .home__notice {
   color: var(--state-alert-ink);
   background: var(--state-alert-bg);
   border: 1px solid var(--state-alert);
   border-radius: var(--radius);
   padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
 }
 .home__notice[hidden] { display: none; }
 
-.ranking { text-align: left; margin-top: var(--space-6); }
-.ranking__table { width: 100%; border-collapse: collapse; }
+.ranking { text-align: left; margin-top: var(--space-8); }
+.ranking h2 { margin-bottom: var(--space-2); }
+.ranking__table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .ranking__table th,
 .ranking__table td {
   text-align: left;
   padding: var(--space-2);
   border-bottom: 1px solid var(--surface-2);
 }
-.ranking__empty { color: var(--ink-faint); }
+/* Score and days are readouts, so they get the readout treatment: right-aligned
+   and tabular, which turns the column into a stack of comparable magnitudes
+   instead of a ragged list of strings. js/ui/home.js tags the cells. */
+/* Scoped through .ranking__table deliberately: the `th, td` rule above sets
+   text-align: left at (0,1,1), so a bare .ranking__num (0,1,0) would lose. */
+.ranking__table .ranking__num { text-align: right; font-variant-numeric: tabular-nums; }
+.ranking__table tbody tr:hover { background: var(--surface-1); }
+.ranking__empty { color: var(--ink-faint); font-size: var(--text-sm); }
 
 /* --- Shop / Setup --- */
 .shop__list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--gap);
+  gap: var(--space-4);
   max-width: 900px;
   margin: 0 auto;
 }
-.wallet { color: var(--ink-dim); }
+.wallet {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-1);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+#shop-wallet {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: normal;
+}
 
-.setup { max-width: 640px; margin: 0 auto; display: grid; gap: var(--gap); }
-.setup fieldset { border: 1px solid var(--surface-2); border-radius: var(--radius); display: grid; gap: var(--space-2); }
+.setup { max-width: 640px; margin: 0 auto; display: grid; gap: var(--space-4); }
+.setup fieldset {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+}
+.setup legend { padding: 0 var(--space-2); }
+/* The primary action of the whole pre-game flow, and until now an unstyled grey
+   button identical to Reroll — the "completes setup unaided" criterion (T22). */
+#setup-confirm {
+  justify-self: start;
+  padding: var(--space-2) var(--space-6);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
 
 .setup-species {
   display: flex;
   gap: var(--space-3);
   align-items: flex-start;
-  padding: var(--space-2);
-  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.setup-species:hover { background: var(--surface-2); }
+/* --surface-3's first user. It is the ramp's "raised/hover" step and has sat
+   unmeasured since V2b; note that only --ink, --ink-dim and --accent may sit on
+   it (see the contrast map in tests/css.test.js) — all three are what a species
+   row contains, which is why the hover landed here and not on the shop card. */
+.setup-species:hover { background: var(--surface-3); }
+/* The radio dot alone is a 13px signal for the screen's biggest decision. An
+   accent rule down the selected row says it at a glance. */
+.setup-species:has(input:checked) {
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
 .setup-species__body { display: grid; gap: var(--space-05); }
 .setup-species__latin { color: var(--ink-dim); font-size: var(--text-sm); }
-.setup-species__desc { font-size: var(--text-md); }
-.setup-species__price { color: var(--accent); font-size: var(--text-sm); }
+.setup-species__desc { font-size: var(--text-md); color: var(--ink-dim); }
+.setup-species__price {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
 
 .setup-bedding__row,
 .setup-waste__amount {
@@ -100,11 +199,12 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  padding: var(--space-05) 0;
+  font-size: var(--text-sm);
 }
 .setup-bedding__row input,
-.setup-waste__amount input { width: 90px; }
+.setup-waste__amount input { width: 90px; text-align: right; }
 #setup-waste { display: grid; gap: var(--space-2); }
-#setup-waste select { padding: var(--space-2); }
 
 /* --- Game screen grid --- */
 /* Regions: HUD across the top, stage (3D canvas) fills the middle,

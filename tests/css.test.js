@@ -241,34 +241,37 @@ const contrast = (a, b) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
+// Each text colour is checked against the surfaces it ACTUALLY sits on, not
+// against all of them. A blanket list is wrong in both directions: it would
+// fail --ink-faint for a pairing that never occurs, and it would silently
+// stop covering an ink the day it appears somewhere new.
+//
+// Fills and borders (--state-warn, --state-alert) are deliberately absent —
+// they carry no text and have no contrast floor.
+//
+// The internals panel's real background is --surface-1-alpha (92% --surface-1
+// over the 3D stage). --surface-1 is the right proxy: the stage behind it is
+// comparably dark, and the 8% bleed cannot move the ratio meaningfully.
+//
+// V10 gave --surface-3 its first users (the hovered species row and language
+// button). Only three inks can reach it, and the two that CANNOT are the point
+// of writing this down: --ink-faint measures 3.5:1 there and --state-alert-ink
+// 4.3:1, so neither may be placed on --surface-3 without moving a value. That
+// is why the shop card raises its border on hover instead of its fill — the
+// "cannot afford" reason line is --state-alert-ink and would have failed here.
+const INK_SURFACES = {
+  '--ink': ['--surface-0', '--surface-1', '--surface-2', '--surface-3'],
+  '--ink-dim': ['--surface-0', '--surface-1', '--surface-2', '--surface-3'],
+  // Only .internals__empty (over --surface-1) and .ranking__empty (--surface-0).
+  '--ink-faint': ['--surface-0', '--surface-1'],
+  '--accent': ['--surface-0', '--surface-1', '--surface-2', '--surface-3'],
+  '--state-warn-ink': ['--surface-0', '--surface-1', '--surface-2'],
+  '--state-alert-ink': ['--surface-0', '--surface-1', '--surface-2'],
+};
+
 test('every text colour clears WCAG AA on every surface it can sit on', () => {
   const tokens = tokenMap(readSheet('tokens.css'));
   const resolved = (name) => resolveVars(`var(${name})`, tokens);
-
-  // Each text colour is checked against the surfaces it ACTUALLY sits on, not
-  // against all of them. A blanket list is wrong in both directions: it would
-  // fail --ink-faint for a pairing that never occurs, and it would silently
-  // stop covering an ink the day it appears somewhere new.
-  //
-  // Fills and borders (--state-warn, --state-alert) are deliberately absent —
-  // they carry no text and have no contrast floor.
-  //
-  // --surface-3 appears nowhere yet. When Phase B gives it a user, every ink
-  // placed on it must be added here; note --ink-faint is only 3.5:1 against it,
-  // so that pairing needs one of the two to move.
-  //
-  // The internals panel's real background is --surface-1-alpha (92% --surface-1
-  // over the 3D stage). --surface-1 is the right proxy: the stage behind it is
-  // comparably dark, and the 8% bleed cannot move the ratio meaningfully.
-  const INK_SURFACES = {
-    '--ink': ['--surface-0', '--surface-1', '--surface-2'],
-    '--ink-dim': ['--surface-0', '--surface-1', '--surface-2'],
-    // Only .internals__empty (over --surface-1) and .ranking__empty (--surface-0).
-    '--ink-faint': ['--surface-0', '--surface-1'],
-    '--accent': ['--surface-0', '--surface-1', '--surface-2'],
-    '--state-warn-ink': ['--surface-0', '--surface-1', '--surface-2'],
-    '--state-alert-ink': ['--surface-0', '--surface-1', '--surface-2'],
-  };
 
   for (const [ink, surfaces] of Object.entries(INK_SURFACES)) {
     for (const surface of surfaces) {
@@ -281,6 +284,96 @@ test('every text colour clears WCAG AA on every surface it can sit on', () => {
       );
     }
   }
+});
+
+// The contrast map above is only as good as its coverage: it measures the
+// pairings someone remembered to list. --surface-3 shipped in V2b with no user
+// at all and sat unmeasured for four tasks precisely because nothing forced the
+// question. This is what forces it — paint a surface anywhere and it must appear
+// in INK_SURFACES, which means someone had to decide which inks may sit on it.
+//
+// Scoped to the four opaque steps on purpose. --surface-1-alpha is proxied by
+// --surface-1 (see above); --scrim/--scrim-dim are backdrops that carry no text
+// of their own; --stage-sky sits behind a canvas.
+test('every surface painted in the sheets is covered by the contrast map', () => {
+  const measured = new Set(Object.values(INK_SURFACES).flat());
+
+  for (const name of SHEETS) {
+    const painted = [
+      ...stripComments(readSheet(name)).matchAll(
+        /background(?:-color)?\s*:\s*var\(\s*(--surface-\d)\s*\)/g,
+      ),
+    ].map((m) => m[1]);
+
+    for (const surface of painted) {
+      assert.ok(
+        measured.has(surface),
+        `${name} paints ${surface}, which no ink is measured against — add it to ` +
+          'INK_SURFACES for every ink that can sit on it, or say why none can',
+      );
+    }
+  }
+});
+
+// --- The spacing and type scales ---------------------------------------------
+// The same argument as the colour rule, applied to the other two scales: a
+// vocabulary nobody is held to decays back into literals. V10's AC ("all three
+// screens on the token scale — no stray literals") is only a claim until
+// something can fail on it.
+//
+// Deliberately narrow. It polices the properties the SCALES cover — box spacing
+// and type size — and nothing else. Widths, heights, offsets, hairline borders
+// and radii are the dimensions of specific components rather than steps on a
+// ramp, and forcing them onto a 4px grid would be cargo-culting the rule instead
+// of applying it. Negative values are exempt for the same reason: the spacing
+// scale has no negative steps, so a negative margin is always a geometry nudge
+// (`.gauge__marker` centring itself on its own position), never a missed token.
+
+/** The px literals that are deliberate, each documented in DESIGN.md. */
+const ALLOWED_LENGTHS = new Map([
+  ['44px', 'dev-nav clearance in the HUD — measured off that bar, not a scale step'],
+  ['56px', 'dev-nav clearance in .screen — same'],
+]);
+
+const SCALE_PROPERTIES = /(?:^|[;{])\s*((?:padding|margin)(?:-(?:top|right|bottom|left))?|(?:row-|column-)?gap|font-size)\s*:\s*([^;}]+)/g;
+
+/**
+ * Off-scale px/rem lengths in spacing/type declarations.
+ * @param {string} css
+ * @returns {string[]} `property: value` for each offending declaration
+ */
+function offScaleLengths(css) {
+  const found = [];
+  for (const [, property, value] of stripComments(css).matchAll(SCALE_PROPERTIES)) {
+    for (const [literal] of value.matchAll(/(?<!-)\b\d+(?:\.\d+)?(?:px|rem)\b/g)) {
+      if (!ALLOWED_LENGTHS.has(literal)) found.push(`${property}: ${value.trim()}`);
+    }
+  }
+  return found;
+}
+
+test('every spacing and type length comes from the scale, not a literal', () => {
+  for (const name of SHEETS.filter((n) => n !== 'tokens.css')) {
+    assert.deepEqual(
+      offScaleLengths(readSheet(name)),
+      [],
+      `${name} sizes with literals instead of --space-* / --text-* tokens`,
+    );
+  }
+});
+
+test('the off-scale length walker actually detects a violation', () => {
+  // Guards the guard (the V6 lesson): every rule above passes trivially once
+  // satisfied, so prove this one sees what it claims to police.
+  assert.deepEqual(offScaleLengths('.a { padding: 13px; }'), ['padding: 13px']);
+  assert.equal(offScaleLengths('.a { font-size: 0.9rem; }').length, 1);
+  assert.equal(offScaleLengths('.a { gap: 6px var(--space-2); }').length, 1);
+
+  // ...and prove it stays quiet on the four things it deliberately permits.
+  assert.deepEqual(offScaleLengths('.a { padding: var(--space-3) var(--space-4); }'), []);
+  assert.deepEqual(offScaleLengths('.a { margin-left: -1px; }'), [], 'negatives are geometry');
+  assert.deepEqual(offScaleLengths('.a { padding-top: 44px; }'), [], 'documented clearance');
+  assert.deepEqual(offScaleLengths('.a { width: 90px; height: 8px; border-radius: 2px; }'), []);
 });
 
 // The token layer is enforced, not offered. Without this, a colour system is a

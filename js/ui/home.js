@@ -121,8 +121,18 @@ function renderRanking(tbody, emptyEl, save) {
   tbody.replaceChildren();
   for (const entry of rows) {
     const tr = document.createElement('tr');
-    for (const value of [entry.nickname, entry.score, entry.daysSurvived]) {
+    // The nickname is a name; score and days are readouts. Tagging the latter
+    // two is what lets the sheet right-align them and set tabular numerals, so
+    // the columns compare as magnitudes — the same treatment every other numeric
+    // readout in the game gets. The <th> pair in index.html carries the class to
+    // match; keep the two in step if a column is ever added.
+    for (const [value, numeric] of [
+      [entry.nickname, false],
+      [entry.score, true],
+      [entry.daysSurvived, true],
+    ]) {
       const td = document.createElement('td');
+      if (numeric) td.className = 'ranking__num';
       td.textContent = value == null ? '—' : String(value);
       tr.appendChild(td);
     }
