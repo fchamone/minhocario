@@ -54,10 +54,27 @@
 
   /* --- State ---
      Named to match markFillLevel()'s vocabulary in js/ui/actions.js, so CSS and
-     JS use one word per meaning. */
+     JS use one word per meaning.
+
+     Each tier splits into a FILL and an INK, because the two have genuinely
+     different jobs: a border, a gauge marker or a bar has no contrast floor to
+     meet, while text does. Collapsing them forces one value to serve both, and
+     the text always loses — #c0563f is a good alarm colour and a bad on-dark
+     text colour (2.7:1 in the stats box, below even AA-large).
+
+     Keeping the fill saturated is the point: the alarm quality lives in the
+     border, the pulse and the gauge fill, which is where it reads anyway. Only
+     the lettering lightens. Same shape as --accent-soft/--accent-soft-strong.
+
+     --state-warn-ink equals --state-warn today because #e0b13c already clears
+     AA (7.6/7.1/6.1). The indirection is not redundant: it keeps the two tiers
+     structurally identical, so retuning warn-as-text later is a one-line change
+     instead of a re-split. Do not "simplify" it away. */
   --state-warn: #e0b13c;
+  --state-warn-ink: var(--state-warn);
   --state-warn-bg: rgba(224, 177, 60, 0.12);
   --state-alert: #c0563f;
+  --state-alert-ink: #ef8a72;
   --state-alert-bg: rgba(192, 86, 63, 0.12);
   --state-alert-glow: rgba(192, 86, 63, 0.28);
   /* The pulse's rest state. Deliberately the same hue at zero alpha rather than

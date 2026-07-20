@@ -279,9 +279,29 @@ unsubsetted face is 100KB+ of base64. Ships as `css/font.css` with
 - **Verify:** `npx serve .` + devtools Network tab (no font request) + offline reload.
 - **Deps:** none. **Files:** `css/font.css`, `index.html`, `DESIGN.md`.
 
-> **CPV1 (after V1–V4, V7):** suites green; **zero visual change** except the new typeface. Human
-> review: the token vocabulary and the `DESIGN.md` art direction — the vocabulary every later task
-> is written against.
+> **CPV1 (after V1, V2a, V2b, V3, V4, V7).** *Restated 2026-07-20 — the original wording
+> ("**zero visual change** except the new typeface") described a phase that no longer exists. It was
+> written when V2 was one task claiming identical computed values; splitting out V2b put a
+> deliberate visual change inside Phase A. Promising "zero visual change" now would send the reviewer
+> looking for the wrong thing, and a checkpoint that misdescribes its own diff is worse than none.*
+>
+> **Expected state:** suites green (299). V1, V2a, V3 and V4 are invisible to the player by
+> construction — V1 and V2a were held to it by a machine-checked equivalence proof, not by eye.
+> **V2b is visible by design**, and V7 changes the typeface.
+>
+> **Human review, in order:**
+> 1. **`tasks/v2b-computed-value-diff.md`** — the property-level diff of resolved computed values,
+>    captured before the baseline fixture was retired. This is the substitute for the screenshot
+>    diff this project cannot have, and it is the main artifact of this checkpoint. Check the surface
+>    ramp (do panels read as *lifted* rather than *greener*?) and the type ramp (is the internals
+>    panel still comfortable, not merely denser?).
+> 2. **`DESIGN.md`** — the art direction and the token rationale, the vocabulary every later task is
+>    written against.
+> 3. **The token set itself** (`css/tokens.css`), including the deviations each marked `DEVIATION`
+>    with its reason.
+>
+> **Already settled, no longer open at this gate:** the `--state-alert` contrast failure, resolved by
+> the fill/ink split and now guarded by a permanent contrast test.
 
 ## Phase B — Chrome
 

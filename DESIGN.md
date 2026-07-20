@@ -69,27 +69,49 @@ flattening was never in the base, it was in the steps above it.
 ### Ink, accent, state
 
 Contrast is measured (WCAG 2.1) against the surfaces each colour actually sits
-on — not assumed. A tier that isn't readable isn't a tier.
+on — not assumed, and not blanket-checked. A tier that isn't readable isn't a
+tier. `tests/css.test.js` enforces this on every text colour, permanently.
 
-| token | value | vs `-0` | vs `-1` | vs `-2` |
-|---|---|---|---|---|
-| `--ink` | `#eaf2e6` | 13.2 | 12.3 | 10.7 |
-| `--ink-dim` | `#a9bda2` | 7.5 | 7.0 | 6.1 |
-| `--ink-faint` | `#879a82` | 5.0 | 4.7 | 4.1 |
-| `--accent` | `#7bc043` | 6.8 | 6.4 | 5.5 |
-| `--state-warn` | `#e0b13c` | 7.6 | 7.1 | 6.1 |
-| `--state-alert` | `#c0563f` | **3.3** | **3.1** | **2.7** |
+| token | value | vs `-0` | vs `-1` | vs `-2` | role |
+|---|---|---|---|---|---|
+| `--ink` | `#eaf2e6` | 13.2 | 12.3 | 10.7 | text |
+| `--ink-dim` | `#a9bda2` | 7.5 | 7.0 | 6.1 | text |
+| `--ink-faint` | `#879a82` | 5.0 | 4.7 | *4.1* | text, `-0`/`-1` only |
+| `--accent` | `#7bc043` | 6.8 | 6.4 | 5.5 | text |
+| `--state-warn-ink` | `#e0b13c` | 7.6 | 7.1 | 6.1 | text |
+| `--state-alert-ink` | `#ef8a72` | 6.1 | 5.7 | 5.0 | text |
+| `--state-warn` | `#e0b13c` | — | — | — | fill / border |
+| `--state-alert` | `#c0563f` | — | — | — | fill / border |
 
 `--ink-faint` was first drafted at `#7d8f78` and measured 4.36:1 — under AA, on
-real copy. It was lightened before shipping.
+real copy. It was lightened before shipping. It is used on exactly two elements,
+both over `--surface-0`/`--surface-1`; it measures 4.1 on `--surface-2` and 3.5
+on `--surface-3`, so **faint text must not be placed on those two surfaces**
+without moving one of the values.
 
-> **Known issue — `--state-alert` fails AA on every surface.** Inherited from
-> v1 and unchanged by C-0003. It carries text in six places, including
-> `.stat--alert .stat__value` inside the stats box, where it measures 2.7:1 —
-> below even AA-large. Reaching AA on all three surfaces requires lightening it
-> to roughly `#d79484`, which reads noticeably pinker and costs the colour its
-> alarm quality. **Open decision, not an oversight** — tracked in
-> `tasks/todo-c0003-visual-redesign.md` under Open items.
+### Why each state tier splits into a fill and an ink
+
+A border, a gauge marker or a bar has no contrast floor to meet. Text does.
+Collapsing both jobs into one token forces a single value to serve both, and the
+text always loses: `#c0563f` is a good alarm colour and a bad on-dark text
+colour — it measured 2.7:1 in the stats box, below even AA-large.
+
+So the saturated value stays where the alarm actually reads (border, pulse,
+gauge marker, gauge fill), and only the lettering lightens to `#ef8a72`. This
+mirrors the `--accent-soft` / `--accent-soft-strong` split already in the file.
+
+`--state-warn-ink` equals `--state-warn` today, because `#e0b13c` already clears
+AA. The indirection is **not** redundant: it keeps the two tiers structurally
+identical, so retuning warn-as-text later is a one-line change rather than a
+re-split. Do not simplify it away.
+
+> An earlier draft of this document claimed reaching AA meant lightening the
+> alert red toward `#d79484` and losing its bite. That was wrong — it came from
+> searching only along the original 51% saturation, which forces lightness up
+> and produces washed pink. Searching saturation as well finds AA-passing reds
+> that are *more* vivid than the original (`#ff724f` at 100% saturation clears
+> AA on all three). The split above was preferred anyway, because it fixes the
+> text without touching the fills at all.
 
 State colours are named to match `markFillLevel()`'s vocabulary in
 `js/ui/actions.js`, so CSS and JS use **one word per meaning**: `warn` is the

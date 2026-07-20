@@ -1,34 +1,20 @@
 # V2b — computed-value diff (review artifact)
 
-> Generated at V2b against `tests/fixtures/style.baseline.css` (the pre-token
-> stylesheet), immediately before that fixture and the resolved-equivalence test
-> in `tests/css.test.js` were retired. Every `var()` on both sides is fully
-> resolved, so these are **computed values**, not source text.
+> Generated against the pre-token stylesheet (`tests/fixtures/style.baseline.css`
+> as it stood at `a716903`, before V2b retired it). Every `var()` on both sides is
+> fully resolved, so these are **computed values**, not source text.
 >
 > This exists because V2b is the first task in C-0003 that changes what the
-> player sees, and the project has no visual-regression tooling (no npm). It is
-> the substitute for a screenshot diff, and the input to the CPV1 review.
+> player sees, and the project has no visual-regression tooling (no npm, by rule).
+> It is the substitute for a screenshot diff, and the primary review artifact at
+> CPV1.
+>
+> Regenerated after the `--state-alert` fill/ink split so it stays complete;
+> the fixture was restored from git history for the regeneration and removed again.
 
 **Shape of the change:** 144 selectors before, 144 after — no rule added, moved
-or removed. 80 declarations changed value, plus exactly one new declaration
+or removed. 88 declarations changed value, plus exactly one new declaration
 (`.actions__btn--warn { background }`, the new `--state-warn-bg` fill).
-
-## Summary by property
-
-| property | changed |
-|---|---|
-| `font-size` | 21 |
-| `background` | 15 |
-| `padding` | 13 |
-| `gap` | 6 |
-| `transition` | 4 |
-| `border` | 4 |
-| `animation` | 4 |
-| `margin` | 3 |
-| `border-bottom` | 3 |
-| `color` | 2 |
-| `border-radius` | 2 |
-| `margin-top` / `border-top` / `border-left` | 1 each |
 
 ## What to look for at CPV1
 
@@ -40,10 +26,30 @@ or removed. 80 declarations changed value, plus exactly one new declaration
    at a 16px root. The workhorse size drops `.85rem → .8125rem`, so panels get
    denser; the chooser title rises `1rem → 1.25rem`. Check the internals panel
    is still comfortable to read, not just compact.
-3. **Alert legibility** — `--state-alert` is UNCHANGED here, but measured at
-   2.70:1 on `--surface-2` (below WCAG AA, and below AA-large). Pre-existing,
-   raised as an open decision — see the todo's Open items.
+3. **Alert text** — the 8 text uses of `--state-alert` moved to
+   `--state-alert-ink` `#ef8a72` (AA on every surface); borders, gauge markers,
+   gauge fills and the pulse deliberately keep the saturated `#c0563f`. Check the
+   two reds sitting adjacent in a gauge read as depth rather than as a mismatch —
+   **this is the one judgement call in the split** and the only part a contrast
+   test cannot settle.
 4. **`--ink-faint`** — new third ink tier, on the two empty-state lines only.
+
+## Summary by property
+
+| property | changed |
+|---|---|
+| `color` | 10 |
+| `font-size` | 21 |
+| `background` | 15 |
+| `padding` | 13 |
+| `gap` | 6 |
+| `transition` | 4 |
+| `border` | 4 |
+| `animation` | 4 |
+| `margin` | 3 |
+| `border-bottom` | 3 |
+| `border-radius` | 2 |
+| `margin-top` / `border-top` / `border-left` | 1 each |
 
 ## Full diff
 
@@ -63,6 +69,7 @@ or removed. 80 declarations changed value, plus exactly one new declaration
 | `.shop-card__desc` | `font-size` | `0.9rem` | `0.875rem` |
 | `.shop-card__stats` | `font-size` | `0.85rem` | `0.8125rem` |
 | `.shop-card--disabled .shop-card__buy` | `background` | `#2c3f2c` | `#2d3830` |
+| `.shop-card__reason` | `color` | `#c0563f` | `#ef8a72` |
 | `.shop-card__reason` | `font-size` | `0.8rem` | `0.75rem` |
 | `.internals` | `font-size` | `0.85rem` | `0.8125rem` |
 | `.internals` | `background` | `rgba(34, 51, 34, 0.92)` | `rgba(35, 46, 37, 0.92)` |
@@ -71,8 +78,10 @@ or removed. 80 declarations changed value, plus exactly one new declaration
 | `.internals h4` | `margin` | `0 0 6px` | `0 0 8px` |
 | `.internals h4` | `font-size` | `0.8rem` | `0.75rem` |
 | `.internals__empty` | `color` | `#a9bda2` | `#879a82` |
+| `.stat--alert .stat__value` | `color` | `#c0563f` | `#ef8a72` |
 | `.gauge` | `padding` | `3px 0` | `4px 0` |
 | `.gauge__marker` | `transition` | `left 0.3s ease, background-color 0.2s ease` | `left 0.3s ease, background-color 0.16s ease` |
+| `.gauge--alert .gauge__value` | `color` | `#c0563f` | `#ef8a72` |
 | `.gauge__fill` | `transition` | `width 0.3s ease, background-color 0.2s ease` | `width 0.3s ease, background-color 0.16s ease` |
 | `.stats` | `padding` | `8px 10px` | `8px 12px` |
 | `.stats` | `font-size` | `0.85rem` | `0.8125rem` |
@@ -88,6 +97,7 @@ or removed. 80 declarations changed value, plus exactly one new declaration
 | `.banner` | `background` | `#223322` | `#232e25` |
 | `.banner` | `border-radius` | `8px` | `12px` |
 | `.banner` | `animation` | `banner-in 0.22s ease-out` | `banner-in 0.16s ease-out` |
+| `.banner strong` | `color` | `#c0563f` | `#ef8a72` |
 | `.banner p` | `margin` | `0 0 10px` | `0 0 12px` |
 | `.banner p` | `font-size` | `0.9rem` | `0.875rem` |
 | `.shop-card__tradein` | `font-size` | `0.85rem` | `0.8125rem` |
@@ -100,6 +110,7 @@ or removed. 80 declarations changed value, plus exactly one new declaration
 | `.lang-select__btn` | `background` | `#2c3f2c` | `#2d3830` |
 | `.home__nickname button` | `padding` | `4px 10px` | `4px 12px` |
 | `.home__nickname button` | `font-size` | `0.85rem` | `0.8125rem` |
+| `.home__notice` | `color` | `#c0563f` | `#ef8a72` |
 | `.ranking__table th, .ranking__table td` | `padding` | `6px 8px` | `8px` |
 | `.ranking__table th, .ranking__table td` | `border-bottom` | `1px solid #2c3f2c` | `1px solid #2d3830` |
 | `.ranking__empty` | `color` | `#a9bda2` | `#879a82` |
@@ -124,7 +135,10 @@ or removed. 80 declarations changed value, plus exactly one new declaration
 | `.speed__buttons button` | `padding` | `6px 12px` | `8px 12px` |
 | `.actions__feedback` | `font-size` | `0.85rem` | `0.8125rem` |
 | `.actions__feedback` | `background` | `#2c3f2c` | `#2d3830` |
+| `.actions__feedback--error` | `color` | `#c0563f` | `#ef8a72` |
+| `.speed__paused` | `color` | `#c0563f` | `#ef8a72` |
 | `.speed__paused` | `font-size` | `0.85rem` | `0.8125rem` |
+| `#hud-status.hud__status--alert` | `color` | `#c0563f` | `#ef8a72` |
 | `.actions__feedback--flash` | `animation` | `feedback-in 0.28s ease-out` | `feedback-in 0.3s ease-out` |
 | `dialog.chooser[open]` | `animation` | `dialog-in 0.18s ease-out` | `dialog-in 0.16s ease-out` |
 | `dialog.chooser[open]::backdrop` | `animation` | `backdrop-in 0.18s ease-out` | `backdrop-in 0.16s ease-out` |

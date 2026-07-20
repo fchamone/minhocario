@@ -49,7 +49,7 @@
 .home__nickname strong { color: var(--ink); }
 .home__nickname button { padding: var(--space-1) var(--space-3); font-size: var(--text-sm); }
 .home__notice {
-  color: var(--state-alert);
+  color: var(--state-alert-ink);
   background: var(--state-alert-bg);
   border: 1px solid var(--state-alert);
   border-radius: var(--radius);
@@ -178,10 +178,10 @@ body.dev-mode .hud { padding-top: 44px; }
   border-radius: var(--radius);
 }
 .actions__feedback:empty { display: none; }
-.actions__feedback--error { color: var(--state-alert); }
+.actions__feedback--error { color: var(--state-alert-ink); }
 
 .speed__paused {
-  color: var(--state-alert);
+  color: var(--state-alert-ink);
   font-weight: 600;
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
@@ -192,4 +192,4 @@ body.dev-mode .hud { padding-top: 44px; }
    colony / full humus tray / full leachate tank), so the condition reads at a
    glance rather than as one word among five. The id keeps this ahead of the
    `.hud__item span:last-child` color rule without !important. */
-#hud-status.hud__status--alert { color: var(--state-alert); font-weight: 700; }
+#hud-status.hud__status--alert { color: var(--state-alert-ink); font-weight: 700; }

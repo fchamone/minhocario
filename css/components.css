@@ -23,7 +23,7 @@
 .shop-card__buy { margin-top: auto; background: var(--accent); color: var(--accent-ink); }
 .shop-card--disabled { opacity: 0.6; }
 .shop-card--disabled .shop-card__buy { background: var(--surface-2); color: var(--ink); }
-.shop-card__reason { color: var(--state-alert); font-size: var(--text-xs); margin: 0; }
+.shop-card__reason { color: var(--state-alert-ink); font-size: var(--text-xs); margin: 0; }
 
 /* --- Internals panel --- */
 /* Overlays the stage. Always present (the x-ray toggle no longer hides it), so
@@ -72,8 +72,8 @@
 .stat { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-05) 0; }
 .stat__label { color: var(--ink-dim); }
 .stat__value { font-variant-numeric: tabular-nums; }
-.stat--warn .stat__value { color: var(--state-warn); font-weight: 600; }
-.stat--alert .stat__value { color: var(--state-alert); font-weight: 600; }
+.stat--warn .stat__value { color: var(--state-warn-ink); font-weight: 600; }
+.stat--alert .stat__value { color: var(--state-alert-ink); font-weight: 600; }
 
 /* A gauge: label + value on one line, then a bar whose highlighted zone is the
    species' comfort band and whose marker is the current value. */
@@ -111,9 +111,9 @@
   /* Glide to the new value each tick instead of jumping (T22 polish). */
   transition: left var(--dur-slow) var(--ease), background-color var(--dur) var(--ease);
 }
-.gauge--warn .gauge__value { color: var(--state-warn); font-weight: 600; }
+.gauge--warn .gauge__value { color: var(--state-warn-ink); font-weight: 600; }
 .gauge--warn .gauge__marker { background: var(--state-warn); }
-.gauge--alert .gauge__value { color: var(--state-alert); font-weight: 600; }
+.gauge--alert .gauge__value { color: var(--state-alert-ink); font-weight: 600; }
 .gauge--alert .gauge__marker { background: var(--state-alert); }
 
 /* A band-less gauge: the bar is filled from the left to the current level. Used
@@ -194,7 +194,7 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-1);
 }
-.banner strong { color: var(--state-alert); display: block; margin-bottom: var(--space-1); }
+.banner strong { color: var(--state-alert-ink); display: block; margin-bottom: var(--space-1); }
 .banner p { margin: 0 0 var(--space-3); font-size: var(--text-md); color: var(--ink-dim); }
 .banner button { background: var(--accent); color: var(--accent-ink); }
 

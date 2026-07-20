@@ -66,8 +66,10 @@
       and vent stack and swallows almost any error. `markBody()` now tags the enclosing meshes, with
       a companion test asserting the tags exist. Suite 282 → 289.
 - [ ] **V7** Base64 webfont (SIL OFL, subset, `data:` URI in `css/font.css`) (S/M) — deps: none (∥)
-- [ ] **CPV1** — suites green; **zero visual change** except the typeface.
-      Review: token vocabulary + `DESIGN.md` art direction
+- [ ] **CPV1** — suites green. V1/V2a/V3/V4 invisible by construction; **V2b visible by design**,
+      V7 changes the typeface. (Restated — the original "zero visual change except the typeface"
+      predates the V2a/V2b split and would point the reviewer at the wrong thing.)
+      Review, in order: `tasks/v2b-computed-value-diff.md` → `DESIGN.md` → `css/tokens.css`
 
 ## Phase B — Chrome
 
@@ -106,17 +108,21 @@
 
 ## Open items
 
-- [ ] **DECISION NEEDED — `--state-alert` fails WCAG AA on every surface.** Found while measuring
-      contrast for V2b's new `--ink-faint` tier. `#c0563f` measures **3.3 / 3.1 / 2.7 : 1** against
-      `--surface-0/-1/-2`; the 2.7 case is `.stat--alert .stat__value` inside the stats box, which is
-      below even AA-large. It carries text in six places (stat values, HUD status, paused label,
-      error feedback, banner heading, shop reason).
-      **Pre-existing since v1 and NOT introduced by C-0003** — left unchanged deliberately rather
-      than fixed silently, because reaching AA on all three surfaces means lightening it to roughly
-      `#d79484`, which reads noticeably pinker and costs the colour its alarm quality. That is an
-      identity call, not a mechanical one. Options: (a) accept and document, (b) lighten to ~`#d79484`,
-      (c) lighten only enough for `--surface-0/-1` (~`#d0806d`) and give the stats box a darker
-      backing. Recorded in `DESIGN.md` under Colour.
+- [x] **RESOLVED — `--state-alert` contrast.** Split each state tier into a fill and an ink:
+      `--state-alert` keeps `#c0563f` for borders, gauge markers, gauge fills and the pulse (where
+      the alarm actually reads), and the 10 text uses moved to `--state-alert-ink` `#ef8a72`
+      (6.1 / 5.7 / 5.0 — AA on every surface). `--state-warn` got the same shape for symmetry;
+      `--state-warn-ink` equals `--state-warn` today because warn already cleared AA, and the
+      indirection exists so a later warn retune is one line rather than a re-split.
+      **My framing of this decision was wrong and was corrected before it was acted on.** I claimed
+      reaching AA meant going pinker and losing the alarm quality — that came from searching only
+      along the original 51% saturation, which forces lightness up. Searching saturation too finds
+      AA-passing reds *more* vivid than the original (`#ff724f`, 100% sat). The split was chosen
+      anyway because it fixes the text without touching the fills.
+      Now guarded permanently: `tests/css.test.js` measures every text colour against the surfaces
+      it actually sits on. That test caught an over-broad assumption in **itself** on first run —
+      a blanket surface list failed `--ink-faint` on `--surface-2`, a pairing that never occurs —
+      so it now carries a per-ink surface map with the reason for each restriction.
 - [ ] **V5 browser check (carried).** ResizeObserver has no automated coverage — it needs a real
       browser. `npx serve .`, resize the window, and drag the bin at several widths; it must stay
       pinned under the cursor. Do this **before** V12, since V12 is the task that would otherwise
@@ -136,10 +142,10 @@
 
 ## Status: Phase A complete except V7 (webfont)
 
-V1, V2a, V2b, V3, V4, V5, V6 all landed. Suite 289 → **298 green**.
+V1, V2a, V2b, V3, V4, V5, V6 all landed. Suite 289 → **299 green**.
 Remaining before CPV1: **V7** (base64 webfont, independent of everything else).
 
-CPV1's promise of "zero visual change except the typeface" **no longer holds as
-written** — V2b retunes values by design, which is why it was split out and why
-`tasks/v2b-computed-value-diff.md` exists. Review that diff at CPV1 alongside the
-token vocabulary and the `DESIGN.md` art direction.
+CPV1 has been restated in the plan: its original "zero visual change except the
+typeface" described a Phase A that no longer exists, since splitting V2b put a
+deliberate visual change inside it. The checkpoint now names
+`tasks/v2b-computed-value-diff.md` as its primary review artifact.
