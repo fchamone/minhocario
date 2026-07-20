@@ -294,6 +294,87 @@ export function buildSurfaceTexture(name, canvas) {
   return texture;
 }
 
+// --- Contact shadow (V16) ----------------------------------------------------
+
+/**
+ * Edge length of the contact-shadow blob texture. Far smaller than the surface
+ * grain: it is a smooth radial falloff with no detail in it, drawn over a patch
+ * of floor roughly one world unit across, so more texels would buy nothing.
+ */
+export const SHADOW_SIZE = 128;
+
+/**
+ * Alpha falloff of the contact shadow, from the centre of the blob outward.
+ *
+ * Reaches EXACTLY zero at r = 1 (and beyond), which is load-bearing rather than
+ * tidy: the blob is a square plane, so any alpha left at the edge draws that
+ * square's outline on the floor as a faint rectangle. A radial gradient that
+ * merely gets close to zero is one of the few ways this feature looks obviously
+ * wrong, and it is invisible in the generating code.
+ * @param {number} r normalised distance from the centre, 0..∞
+ * @returns {number} alpha in [0, 1]
+ */
+export function shadowAlpha(r) {
+  if (r >= 1) return 0;
+  const falloff = 1 - r * r;
+  return falloff * falloff;
+}
+
+/**
+ * Write the contact-shadow blob into an ImageData-shaped buffer: black, with the
+ * radial alpha falloff above. Pure, so the falloff is testable without a canvas.
+ * @param {{data: Uint8ClampedArray}} imageData length SHADOW_SIZE^2 * 4
+ */
+export function paintContactShadow(imageData) {
+  const { data } = imageData;
+  const c = (SHADOW_SIZE - 1) / 2;
+  for (let y = 0; y < SHADOW_SIZE; y += 1) {
+    for (let x = 0; x < SHADOW_SIZE; x += 1) {
+      const i = (y * SHADOW_SIZE + x) * 4;
+      const r = Math.hypot(x - c, y - c) / c;
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+      data[i + 3] = Math.round(shadowAlpha(r) * 255);
+    }
+  }
+}
+
+/**
+ * Build a contact-shadow texture. Deliberately NOT cached, unlike the three
+ * surfaces — and that is a direct consequence of the ownership rule V15 set up.
+ *
+ * The blob is parented to `composterGroup`, so `disposeComposterMesh` frees it on
+ * every model swap — including, as of V15, its textures. A cached texture shared
+ * across model builds would therefore be DISPOSED by the first upgrade and every
+ * blob after it would sample a dead texture. The plan asks for both "one soft
+ * radial-gradient CanvasTexture" and "disposed including its texture"; those two
+ * are only compatible if each blob owns its own. A 128² gradient costs about a
+ * millisecond and is built once per upgrade, which is rare — so the cheap thing
+ * and the correct thing are the same thing here.
+ * @param {HTMLCanvasElement|OffscreenCanvas|null} [canvas] defaults to a fresh one
+ * @returns {CanvasTexture|null}
+ */
+export function buildContactShadowTexture(canvas = createShadowCanvas()) {
+  if (!canvas) return null;
+  const ctx = canvas.getContext?.('2d');
+  if (!ctx) return null;
+
+  const imageData = ctx.createImageData(SHADOW_SIZE, SHADOW_SIZE);
+  paintContactShadow(imageData);
+  ctx.putImageData(imageData, 0, 0);
+
+  const texture = new CanvasTexture(canvas);
+  // Bound to a `map` slot, so it declares sRGB like every other colour map here.
+  // The RGB is pure black, which is invariant under the transfer either way, and
+  // alpha is never colour-managed — so this is for uniformity of the rule rather
+  // than for correctness. Stated because the opposite mistake (tagging a DATA map
+  // sRGB) is the one the plan warns about, and silence here would read as a slip.
+  texture.colorSpace = SRGBColorSpace;
+  texture.name = 'contactShadow';
+  return texture;
+}
+
 /** Cached textures, so re-entering the game screen does not regenerate them. */
 let cache = null;
 
@@ -304,15 +385,20 @@ let cache = null;
  * materials untextured, which is precisely how they looked before V15.
  * @returns {HTMLCanvasElement|OffscreenCanvas|null}
  */
-function createCanvas() {
-  if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(NOISE_SIZE, NOISE_SIZE);
+function createCanvas(size = NOISE_SIZE) {
+  if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(size, size);
   if (typeof document !== 'undefined' && document.createElement) {
     const canvas = document.createElement('canvas');
-    canvas.width = NOISE_SIZE;
-    canvas.height = NOISE_SIZE;
+    canvas.width = size;
+    canvas.height = size;
     return canvas;
   }
   return null;
+}
+
+/** A SHADOW_SIZE-square canvas, or null where no canvas API exists. */
+function createShadowCanvas() {
+  return createCanvas(SHADOW_SIZE);
 }
 
 /**

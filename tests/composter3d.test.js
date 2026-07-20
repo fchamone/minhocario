@@ -14,12 +14,44 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Box3, Mesh, BoxGeometry, MeshStandardMaterial, Texture } from '../vendor/three.module.min.js';
-import { buildComposterMesh, composterCavity, disposeComposterMesh } from '../js/render/composter3d.js';
+import {
+  Box3,
+  Mesh,
+  BoxGeometry,
+  MeshStandardMaterial,
+  Texture,
+  Raycaster,
+  Vector3,
+} from '../vendor/three.module.min.js';
+import {
+  buildComposterMesh,
+  composterCavity,
+  composterFootprint,
+  disposeComposterMesh,
+} from '../js/render/composter3d.js';
 import { COMPOSTERS } from '../js/sim/composters.js';
 
 /** Every catalog id, read from the sim so a new model cannot skip these tests. */
 const IDS = COMPOSTERS.map((c) => c.id);
+
+// The contact shadow (V16) needs a 2D canvas, which Node has none of — so
+// `textures.js` correctly degrades to no shadow here and the blob would be
+// invisible to every test below. Standing up the smallest possible OffscreenCanvas
+// exercises the REAL path (`createCanvas` feature-detects at call time, not at
+// import), rather than adding a test-only parameter to the production API.
+globalThis.OffscreenCanvas = class {
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
+  }
+
+  getContext() {
+    return {
+      createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+      putImageData: () => {},
+    };
+  }
+};
 
 /**
  * The cavity descriptor as an axis-aligned Box3, matching how xray.js lays the
@@ -119,6 +151,198 @@ test('the buried model is the one cavity that sits below ground', () => {
     if (id === 'buried') assert.ok(cav.yMin < 0, 'buried cavity should sit below y=0');
     else assert.ok(cav.yMin >= 0, `${id}: only the buried model may sit below y=0 (yMin ${cav.yMin})`);
   }
+});
+
+// --- Contact-shadow footprint (V16) ------------------------------------------
+// Same drift hazard as the cavity, and the same fix: `composterFootprint` reads
+// `structureOf` rather than restating the body's dimensions. A shadow of the
+// wrong size is not a visible bug — it still looks like a shadow — so nothing
+// but a test can notice when a silhouette moves and the blob does not follow.
+// V18 reshapes two of these models, which is exactly when this earns its keep.
+
+test('every above-ground model has a footprint, and the buried one has none', () => {
+  for (const id of IDS) {
+    const footprint = composterFootprint(id);
+    if (id === 'buried') {
+      assert.equal(footprint, null, 'the buried model is sunk — nothing rests on the floor to shade');
+    } else {
+      assert.ok(footprint, `${id}: no footprint`);
+      assert.ok(footprint.width > 0 && footprint.depth > 0, `${id}: degenerate footprint`);
+    }
+  }
+});
+
+test('every footprint matches the ground extent of the body that stands on it', () => {
+  // Measured against the same `shellBody` meshes the cavity test uses. This is
+  // what ties the blob to the silhouette: reshape a body and the footprint must
+  // move with it or the shadow sits under the wrong outline.
+  for (const id of IDS) {
+    const footprint = composterFootprint(id);
+    if (!footprint) continue;
+    const mesh = buildComposterMesh(id);
+    const { box } = bodyBox(mesh);
+
+    const tolerance = 1e-6;
+    assert.ok(
+      Math.abs(box.max.x - box.min.x - footprint.width) < tolerance,
+      `${id}: footprint width ${footprint.width} vs body ${box.max.x - box.min.x}`,
+    );
+    assert.ok(
+      Math.abs(box.max.z - box.min.z - footprint.depth) < tolerance,
+      `${id}: footprint depth ${footprint.depth} vs body ${box.max.z - box.min.z}`,
+    );
+    assert.ok(
+      Math.abs((box.max.z + box.min.z) / 2 - footprint.z) < tolerance,
+      `${id}: footprint centre z ${footprint.z} vs body ${(box.max.z + box.min.z) / 2}`,
+    );
+    disposeComposterMesh(mesh);
+  }
+});
+
+test('every footprint covers the cavity it encloses', () => {
+  // A weaker but independent check that survives a builder swapping which meshes
+  // it tags: whatever the body is, the interior must fit on the ground it stands on.
+  for (const id of IDS) {
+    const footprint = composterFootprint(id);
+    if (!footprint) continue;
+    const cav = composterCavity(id);
+    assert.ok(footprint.width >= cav.width, `${id}: footprint narrower than its cavity`);
+    assert.ok(footprint.depth >= cav.depth, `${id}: footprint shallower than its cavity`);
+  }
+});
+
+test('an unknown id yields no footprint', () => {
+  for (const id of [null, undefined, '', 'nope']) {
+    assert.equal(composterFootprint(id), null, `composterFootprint(${JSON.stringify(id)})`);
+  }
+});
+
+// --- The contact-shadow blob itself (V16) ------------------------------------
+
+/** The blob under a built group, or null. */
+function shadowOf(group) {
+  let found = null;
+  group.traverse((obj) => {
+    if (obj.name === 'contactShadow') found = obj;
+  });
+  return found;
+}
+
+test('every above-ground model carries a contact shadow, and buried carries none', () => {
+  for (const id of IDS) {
+    const mesh = buildComposterMesh(id);
+    const blob = shadowOf(mesh);
+    if (id === 'buried') assert.equal(blob, null, 'the sunken model has no floor contact to shade');
+    else assert.ok(blob, `${id}: no contact shadow`);
+    disposeComposterMesh(mesh);
+  }
+});
+
+test('the contact shadow lies flat on the floor, spread past the footprint', () => {
+  for (const id of IDS.filter((i) => i !== 'buried')) {
+    const mesh = buildComposterMesh(id);
+    const blob = shadowOf(mesh);
+    const footprint = composterFootprint(id);
+
+    assert.ok(blob.position.y > 0, `${id}: shadow must sit above the floor, not in it`);
+    assert.ok(blob.position.y < 0.05, `${id}: shadow floats at y=${blob.position.y}`);
+    assert.equal(blob.position.z, footprint.z, `${id}: shadow not centred on the footprint`);
+
+    const box = new Box3().setFromObject(blob);
+    assert.ok(
+      box.max.x - box.min.x > footprint.width,
+      `${id}: shadow is not wider than the bin it grounds`,
+    );
+    assert.ok(
+      box.max.z - box.min.z > footprint.depth,
+      `${id}: shadow is not deeper than the bin it grounds`,
+    );
+    disposeComposterMesh(mesh);
+  }
+});
+
+test('the contact shadow is excluded from the x-ray transparency sweep', () => {
+  // setShellTransparency skips anything tagged xrayPart. Without the tag the
+  // shadow fades to 0.1 with the shell, so the bin floats in exactly the view
+  // where floating reads worst.
+  for (const id of IDS.filter((i) => i !== 'buried')) {
+    const mesh = buildComposterMesh(id);
+    assert.equal(shadowOf(mesh).userData.xrayPart, true, `${id}: shadow not tagged xrayPart`);
+    disposeComposterMesh(mesh);
+  }
+});
+
+test('the contact shadow is not part of the drag grab target', () => {
+  // The real check, with the real Raycaster the drag uses. `raycastComposter`
+  // intersects composterGroup recursively, so a pickable blob would let the bin
+  // be grabbed from bare floor well outside its own outline — a silent change to
+  // an interaction built in T19 and re-verified at V12.
+  for (const id of IDS.filter((i) => i !== 'buried')) {
+    const mesh = buildComposterMesh(id);
+    mesh.updateMatrixWorld(true);
+    const footprint = composterFootprint(id);
+
+    // Straight down onto floor that only the blob covers: outside the bin's
+    // footprint, inside the blob's 1.6x spread.
+    const x = (footprint.width / 2) * 1.3;
+    const ray = new Raycaster(new Vector3(x, 5, footprint.z), new Vector3(0, -1, 0));
+    const hits = ray.intersectObject(mesh, true);
+
+    assert.deepEqual(
+      hits.map((h) => h.object.name),
+      [],
+      `${id}: the contact shadow is pickable, so clicking empty floor grabs the bin`,
+    );
+    disposeComposterMesh(mesh);
+  }
+});
+
+test('the contact shadow raycast exclusion is not vacuous', () => {
+  // Companion to the test above: prove that ray WOULD hit the blob if it were
+  // pickable. Without this, a blob accidentally positioned outside the ray's path
+  // would make the exclusion test pass for the wrong reason — the V6 lesson.
+  const mesh = buildComposterMesh('electric');
+  mesh.updateMatrixWorld(true);
+  const footprint = composterFootprint('electric');
+  const blob = shadowOf(mesh);
+  delete blob.raycast; // restore the default Mesh.raycast
+
+  const x = (footprint.width / 2) * 1.3;
+  const ray = new Raycaster(new Vector3(x, 5, footprint.z), new Vector3(0, -1, 0));
+  const hits = ray.intersectObject(mesh, true);
+
+  assert.deepEqual(
+    hits.map((h) => h.object.name),
+    ['contactShadow'],
+    'the probe ray does not actually cross the blob, so the exclusion test proves nothing',
+  );
+  disposeComposterMesh(mesh);
+});
+
+test('disposing a model frees its contact shadow texture', () => {
+  // The blob's texture is built fresh per model precisely so this is safe; a
+  // shared one would be dead for every model after the first upgrade.
+  const mesh = buildComposterMesh('electric');
+  const texture = shadowOf(mesh).material.map;
+  let disposed = false;
+  texture.addEventListener('dispose', () => {
+    disposed = true;
+  });
+
+  disposeComposterMesh(mesh);
+  assert.ok(disposed, 'the contact shadow texture leaks on every model swap');
+});
+
+test('two builds of the same model do not share a shadow texture', () => {
+  const a = buildComposterMesh('electric');
+  const b = buildComposterMesh('electric');
+  assert.notEqual(
+    shadowOf(a).material.map,
+    shadowOf(b).material.map,
+    'shadow textures are shared, so disposing one model kills the others',
+  );
+  disposeComposterMesh(a);
+  disposeComposterMesh(b);
 });
 
 // --- Texture disposal (V15) --------------------------------------------------

@@ -25,6 +25,10 @@ import {
   grainRepeat,
   paintGrain,
   buildSurfaceTexture,
+  SHADOW_SIZE,
+  shadowAlpha,
+  paintContactShadow,
+  buildContactShadowTexture,
 } from '../js/render/textures.js';
 import { WALL_WIDTH, WALL_HEIGHT, FLOOR_DEPTH } from '../js/render/scene.js';
 
@@ -325,6 +329,60 @@ test('an unknown surface yields nothing rather than a broken texture', () => {
   }
 });
 
+// --- Contact shadow (V16) ----------------------------------------------------
+
+test('the contact shadow falls to exactly zero at its edge', () => {
+  // The plane is square and the shadow is round, so any alpha surviving to the
+  // rim draws that square's outline on the garage floor. "Close to zero" is not
+  // enough — 1/255 is still a visible rectangle against a matte floor.
+  assert.equal(shadowAlpha(1), 0, 'alpha at the rim');
+  assert.equal(shadowAlpha(1.4), 0, 'alpha past the rim (the plane corners)');
+  assert.equal(shadowAlpha(0), 1, 'alpha at the centre');
+  for (let r = 0; r < 1; r += 0.05) {
+    assert.ok(shadowAlpha(r) > shadowAlpha(r + 0.05), `alpha must decrease across r=${r.toFixed(2)}`);
+  }
+});
+
+test('the painted contact shadow is black with a clean transparent border', () => {
+  const image = { data: new Uint8ClampedArray(SHADOW_SIZE * SHADOW_SIZE * 4) };
+  paintContactShadow(image);
+
+  const alphaAt = (x, y) => image.data[(y * SHADOW_SIZE + x) * 4 + 3];
+  const last = SHADOW_SIZE - 1;
+  for (let i = 0; i < SHADOW_SIZE; i += 1) {
+    for (const [x, y] of [[i, 0], [i, last], [0, i], [last, i]]) {
+      assert.equal(alphaAt(x, y), 0, `border texel (${x},${y}) is not fully transparent`);
+    }
+  }
+  // ...and the corners, which sit at r ≈ 1.41 and are the furthest out.
+  assert.equal(alphaAt(0, 0), 0, 'corner texel');
+
+  const mid = Math.floor(SHADOW_SIZE / 2);
+  assert.ok(alphaAt(mid, mid) > 240, `centre should be near-opaque, got ${alphaAt(mid, mid)}`);
+
+  for (let i = 0; i < SHADOW_SIZE * SHADOW_SIZE; i += 1) {
+    const [r, g, b] = image.data.slice(i * 4, i * 4 + 3);
+    assert.ok(r === 0 && g === 0 && b === 0, `texel ${i} is not black (${r},${g},${b})`);
+  }
+});
+
+test('each contact shadow owns its texture rather than sharing one', () => {
+  // The blob is parented to composterGroup, so disposeComposterMesh frees it on
+  // every model swap — including its textures, as of V15. A shared/cached texture
+  // would therefore be DEAD after the first upgrade, and every later blob would
+  // sample a disposed texture. Two calls must not hand back the same object.
+  const a = buildContactShadowTexture(stubCanvas());
+  const b = buildContactShadowTexture(stubCanvas());
+  assert.ok(a && b, 'no texture built');
+  assert.notEqual(a, b, 'contact shadow textures are shared — the first upgrade disposes them all');
+  assert.equal(a.colorSpace, SRGBColorSpace, 'bound to a map slot, so it declares sRGB');
+});
+
+test('a missing canvas leaves the contact shadow out rather than throwing', () => {
+  assert.equal(buildContactShadowTexture(null), null);
+  assert.equal(buildContactShadowTexture({ getContext: () => null }), null);
+});
+
 // --- How scene.js consumes them ----------------------------------------------
 // Static source reads, the pattern this project already uses where the runtime is
 // out of reach (tests/markup.test.js, tests/css.test.js). `buildScene` needs a
@@ -345,6 +403,22 @@ test('scene.js compensates every grain map by its measured mean', () => {
   );
 });
 
+/**
+ * Map assignments in scene.js that are deliberately NOT albedo compensation, each
+ * listed with the argument for it. An allowlist rather than a widened pattern, on
+ * the `css.test.js` precedent: a new textured surface should have to justify
+ * itself here, not slip through a rule that quietly got looser.
+ *
+ * V16's contact shadow is the first entry, and it fired this guard on arrival —
+ * which is the guard working. It is exempt because `grainMean` compensation
+ * applies to an albedo multiplied into a LIT surface, and the blob is an unlit
+ * `MeshBasicMaterial` carrying black with an alpha falloff. There is no albedo to
+ * preserve; the map is the shadow's shape, not its brightness.
+ */
+const SANCTIONED_MAPS = [
+  'map: texture,', // V16 contact shadow — unlit MeshBasicMaterial, black + alpha
+];
+
 test('scene.js routes every textured surface through the one compensating builder', () => {
   // The realistic regression is not removing the division — it is adding a fourth
   // textured surface next to the three and assigning `.map` directly, which skips
@@ -359,13 +433,15 @@ test('scene.js routes every textured surface through the one compensating builde
     // matched only a bare `map` and let a planted `extra.map = grain.soil` through
     // — the exact regression the test is for. `.map(` never matches, since a call
     // is followed by `(` rather than `:` or `=`.
-    .filter((line) => /(?:^|[\s.])[a-zA-Z]*[Mm]ap\s*[:=](?!=)/.test(line) && !line.trim().startsWith('*') && !line.trim().startsWith('//'));
+    .filter((line) => /(?:^|[\s.])[a-zA-Z]*[Mm]ap\s*[:=](?!=)/.test(line) && !line.trim().startsWith('*') && !line.trim().startsWith('//'))
+    .filter((line) => !SANCTIONED_MAPS.includes(line.trim()));
 
   assert.deepEqual(
     outside,
     [],
     'a texture map is assigned in scene.js outside surfaceMaterial(), so it skips the ' +
-      'grainMean compensation and that surface alone shifts brightness.',
+      'grainMean compensation and that surface alone shifts brightness. If it is genuinely ' +
+      'not an albedo map (an unlit overlay, a data map), add it to SANCTIONED_MAPS with the reason.',
   );
 });
 

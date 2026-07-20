@@ -2,8 +2,10 @@
 //
 // BROWSER/render layer: may use Three.js. Builds a low-poly mesh for each of the
 // six catalog models (js/sim/composters.js) from primitive geometry (boxes +
-// cylinders) with flat colors. No textures, no addons — self-contained and
-// offline-safe like the rest of the render layer.
+// cylinders) with flat colors, plus the contact-shadow blob that grounds it
+// (V16). No addons and no image assets — self-contained and offline-safe like
+// the rest of the render layer; the blob's one texture is generated procedurally
+// by js/render/textures.js.
 //
 // The only sim import is the PURE composter catalog, read so mesh DIMENSIONS are
 // DERIVED FROM CATALOG CAPACITY (bigger bin -> physically bigger mesh) — the same
@@ -25,8 +27,17 @@
 //   buried          in-ground drum, only a raised collar + domed lid show
 //   eco             the largest: a peaked barrel/drum on feet with a front hatch
 
-import { Group, Mesh, BoxGeometry, CylinderGeometry, MeshStandardMaterial } from '../../vendor/three.module.min.js';
+import {
+  Group,
+  Mesh,
+  BoxGeometry,
+  CylinderGeometry,
+  PlaneGeometry,
+  MeshStandardMaterial,
+  MeshBasicMaterial,
+} from '../../vendor/three.module.min.js';
 import { getComposter } from '../sim/composters.js';
+import { buildContactShadowTexture } from './textures.js';
 
 // --- Palette (flat colors) ---------------------------------------------------
 const APPLIANCE_BODY = 0xe6e9ec;
@@ -262,6 +273,78 @@ function buildEco(group, s) {
   addCyl(group, r * 0.15, r * 1.0, 0.45, [0, topY + 0.16 + 0.22, zc], ECO_DARK, 8);
 }
 
+// --- Contact shadow (V16) ----------------------------------------------------
+// The cheapest fix in Phase D for the "bin floats" read, and deliberately ahead
+// of real shadow maps (V19): one blended plane, one draw call, zero per-frame
+// work, nothing to measure and nothing to gate. If V19 is dropped at its perf
+// gate, this is what keeps the bin grounded.
+//
+// DEVIATION: the plan files this under js/render/{scene,textures}.js. It lives
+// here instead, because everything about it is a property of the MODEL — it is
+// sized from the model's footprint, parented to the model's group, and freed with
+// the model. Building it here also puts it where a test can reach it with a real
+// Raycaster, which is what caught the grab-target problem noted below; from
+// scene.js the same claims could only have been asserted by reading source.
+
+/** Height above the floor. Enough to beat z-fighting, far too little to see. */
+const SHADOW_LIFT = 0.01;
+/**
+ * How far the blob spreads past the bin's footprint. The alpha falls to zero at
+ * the plane's edge, so the *visible* core is a good deal smaller than the plane —
+ * a spread of 1 would read as a shadow tucked strictly under the bin, which is
+ * what an object welded to the floor looks like rather than one resting on it.
+ */
+const SHADOW_SPREAD = 1.6;
+/** Peak darkness under the bin's centre. */
+const SHADOW_STRENGTH = 0.42;
+
+/**
+ * Add the contact-shadow blob to a composter group. No-op for the buried model
+ * (no footprint) and where no canvas exists, both of which arrive as a null.
+ * @param {Group} group
+ * @param {string} composterId
+ */
+function addContactShadow(group, composterId) {
+  const footprint = composterFootprint(composterId);
+  if (!footprint) return;
+
+  const texture = buildContactShadowTexture();
+  if (!texture) return; // no canvas — degrade to no shadow, as the surfaces do
+
+  const blob = new Mesh(
+    new PlaneGeometry(footprint.width * SHADOW_SPREAD, footprint.depth * SHADOW_SPREAD),
+    new MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity: SHADOW_STRENGTH,
+      // Must not write depth: a blended plane lying on the floor that wrote depth
+      // would punch a hole in whatever is drawn after it — including the bin's
+      // own legs, which stand inside its radius.
+      depthWrite: false,
+      fog: false,
+    }),
+  );
+  blob.rotation.x = -Math.PI / 2; // lie flat, facing up
+  blob.position.set(0, SHADOW_LIFT, footprint.z);
+  blob.name = 'contactShadow';
+
+  // Skipped by setShellTransparency's traversal. Not cosmetic: without the tag
+  // the x-ray fades the shadow to 0.1 alongside the shell, and a bin that loses
+  // its contact shadow the moment you look inside it goes straight back to
+  // floating — in the one view where the floating read is most obvious.
+  blob.userData.xrayPart = true;
+
+  // Not pickable. `raycastComposter` intersects composterGroup RECURSIVELY, so
+  // without this the blob silently becomes part of the drag grab target: the bin
+  // could be grabbed by clicking bare floor up to 1.6x its own footprint away,
+  // and the hover cursor would show 'grab' over apparently empty ground. That is
+  // a change to an interaction built in T19 and re-verified at V12, made by a
+  // decoration that has no business being in the hit test.
+  blob.raycast = () => {};
+
+  group.add(blob);
+}
+
 // --- Public API --------------------------------------------------------------
 
 /**
@@ -298,6 +381,7 @@ export function buildComposterMesh(composterId) {
     default:
       return null;
   }
+  addContactShadow(group, composterId);
   return group;
 }
 
@@ -339,6 +423,44 @@ export function composterCavity(composterId) {
     case 'eco':
       // Drum on short feet.
       return { yMin: s.legH + 0.12, yMax: s.topY - 0.12, width: s.r * 1.7, depth: s.r * 1.7, z: s.zc };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Ground footprint of a model's body, in the composter group's LOCAL frame (V16).
+ *
+ * Read from the SAME `structureOf` the builders and `composterCavity` use, so the
+ * contact shadow tracks the silhouette it is cast by and cannot drift from it —
+ * the discipline V6 established after the cavity dimensions had been maintained
+ * by hand in two places. A blob sized independently would come apart the first
+ * time a model's proportions changed, and the failure is silent: a shadow that is
+ * merely the wrong size still looks like a shadow.
+ *
+ * Returns null for the BURIED model, which is sunk into the ground and has no
+ * contact with the floor to shade. That null is the whole "skip for buried" rule,
+ * expressed where the geometry is known rather than as a conditional at the call
+ * site.
+ * @param {string|null} composterId catalog id (js/sim/composters.js)
+ * @returns {{width: number, depth: number, z: number}|null}
+ */
+export function composterFootprint(composterId) {
+  const composter = composterId ? getComposter(composterId) : null;
+  const spec = composterId ? MODEL_SPEC[composterId] : null;
+  if (!composter || !spec) return null;
+
+  const s = structureOf(spec, baseDims(composter.capacity));
+  if (!s) return null;
+
+  switch (spec.kind) {
+    case 'electric':
+    case 'tray':
+      return { width: s.w, depth: s.d, z: s.zc };
+    case 'eco':
+      return { width: s.r * 2, depth: s.r * 2, z: s.zc };
+    case 'buried':
+      return null; // sunk into the ground — nothing rests on the floor
     default:
       return null;
   }
