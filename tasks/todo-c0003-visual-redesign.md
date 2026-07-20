@@ -290,7 +290,41 @@
 
 ## Phase D — 3D richness
 
-- [ ] **V14** ACES tone mapping + retire `LIGHT_GAIN` + `toneMapped:false` opt-outs (M) — deps: V5
+- [x] **V14** ACES tone mapping + retire `LIGHT_GAIN` + `toneMapped:false` opt-outs (M) — deps: V5
+      **Code complete; the 3D visual matrix is NOT walked — see "Owed before CPV4".**
+      `outputColorSpace` left alone (finding #4 in the plan was right: r170 already defaults it).
+      Four corrections, all found by checking the task's numbers **before** implementing:
+      **(1) The mitigation missed a material, inside the layer it exists to protect.** The plan
+      opts out `solidMaterial()` and the sun patch, but the leachate liquid is built inline with
+      its own material (translucent, so the tank reads as wet). It would have been the one x-ray
+      internal still going through ACES while the humus it pools under did not. The palette only
+      works as a calibrated **set**, so the guard checks *every* emissive material in `xray.js`
+      rather than trusting the shared helper to be the only place it matters.
+      **(2) The sun-patch opt-out is right, for the opposite reason to the one given.** The plan
+      frames it as protection from ACES "crushing" the patch; ACES **lifts** midtones
+      (0.2 → 0.30, 0.5 → 0.62), so mapping it would have made it *brighter*. The real reason is
+      **shape**: Three tone-maps per material before blending, so a mapped additive overlay gets
+      its own gradient curved and its falloff flattened — and that gradient IS the information,
+      since it traces `solarGain` and must keep tracking the bin's temperature advantage.
+      Brightness is what the knob is for: `SUN_PATCH_STRENGTH` 0.6 → 0.35, because the old value
+      was calibrated against a wall that clipped at midday and no longer does.
+      **(3) Deleting `LIGHT_FLOOR` drops an invariant with nothing left to hold it.** The floor
+      was *structural* — added after the fact, so no authored keyframe could darken the bin past
+      it. Folded into the table it is merely authored, and its AC ("dawn/noon/dusk/midnight all
+      read correctly") cannot fail in CI. Now tested at the exact old values (ambient 0.49,
+      total 1.45), plus the two properties a hand-retyped 10-row table loses in silence:
+      ascending hours (`sampleDayCycle` falls back to the first/last keyframe rather than
+      throwing, freezing a stretch of the day) and the h:24 → h:0 midnight wrap.
+      **(4) A comment claiming "no tone-mapping curve is needed"** — argued from light
+      *intensity* staying under the pre-r155 PI-scaled intent, which bounds the input to the
+      lighting equation, not the radiance reaching the framebuffer. Rewritten, not left standing
+      beside the curve it calls unnecessary.
+      **The fold is proven invisible.** A one-time equivalence test reconstructs
+      `floor + 1.9 × curve` across all 30 values, and the folded table independently reproduces
+      the totals the old comment documented (4.80 noon / 1.45 midnight / 3.30×). That leaves
+      **ACES and its exposure as the only variable the matrix has to judge** — the V2a pattern,
+      and it retires the same way: the first deliberate re-tune SHOULD fail it, and the fix is
+      to delete it, never to update its numbers. All five guards broken first. Suite 338 → **344**.
 - [ ] **V15** `js/render/textures.js` CanvasTexture surfaces + fix the `material.map` leak (M) — deps: V14
 - [ ] **V16** Contact-shadow blob (S) — deps: V6, V15
 - [ ] **V17** Gradient sky backdrop via `vertexColors` (S/M) — deps: V14 (∥ V15/V16)
@@ -359,6 +393,24 @@
         way. If the track does not shrink on collapse, the layout still looks fine.
       - **One §2.8 failure chain at 20×**, to confirm the panel still narrates it after the
         groups were re-flowed (V13's AC).
+- [ ] **Owed before CPV4 — the 3D visual matrix for V14.** Nothing about a tone curve is
+      reachable from a green suite, and unlike CPV1 there is no computed-value-diff analogue to
+      review in its place. The matrix **is** the artifact: dawn / noon / dusk / midnight ×
+      x-ray on/off × each of the 6 composters, recorded in `tasks/visual-overhaul-playtest.md`.
+      The fold being provably invisible means every difference seen is the curve or the
+      exposure, nothing else — so the questions are narrow:
+      - **X-ray legibility on all 6 models** — the criterion the plan calls most at risk. The
+        internals opt out entirely, so they should look *unchanged*; if they moved, an emissive
+        material escaped the opt-out (the leachate tank is the one to check first).
+      - **`TONE_MAPPING_EXPOSURE` is a judgement, currently 1.0.** It is the one number in V14
+        that is not a measurement. If midday reads flat or night reads muddy, this is the knob.
+      - **`SUN_PATCH_STRENGTH` 0.35 is an estimate, not a measurement.** At noon the band must
+        still visibly track the bin's temperature advantage as the slider moves — that coupling
+        is the one thing the plan's risk table says never to break.
+      - Dawn/dusk transitions still perceivable at 1×, and the patch still vanishing at night.
+      **If the table gets re-tuned by eye as a result, delete the equivalence test** — it exists
+      to prove the fold was invisible and means nothing once the values are authored against the
+      curve. Do not update its numbers to match.
 - [ ] Decide whether C-0003 warrants a formal `.harn/devy/changes/C-0003-*/spec.md`. The decisions
       are captured in the plan's "Decisions locked" table; a spec was not written because this
       started as a design interview rather than a feature request.
@@ -372,7 +424,7 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phases A–C complete and approved — Phase D (V14) next
+## Status: Phases A–C approved — Phase D underway (V14 landed, matrix owed)
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
 V8, V9, V10, V11 landed and **CPV2 approved 2026-07-20**.
@@ -382,9 +434,35 @@ All three chrome/layout phases are signed off and every browser item carried
 out of them is closed, including the V5 drag re-walk that survived two gates.
 **Phase D starts from a clean ledger** — nothing owed, nothing deferred.
 
-Next: **V14** (ACES tone mapping + retiring `LIGHT_GAIN`). Note it depends only
-on V5 ✅, so it was never actually blocked by Phase C — Phase D has been
-available since V5 landed and was simply sequenced behind the serial spine.
+**V14 landed 2026-07-20**; suite **344 green**. It depends only on V5 ✅, so it
+was never actually blocked by Phase C — Phase D has been available since V5
+landed and was simply sequenced behind the serial spine.
+
+Next: **V15** (CanvasTexture surfaces + the `material.map` leak), which V14
+unblocks. **V17** (gradient sky) is also open now and is independent of V15/V16.
+
+**V19 is NOT ready to start, for a reason found the same way as V14's four.**
+Its gate — "if shadows cost more than 2 ms per frame at 1×, drop V19" — is to be
+"measured via a `?dev=1` frame-time readout". **That readout does not exist.**
+`?dev=1` toggles a nav bar and `window.setLang`; `renderer.info` is read nowhere;
+there is no frame timing in the repo. So the gate cannot be evaluated without
+first building an instrument no task owns — inside a task already marked
+droppable. Two further problems in the same gate:
+- **`sunLight.target` is never added to the scene** (`scene.js:430-433`). V19's
+  core mitigation is re-targeting it to `composterGroup.position` each frame to
+  keep the ortho shadow camera tight. Three only updates `matrixWorld` for
+  objects in the scene graph, so moving an unparented target is a **documented
+  no-op** — it works today purely because it sits at the origin with an identity
+  matrix. The moment V19 moves it, the shadow camera silently stays centred on
+  world origin while the bin slides along the wall.
+- **"at 1×" is not the axis that matters.** `renderState` runs every rAF
+  regardless of game speed (main.js says so explicitly), so shadow cost is
+  speed-independent. What moves it is caster count — which composter, and
+  whether x-ray is on — and the gate names neither.
+Also unconsidered by the plan's mitigation list: `shadowMap.autoUpdate = false`
+with `needsUpdate` throttled to every Nth frame. At 1× a full day is a real
+minute, so a few-frame stagger should be imperceptible — a middle option between
+paying full cost and dropping V19 outright.
 
 **What Phase C says about the plan itself.** Both tasks had a specified design
 that could not do what the task's own AC claimed, and in both cases the failure
