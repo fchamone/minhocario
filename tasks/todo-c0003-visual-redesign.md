@@ -215,8 +215,54 @@
 
 ## Phase C — Game-screen layout
 
-- [ ] **V12** Three-column grid; internals → left column; delete `internalsSide` + its 5 tests (M) — deps: V5, V11
-- [ ] **V13** Internals density pass: sub-grid, unified gauge, decomposition rings (M) — deps: V12, V9
+- [x] **V12** Three-column grid; internals → left column; delete `internalsSide` + its 5 tests (M) — deps: V5, V11
+      The panel is out of the canvas overlay and into its own grid track, and the dodge
+      machinery went with it: `internalsSide`, its two thresholds, `placeInternals`, four call
+      sites, `.internals--right` and 5 unit tests, **deleted rather than skipped**.
+      `--surface-1-alpha` went too — it existed only so the panel could show the 3D scene
+      through itself, and had zero users the moment the column became opaque. A dead token is
+      exactly what V2a refused to leave behind, since no test can catch one.
+      **A decision the plan left contradictory, resolved with the maintainer before coding.**
+      The specified tracks are all viewport-sized, so collapsing a panel could never resize the
+      canvas — which made this task's own AC clause ("drag stays pinned … with panels
+      collapsed/expanded") and the whole rationale for re-walking the V5 check **vacuous**, and
+      would have left a 280px empty gutter where the overlay used to hand its area back.
+      Chosen: `:has(#internals:not([open]))` shrinks the track to `auto`. The behaviour is
+      preserved, the AC can now fail, and `:has()` degrades to the fixed column where absent.
+      Four guards, each broken deliberately first. The one that matters most is **finding #3's
+      tripwire**: both readout panels must be open `<details>`, because the repaint guards read
+      `panel.open` and that is `undefined` on every other element — a `<div>` renders blank
+      forever with no error. This is precisely the edit that invites "it's just a box now".
+      Also: `#internals` is never inside `#stage`; no dangling reference to the deleted
+      machinery survives **in code or in prose**; and every `grid-area` resolves to a declared
+      template area and back. That last one **caught a real coupling** — `grid-area: readouts`
+      was in components.css while the template was in screens.css, so placement moved next to
+      the grid and components.css kept appearance only. A `grid-area` typo does not warn: it
+      drops the element into an implicit track, which over a WebGL region reads as a stretched
+      scene rather than as a CSS bug. Banner cap `min()`-ed for the narrower centre.
+      Suite 335 → **337** (5 deleted, 7 added).
+- [x] **V13** Internals density pass: sub-grid, unified gauge, decomposition rings (M) — deps: V12, V9
+      The unified gauge and the decomposition rings already landed (V9, V8), so this was the
+      sub-grid — and **as specified it would have done nothing at all.**
+      Two independent reasons, both silent. (1) The readouts track caps at 340px and two 220px
+      `auto-fit` columns plus their gap need 456px, so it would have laid out **one column at
+      every width, including 1920px**; auto-fit does not warn when it cannot fit another column,
+      so the density pass would simply not have happened and the AC would have been read as met.
+      Fixed by widening the track to `minmax(480px, 560px)` at ≥1600px — deliberately *lower*
+      specificity than the `:has()` collapse rule, so a collapsed panel keeps `auto` at every
+      viewport. (2) `updateInternals` built everything into a wrapper `<div>`, so the grid would
+      have had exactly **one** item. `fill` already takes varargs and does `replaceChildren`, so
+      the wrapper is gone and the groups are direct children — no new class, no new element.
+      Consequences worth recording: the model line spans the row (`grid-column: 1 / -1`) instead
+      of becoming a cell beside the first group, and `.internals__group`'s `margin-bottom` is
+      retired in favour of the gap — margins ADD to a grid gap, and `:last-child` stops meaning
+      "the bottom one" the moment there are two columns.
+      New guard, **broken in both directions first** (a 340px track, then a raised 300px column
+      minimum; each failed naming the exact arithmetic): the wide track must actually fit two
+      sub-grid columns. The two numbers live in different rules in different files and the
+      failure mode is invisible — no error, no visible breakage, just a density pass that never
+      happens. It is the bug this task shipped with, so it is asserted, not eyeballed.
+      Suite 337 → **338**.
 - [ ] **CPV3** — desktop layout complete.
       Review: density, drag accuracy, and the `<details>` collapse→tick→expand repaint
 
@@ -268,6 +314,26 @@
       the bug V5 fixed: V12 changes the grid *and* makes a collapsing panel resize the canvas, so
       it exercises the ResizeObserver path far harder than anything shipped so far. Re-walk the
       drag check at the end of V12 — the verify step there is not a formality.
+- [ ] **Owed before CPV3 — browser verification of V12/V13.** None of this is reachable by
+      `node --test`, and three of the items below are of the kind CPV2 proved a diff-read cannot
+      catch either. To be walked on desktop with `npx serve .`:
+      - **The drag re-walk (V5's check, re-armed).** Drag the bin at 3+ window widths **and with
+        the internals panel collapsed and expanded**. Collapsing now genuinely resizes the
+        canvas — that is what the `:has()` track shrink is for — so this is the first time the
+        ResizeObserver path is exercised by a layout change rather than a window resize. Drift
+        means a stale `camera.aspect`.
+      - **`<details>` collapse → tick → expand, on BOTH panels, including while paused.** The
+        finding-#3 tripwire proves the elements are still `<details>`; it cannot prove the
+        memoized repaint still works. Content must come back current, not stale or blank.
+      - **The sub-grid at 1366 / 1600 / 1920.** Two columns above 1600, one below, no clipping
+        at 1366, and the whole panel readable without scrolling at 1920 (V13's AC). A guard now
+        proves two columns *can* fit; only a browser proves they *do*, and that the result reads
+        as denser rather than merely wider.
+      - **`:has()` on the game screen.** It degrades silently — exactly the trap V10 hit with
+        `:has(input:checked)`, which no test and no reviewer of the diff could have told either
+        way. If the track does not shrink on collapse, the layout still looks fine.
+      - **One §2.8 failure chain at 20×**, to confirm the panel still narrates it after the
+        groups were re-flowed (V13's AC).
 - [ ] Decide whether C-0003 warrants a formal `.harn/devy/changes/C-0003-*/spec.md`. The decisions
       are captured in the plan's "Decisions locked" table; a spec was not written because this
       started as a design interview rather than a feature request.
@@ -281,10 +347,24 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phase B complete and approved — Phase C (V12) next
+## Status: Phase C code-complete — CPV3 is the next gate
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
-V8, V9, V10, V11 landed and **CPV2 approved 2026-07-20**. Suite 289 → **335 green**.
+V8, V9, V10, V11 landed and **CPV2 approved 2026-07-20**.
+V12 and V13 landed 2026-07-20. Suite 289 → **338 green**.
+
+**CPV3 cannot be claimed from a green suite — see "Owed before CPV3" below.**
+Both Phase C tasks changed layout, and layout is the thing this project's tests
+explicitly do not cover. Everything asserted here is structure.
+
+**What Phase C says about the plan itself.** Both tasks had a specified design
+that could not do what the task's own AC claimed, and in both cases the failure
+would have been *silent* — a vacuous drag check in V12, and a sub-grid that lays
+out one column forever in V13. Neither would have shown up as a failing test, a
+console error, or an obviously broken screen; both would have been ticked off a
+green suite. Phase D's tasks are written in the same style (V19's 2 ms shadow
+gate is the same shape of claim), so the lesson to carry is to check a task's
+numbers against each other **before** implementing it, not after.
 
 V9 went first despite being nominally parallel: V8 adds decomposition rings to
 the internals queue rows that V9 relocates, so landing V9 first kept V8 a clean
