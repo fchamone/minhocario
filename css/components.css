@@ -225,7 +225,16 @@
    itself derived from the content. The 14-food chooser therefore laid out as a
    single tall column and scrolled. The grid needs a DEFINITE width to divide up.
    660px less 32px of padding leaves 628px, which fits five 112px tracks with
-   8px gaps — so 14 foods land in three rows instead of fourteen. */
+   8px gaps — so 14 foods land in three rows instead of fourteen.
+
+   THE CAP IS DELIBERATE, and it makes this look unresponsive on a desktop.
+   `min()` only lets the 90vw term win below a 734px viewport, so dragging a
+   1920px window down to ~800px changes NOTHING — the dialog stays pinned at
+   660px and the first column drop is at 694px. That is not a bug to "fix": the
+   modal is capped so it stays a dialog rather than sprawling into a page, and
+   14 foods already fit without scrolling on any normal desktop screen. Column
+   counts below the cap: 5 >= 694px, 4 >= 560, 3 >= 427, 2 >= 294. Reviewed and
+   kept at 660px on 2026-07-20. */
 .chooser--grid { width: min(90vw, 660px); }
 .chooser::backdrop { background: var(--scrim); }
 .chooser h3 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
