@@ -7,6 +7,52 @@
    order within this file, because several pairs rely on it (`.internals` then
    `.internals--right`, `.gauge__fill` then its `--warn`/`--alert` variants). */
 
+/* --- Icons --- */
+/* The sprite lives at the top of <body>. It must stay in the render tree for
+   <use> to resolve, so it is taken out of LAYOUT rather than hidden:
+   `display: none` on the sprite breaks every reference to it in some engines. */
+.ico-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Sized in `em` so an icon tracks the type size of whatever it sits in, and
+   painted in `currentColor` by the symbols themselves — which is what makes an
+   icon inside a warn/alert button pick up that tier for free. */
+.ico {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+}
+
+/* Parametric glyphs (js/ui/icons.js). Their colours cannot live in the symbol,
+   because the whole point is that they change with a value. */
+.ico-volume {
+  flex: none;
+  width: 1.6em;
+  height: 1.6em;
+}
+.ico-volume__vessel { fill: none; stroke: var(--ink-dim); stroke-width: 1.5; }
+.ico-volume__level { fill: var(--accent); }
+
+.ico-ring {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+}
+.ico-ring__track { fill: none; stroke: var(--surface-2); stroke-width: 3; }
+.ico-ring__arc {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  /* Sweeps to the new fraction on each repaint instead of jumping, matching the
+     gauge marker's glide. */
+  transition: stroke-dashoffset var(--dur-slow) var(--ease);
+}
+
 /* --- Shop card --- */
 .shop-card {
   display: flex;
@@ -70,7 +116,9 @@
 
 /* --- Readouts --- */
 .stat { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-05) 0; }
-.stat__label { color: var(--ink-dim); }
+/* Flex so an optional leading glyph (the queue's decomposition ring) sits on the
+   text baseline row rather than pushing the label onto its own line. */
+.stat__label { display: flex; align-items: center; gap: var(--space-2); color: var(--ink-dim); }
 .stat__value { font-variant-numeric: tabular-nums; }
 .stat--warn .stat__value { color: var(--state-warn-ink); font-weight: 600; }
 .stat--alert .stat__value { color: var(--state-alert-ink); font-weight: 600; }
@@ -175,7 +223,15 @@
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
-.chooser__option { text-align: left; }
+/* The food grid is the one place the icon set is judged as a SET: 14 options in
+   an auto-fill grid. Every cell gets identical geometry — same icon box, same
+   gap, same alignment — so nothing about the layout can group them either. */
+.chooser__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: left;
+}
 .chooser__cancel { width: 100%; }
 
 /* --- Colony-dead banner (§2.1) --- */

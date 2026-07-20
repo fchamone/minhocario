@@ -19,6 +19,232 @@
   <link rel="stylesheet" href="css/motion.css">
 </head>
 <body>
+  <!-- ICON SPRITE.
+       Inlined rather than fetched: zero HTTP requests, cached with the HTML, and
+       it keeps the "no external network calls, works offline" non-negotiable
+       trivially true. `js/ui/icons.js` is the only module that builds <use>
+       references at runtime; the static chrome below writes them by hand.
+
+       NOT `display: none` — that stops <use> resolving in some engines. It is
+       taken out of layout by `.ico-sprite` in css/components.css instead.
+
+       Every symbol paints in `currentColor`, so an icon inherits the two-tier
+       warn/alert colouring of whatever it sits inside for free.
+
+       THE FOOD SET (14, in catalog order) IS UNDER A UNIFORM-TREATMENT
+       DISCIPLINE — see DESIGN.md. Identical circular frame, identical viewBox,
+       one stroke weight, stroke-only, `currentColor` only. The frame is what the
+       eye groups on, so it must stay byte-identical across all 14: the moment
+       one icon reads as a different KIND of thing, the list has leaked the
+       suitability split it exists to hide. `tests/icons.test.js` enforces every
+       part of that which a machine can see; the clustering of the glyphs THEMSELVES
+       is a manual review item (CPV2) that no test here can reach. -->
+  <svg class="ico-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- --- Chrome: the action buttons and the wall slider --- -->
+      <symbol id="ico-addWaste" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.5 12.5h15a7.5 7.5 0 0 1-15 0Z"/>
+          <path d="M12 3v6.5"/>
+          <path d="M9.3 6.8 12 9.5l2.7-2.7"/>
+        </g>
+      </symbol>
+      <symbol id="ico-addSawdust" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5c2.5-5 13.5-5 16 0Z"/>
+          <path d="m8 5.5 1.2 1.6"/>
+          <path d="m12.2 3.8 1.2 1.6"/>
+          <path d="m15.8 6.6 1.2 1.6"/>
+          <path d="m9.6 10.2 1.2 1.6"/>
+          <path d="m14.4 9.4 1.2 1.6"/>
+        </g>
+      </symbol>
+      <symbol id="ico-worms" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 16.5c2.5-6 5.5 2 8-3.5 1.8-4 4.5-2.5 6-3.2"/>
+          <path d="M6.9 12.9 6 11.6"/>
+          <path d="m9.4 14.4.7-1.4"/>
+          <path d="m12.6 12.4-1.1-1.1"/>
+          <circle cx="19.1" cy="9.1" r="1"/>
+        </g>
+      </symbol>
+      <symbol id="ico-drain" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 6.5h16"/>
+          <path d="M12 6.5v3.5"/>
+          <path d="M12 11.5c-1.6 2.1-2.4 3.4-2.4 4.5a2.4 2.4 0 0 0 4.8 0c0-1.1-.8-2.4-2.4-4.5Z"/>
+        </g>
+      </symbol>
+      <symbol id="ico-harvest" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3.5 10h17l-1.8 9.5H5.3Z"/>
+          <path d="M7.5 10a4.5 4.5 0 0 1 9 0"/>
+          <path d="m9 13.2.8 3.8"/>
+          <path d="m15 13.2-.8 3.8"/>
+        </g>
+      </symbol>
+      <symbol id="ico-shop" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 8h14l-1.2 11.5H6.2Z"/>
+          <path d="M9 8V6a3 3 0 0 1 6 0v2"/>
+        </g>
+      </symbol>
+      <symbol id="ico-xray" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </g>
+      </symbol>
+      <symbol id="ico-restart" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/>
+          <path d="M14.5 6H18V2.5"/>
+        </g>
+      </symbol>
+      <symbol id="ico-move" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3.5 12h17"/>
+          <path d="m7 8.5-3.5 3.5L7 15.5"/>
+          <path d="m17 8.5 3.5 3.5-3.5 3.5"/>
+        </g>
+      </symbol>
+
+      <!-- --- Foods (catalog order) ---
+           Frame, viewBox and stroke weight are IDENTICAL across all 14 by rule.
+           Do not "improve" one icon's weight or radius in isolation. -->
+      <symbol id="ico-food-fruitPeels" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 6.4v2.1"/>
+          <path d="M12 8.5c-3.6 2.4-5.2 5.9-4.8 9"/>
+          <path d="M12 8.5c-.4 3.4-.7 6.4-1 9"/>
+          <path d="M12 8.5c3.6 2.4 5.2 5.9 4.8 9"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-onionGarlic" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 8.4c3.3 0 5.4 2.9 5.4 5.8 0 2.4-2.4 3.9-5.4 3.9s-5.4-1.5-5.4-3.9c0-2.9 2.1-5.8 5.4-5.8Z"/>
+          <path d="M12 8.4c0-1.4-1-2.4-2.1-2.5"/>
+          <path d="M12 8.4c0-1.4 1-2.4 2.1-2.5"/>
+          <path d="M9.6 9.4c-.6 2.4-.6 5.7.2 8.3"/>
+          <path d="M14.4 9.4c.6 2.4.6 5.7-.2 8.3"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-coffeeGrounds" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <g transform="rotate(-35 9.8 10.4)">
+            <ellipse cx="9.8" cy="10.4" rx="2.8" ry="3.9"/>
+            <path d="M9.8 6.5c-1.2 1.8-1.2 6 0 7.8"/>
+          </g>
+          <g transform="rotate(25 14.6 14.4)">
+            <ellipse cx="14.6" cy="14.4" rx="2.4" ry="3.4"/>
+            <path d="M14.6 11c-1 1.6-1 5.2 0 6.8"/>
+          </g>
+        </g>
+      </symbol>
+      <symbol id="ico-food-vegetableScraps" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9.2 10.2 12 18.2l2.8-8"/>
+          <path d="M9.2 10.2h5.6"/>
+          <path d="M12 10.2V8.4"/>
+          <path d="M12 8.4c-1.3-1.5-2.4-2-3.6-2"/>
+          <path d="M12 8.4c1.3-1.5 2.4-2 3.6-2"/>
+          <path d="M10.2 13h3.6"/>
+          <path d="M10.9 15.4h2.2"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-meat" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9.6 8.2c3.9-1.2 7.4 1 7.6 4.3.2 3.3-2.7 5.3-5.7 4.9-2.7-.4-4.5-2.6-4.3-5.2.15-1.9 1-3.6 2.4-4Z"/>
+          <path d="M9.6 8.2C8.6 6.8 7 6.7 6.4 7.7c-.5.9 0 1.9 1 2.1"/>
+          <path d="M10.6 11.8c1.5-.7 3.3-.3 4.1 1.1"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-eggshells" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 6.2c3 2.2 4.6 5.2 4.6 7.4 0 2.7-2.1 4.4-4.6 4.4s-4.6-1.7-4.6-4.4c0-2.2 1.6-5.2 4.6-7.4Z"/>
+          <path d="m7.6 12.8 2 1 1.6-1.4 1.8 1.2 1.6-1.4 1.8 1.1"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-cookedPasta" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6.4 9.4c2.5-1.7 4.5 1.7 7 0 1.9-1.3 2.8-.3 4.2.3"/>
+          <path d="M6.4 13c2.5-1.7 4.5 1.7 7 0 1.9-1.3 2.8-.3 4.2.3"/>
+          <path d="M6.4 16.6c2.5-1.7 4.5 1.7 7 0 1.9-1.3 2.8-.3 4.2.3"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-citrus" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6.3 14.6a5.7 5.7 0 0 1 11.4 0Z"/>
+          <path d="M7.5 14.6a4.5 4.5 0 0 1 9 0"/>
+          <path d="M12 14.6V9.9"/>
+          <path d="m12 14.6-3.4-3.1"/>
+          <path d="m12 14.6 3.4-3.1"/>
+          <path d="m12 14.6-4.3-1.3"/>
+          <path d="m12 14.6 4.3-1.3"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-wetCardboard" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6.2 9.6h11.6v5.6H6.2Z"/>
+          <path d="M6.2 12.4c1-1.3 1.9-1.3 2.9 0s1.9 1.3 2.9 0 1.9-1.3 2.9 0 1.9 1.3 2.9 0"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-dairy" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8.5 10.6V17.8h7V10.6L13.6 6.6h-3.2Z"/>
+          <path d="M8.5 10.6h7"/>
+          <path d="M12 6.6v4"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-teaLeaves" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17.2 7.2c0 5.7-3.9 9.6-9.6 9.6 0-5.7 3.9-9.6 9.6-9.6Z"/>
+          <path d="M7.6 16.8c2.8-2.9 6.3-6.4 9.6-9.6"/>
+          <path d="m11.3 15.4-1-2.9"/>
+          <path d="m14 12.7-1-2.9"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-pumpkinGuts" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="13.4" rx="5.9" ry="4.6"/>
+          <path d="M12 8.8v9.2"/>
+          <path d="M9.2 9.4c-.9 1.7-.9 6.3 0 8"/>
+          <path d="M14.8 9.4c.9 1.7.9 6.3 0 8"/>
+          <path d="M12 8.8V6.6c0-.6.7-.7 1.1-.3"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-oilyFood" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5.6c2.1 2.8 3.4 4.6 3.4 6.3a3.4 3.4 0 0 1-6.8 0c0-1.7 1.3-3.5 3.4-6.3Z"/>
+          <path d="M6.6 16.4c1.6 1.6 9.2 1.6 10.8 0"/>
+        </g>
+      </symbol>
+      <symbol id="ico-food-saltyLeftovers" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9.4 10.8h5.2l.8 7H8.6Z"/>
+          <path d="M9.8 8.6h4.4v2.2H9.8Z"/>
+          <path d="M11 6.4h.01"/>
+          <path d="M13 6.4h.01"/>
+          <path d="M12 4.9h.01"/>
+        </g>
+      </symbol>
+    </defs>
+  </svg>
+
   <!-- Developer navigation: jumps between screens without playing through the
        flow. Hidden by default and removed from the DOM for players; main.js
        reveals it only under `?dev=1`. Text filled from strings.js by main.js. -->
@@ -132,7 +358,10 @@
         <div class="banner" id="colony-dead" hidden>
           <strong data-string="game.colonyDeadTitle"></strong>
           <p data-string="game.colonyDeadBody"></p>
-          <button type="button" data-action="repopulate" data-string="game.repopulate"></button>
+          <button type="button" data-action="repopulate">
+            <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-worms"/></svg>
+            <span data-string="game.repopulate"></span>
+          </button>
         </div>
 
         <!-- Internals panel: the numeric gauge layer, ALWAYS present. It is the
@@ -146,18 +375,51 @@
         </details>
       </div>
 
+      <!-- Every icon is a SIBLING of the [data-string] span, never a child of it.
+           js/main.js `applyStrings()` does `el.textContent = t(key)` on every
+           [data-string] node, so an <svg> nested inside one is wiped at init AND
+           on every language switch. tests/markup.test.js is the permanent
+           tripwire for that; the icons themselves carry no text, so the three
+           locales are untouched by this restructure and every key is unchanged. -->
       <aside class="actions" id="actions">
         <h2 data-string="game.actionsTitle"></h2>
-        <button type="button" data-action="addWaste" data-string="game.addWaste"></button>
-        <button type="button" data-action="addSawdust" data-string="game.addSawdust"></button>
-        <button type="button" data-action="addWorms" data-string="game.addWorms"></button>
-        <button type="button" data-action="drain" data-string="game.drain"></button>
-        <button type="button" data-action="harvest" data-string="game.harvest"></button>
-        <button type="button" data-action="openShop" data-nav="shop" data-string="game.openShop"></button>
-        <button type="button" data-action="xray" data-string="game.xrayToggle" aria-pressed="false"></button>
-        <button type="button" data-action="restart" data-string="game.restart"></button>
+        <button type="button" data-action="addWaste">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-addWaste"/></svg>
+          <span data-string="game.addWaste"></span>
+        </button>
+        <button type="button" data-action="addSawdust">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-addSawdust"/></svg>
+          <span data-string="game.addSawdust"></span>
+        </button>
+        <button type="button" data-action="addWorms">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-worms"/></svg>
+          <span data-string="game.addWorms"></span>
+        </button>
+        <button type="button" data-action="drain">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-drain"/></svg>
+          <span data-string="game.drain"></span>
+        </button>
+        <button type="button" data-action="harvest">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-harvest"/></svg>
+          <span data-string="game.harvest"></span>
+        </button>
+        <button type="button" data-action="openShop" data-nav="shop">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-shop"/></svg>
+          <span data-string="game.openShop"></span>
+        </button>
+        <button type="button" data-action="xray" aria-pressed="false">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-xray"/></svg>
+          <span data-string="game.xrayToggle"></span>
+        </button>
+        <button type="button" data-action="restart">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-restart"/></svg>
+          <span data-string="game.restart"></span>
+        </button>
         <label class="actions__slider">
-          <span data-string="game.move"></span>
+          <span class="actions__slider-head">
+            <svg class="ico" aria-hidden="true" focusable="false"><use href="#ico-move"/></svg>
+            <span data-string="game.move"></span>
+          </span>
           <input type="range" id="wall-position" min="0" max="1" step="0.01" value="0.5">
         </label>
         <p class="actions__feedback" id="action-feedback"></p>

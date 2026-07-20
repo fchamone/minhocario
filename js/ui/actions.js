@@ -37,6 +37,7 @@ import {
   markFillLevel,
   WARN_FILL,
 } from './components.js';
+import { foodIcon, volumeGlyph, decompositionRing } from './icons.js';
 import { listFoods, decompositionFraction } from '../sim/foods.js';
 import { getComposter } from '../sim/composters.js';
 import { getSpecies, carryingCapacity, PH_COMFORT, TOX_THRESHOLD } from '../sim/worms.js';
@@ -523,10 +524,14 @@ export function updateInternals(farm) {
     queue.append(empty);
   } else {
     for (const entry of snap.queue) {
+      // The ring reports the SAME `decomposed` fraction the percentage beside it
+      // prints, so the glyph and the number cannot disagree — both come from the
+      // sim's `decompositionFraction` via the snapshot, never re-derived here.
       queue.append(
         buildStat(
           `foods.${entry.foodId}.name`,
           `${formatLiters(entry.liters)} · ${formatPercent(entry.decomposed)}`,
+          decompositionRing(entry.decomposed),
         ),
       );
     }
@@ -564,8 +569,12 @@ export function showFeedback(message, isError = false) {
 /**
  * Open a modal chooser and resolve with the picked value (or null on cancel).
  * Built from a `<dialog>` so Escape and the backdrop behave natively.
+ *
+ * An option may carry an `icon` node, rendered ahead of its label. Options are
+ * built here with `t()` already applied, so nothing in this dialog carries
+ * `data-string` and `applyStrings()` cannot wipe an icon out of it.
  * @param {string} titleKey i18n key for the heading
- * @param {{value: *, label: string, disabled?: boolean}[]} options
+ * @param {{value: *, label: string, disabled?: boolean, icon?: Node}[]} options
  * @returns {Promise<*|null>}
  */
 function chooseFrom(titleKey, options) {
@@ -604,7 +613,10 @@ function chooseFrom(titleKey, options) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'chooser__option';
-      button.textContent = option.label;
+      const label = document.createElement('span');
+      label.textContent = option.label;
+      if (option.icon) button.append(option.icon);
+      button.append(label);
       button.disabled = Boolean(option.disabled);
       if (!option.disabled) button.addEventListener('click', () => finish(option.value));
       list.append(button);
@@ -629,16 +641,32 @@ function chooseFrom(titleKey, options) {
  * @param {(foodId: string, liters: number) => void} onAddWaste
  */
 async function promptAddWaste(capacity, onAddWaste) {
+  // Icons are attached in the SAME pass that renders the names, straight off
+  // `foodChoices()`, so the list still has exactly one ordering and no food can
+  // acquire a decoration another one lacks (§2.7).
   const foodId = await chooseFrom(
     'game.chooseFood',
-    foodChoices().map((choice) => ({ value: choice.id, label: choice.name })),
+    foodChoices().map((choice) => ({
+      value: choice.id,
+      label: choice.name,
+      icon: foodIcon(choice.id),
+    })),
   );
   if (!foodId) return;
 
   const portions = portionOptions(capacity);
+  // The glyph is relative to the LARGEST rung offered for this bin, so the four
+  // buttons read as a ladder. Against an absolute scale every rung on a small
+  // bin would look empty and the comparison — which is the whole point — would
+  // be lost.
+  const largest = portions[portions.length - 1];
   const liters = await chooseFrom(
     'game.choosePortion',
-    portions.map((value) => ({ value, label: formatLiters(value) })),
+    portions.map((value) => ({
+      value,
+      label: formatLiters(value),
+      icon: volumeGlyph(largest > 0 ? value / largest : 0),
+    })),
   );
   if (!portionValid(liters)) return;
 

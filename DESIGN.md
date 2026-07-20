@@ -204,8 +204,25 @@ Rules:
    in `js/main.js` does `el.textContent = t(key)` on every such node, which wipes
    the icon at init *and* on every language switch. `tests/markup.test.js`
    enforces this permanently.
-3. **Every symbol is `fill="currentColor"`**, so icons inherit the two-tier
+3. **Every symbol paints in `currentColor`**, so icons inherit the two-tier
    warn/alert colouring for free.
+
+   > **Amended at V8 (was "every symbol is `fill="currentColor"`").** The set
+   > shipped **stroke-based**, not filled: `fill="none"` with
+   > `stroke="currentColor"`. Two reasons. The register — this doc's own "thin
+   > rules, no glow, calm and dense" — is a line-drawing register, and solid
+   > glyphs read as a different, heavier UI than the one the tokens describe.
+   > More importantly, stroke weight is a **single scalar per icon**, so "all 14
+   > foods at the same optical weight" becomes a property a test can measure;
+   > with fills, uniform density is a matter of taste and nothing can enforce it.
+   > `currentColor` inheritance — the actual point of the original rule — is
+   > unchanged.
+
+4. **Parametric glyphs are not sprite symbols.** The portion chooser's volume
+   glyph and the queue's decomposition ring are drawn from a number, so they are
+   built element-by-element in `js/ui/icons.js` and coloured from CSS (their
+   colours *have* to change with the value, so they cannot live in the symbol).
+   Everything with fixed artwork goes in the sprite.
 
 ### Food icons — the uniform-treatment discipline
 
@@ -232,9 +249,29 @@ Two leaks *are* genuinely new, and these rules hold them:
    another channel. **All 14 render monochrome in `currentColor`.** No per-food
    hue, ever.
 
-No test can prove the absence of clustering. The substitute is a **manual review
-at CPV2**: lay all 14 out in the chooser grid and confirm they do not read as two
-families.
+**What V8 made machine-checkable.** "Same frame, same weight, same scale" sounded
+like taste when it was written; most of it turned out to be measurable, and
+`tests/icons.test.js` now enforces every part that is:
+
+| Rule | How it is checked |
+|---|---|
+| Same canvas | all `#ico-food-*` share one `viewBox` |
+| Identical frame | the frame `<circle>` is byte-identical across all 14 |
+| One optical weight | exactly one `stroke-width` value across the whole set |
+| Monochrome | every `fill`/`stroke` is `currentColor` or `none` |
+| No density differences | every `fill` is `none` — the set is stroke-only |
+| Complete, no strays | one symbol per catalog food, and no symbol without a food |
+
+Concretely, all 14 carry
+`<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.45"/>`
+and one glyph group at `stroke-width="1.25"`. **Do not retune one icon's weight
+or frame radius in isolation** — the moment one reads as a different *kind* of
+thing, the list has leaked the split it exists to hide.
+
+What remains unmeasurable is whether the 14 **glyphs inside those identical
+frames** still cluster into organic-irregular versus manufactured-regular. No
+test can reach that. The substitute is a **manual review at CPV2**: lay all 14
+out in the chooser grid and confirm they do not read as two families.
 
 ---
 

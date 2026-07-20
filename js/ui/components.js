@@ -122,17 +122,27 @@ export function fill(id, ...nodes) {
  * Build one `label: value` line. Both panels use it, which is what keeps them
  * typographically identical — the tabular-nums alignment in particular only
  * holds if every readout emits this markup.
+ *
+ * `lead` is an optional glyph placed BEFORE the label text, inside the label
+ * span (the internals queue uses it for the decomposition ring). It is appended
+ * as a node rather than set as text, and the label carries no `data-string`, so
+ * `applyStrings()` has nothing here to wipe — the copy is already resolved
+ * through `t()` at build time.
  * @param {string} labelKey i18n key path
  * @param {string} valueText pre-formatted display value
+ * @param {Node} [lead] optional glyph rendered ahead of the label
  * @returns {HTMLElement}
  */
-export function buildStat(labelKey, valueText) {
+export function buildStat(labelKey, valueText, lead) {
   const row = document.createElement('div');
   row.className = 'stat';
 
   const label = document.createElement('span');
   label.className = 'stat__label';
-  label.textContent = t(labelKey);
+  const text = document.createElement('span');
+  text.textContent = t(labelKey);
+  if (lead) label.append(lead);
+  label.append(text);
 
   const value = document.createElement('span');
   value.className = 'stat__value';

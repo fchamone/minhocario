@@ -154,7 +154,12 @@ body.dev-mode .hud { padding-top: 44px; }
   border-left: 1px solid var(--surface-2);
   overflow-y: auto;
 }
+/* Icon + label on one row. `> button` rather than a class because these buttons
+   carry only `data-action`; the `.actions__btn--warn/--alert` modifiers that
+   markFillLevel() toggles have never had a base class to sit on. */
+.actions > button { display: flex; align-items: center; gap: var(--space-2); }
 .actions__slider { display: grid; gap: var(--space-1); color: var(--ink-dim); font-size: var(--text-sm); }
+.actions__slider-head { display: flex; align-items: center; gap: var(--space-2); }
 
 .speed {
   grid-area: speed;
