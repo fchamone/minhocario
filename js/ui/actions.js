@@ -406,7 +406,12 @@ export function updateInternals(farm) {
     return;
   }
 
-  const body = document.createElement('div');
+  // Collected flat and handed to `fill` as separate nodes rather than wrapped in
+  // a container div. The groups have to be DIRECT children of #internals-body:
+  // that is the element the V13 sub-grid lays out, and a wrapper would leave the
+  // grid with exactly one item, silently collapsing the density pass back to a
+  // single column at every width. `fill` takes varargs, so nothing is lost.
+  const body = [];
 
   // Which bin this is: model name + total volume. Rendered into the body (not
   // the static heading) so it follows a mid-farm upgrade automatically.
@@ -415,7 +420,7 @@ export function updateInternals(farm) {
     model.className = 'internals__model';
     model.textContent =
       `${t(`composters.${snap.composterId}.name`)} · ${snap.capacity} ${t('common.liters')}`;
-    body.append(model);
+    body.push(model);
   }
 
   // Population by stage, against carrying capacity.
@@ -486,8 +491,8 @@ export function updateInternals(farm) {
     }
   }
 
-  body.append(pop, env, tanks, queue);
-  fill('internals-body', body);
+  body.push(pop, env, tanks, queue);
+  fill('internals-body', ...body);
 }
 
 /**

@@ -454,6 +454,67 @@ test('the grid-area walker actually detects a violation both ways', () => {
   assert.deepEqual([...both.used], ['a']);
 });
 
+// --- The internals sub-grid actually has room to be a sub-grid ---------------
+// V13 densifies the readouts column by letting its groups sit side by side at
+// wide viewports: `repeat(auto-fit, minmax(220px, 1fr))`. auto-fit is silent
+// when it cannot fit a second column — it just lays out one, at every width, on
+// every monitor. Nothing throws and nothing looks broken; the density pass
+// simply does not happen, and the only way to notice is to have expected it.
+//
+// The trap is that the two numbers live in different rules in different files:
+// the sub-grid's column minimum here, and the width of the track it sits in
+// over in the game-screen grid. V13 as originally specified had exactly this
+// bug — a 220px minimum inside a track capped at 340px, which can never fit
+// two columns. So the arithmetic is asserted rather than eyeballed.
+
+/** First declaration of `prop` inside the first rule matching `selectorPattern`. */
+function declIn(css, selectorPattern, prop) {
+  const block = new RegExp(`${selectorPattern}\\s*\\{([^}]*)\\}`).exec(stripComments(css));
+  if (!block) return null;
+  const decl = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;}]+)`).exec(block[1]);
+  return decl ? squash(decl[1]) : null;
+}
+
+test('the wide-viewport readouts track can actually fit two sub-grid columns', () => {
+  const tokens = tokenMap(readSheet('tokens.css'));
+  const screens = readSheet('screens.css');
+  const components = readSheet('components.css');
+
+  /** Resolve a token-bearing length to a plain number of px. */
+  const px = (value) => {
+    const n = /(-?\d+(?:\.\d+)?)px/.exec(resolveVars(value, tokens));
+    assert.ok(n, `expected a px length, got \`${value}\``);
+    return Number(n[1]);
+  };
+
+  const columns = declIn(screens, '#internals-body', 'grid-template-columns');
+  assert.ok(columns, 'screens.css should lay #internals-body out as a grid');
+  const colMin = px(/minmax\(\s*([^,]+),/.exec(columns)[1]);
+  const gap = px(declIn(screens, '#internals-body', 'gap'));
+
+  // The panel's own horizontal padding eats into the track twice over.
+  const padding = px(declIn(components, '\\.internals', 'padding').split(/\s+/).pop());
+
+  // The widened track lives behind the wide-viewport media query. Everything
+  // after that marker is the wide layout, so the tail is the right place to look.
+  const wide = screens.slice(screens.indexOf('@media (min-width: 1600px)'));
+  assert.ok(wide, 'screens.css should widen the readouts track at wide viewports');
+  const track = declIn(wide, '\\.screen--game', 'grid-template-columns');
+  const trackMax = px(/minmax\([^,]+,\s*([^)]+)\)/.exec(track)[1]);
+
+  const available = trackMax - 2 * padding;
+  const needed = 2 * colMin + gap;
+
+  assert.ok(
+    available >= needed,
+    `the readouts track is ${trackMax}px at wide viewports, leaving ${available}px ` +
+      `of content width, but two ${colMin}px sub-grid columns plus a ${gap}px gap ` +
+      `need ${needed}px. auto-fit will silently lay out ONE column at every ` +
+      'width, so the density pass never happens — widen the track or lower the ' +
+      'column minimum.',
+  );
+});
+
 // The token layer is enforced, not offered. Without this, a colour system is a
 // suggestion that decays back into literals one "just this once" at a time.
 test('no colour literal appears outside tokens.css', () => {

@@ -110,8 +110,9 @@
   letter-spacing: var(--tracking-caps);
   color: var(--ink-dim);
 }
-.internals__group { margin-bottom: var(--space-3); }
-.internals__group:last-child { margin-bottom: 0; }
+/* No margin: #internals-body is a grid (screens.css) and its `gap` does the
+   stacking. A margin here would ADD to that gap, and `:last-child` stops
+   meaning "the bottom one" as soon as the groups flow into two columns. */
 .internals__empty { margin: 0; color: var(--ink-faint); }
 
 /* --- Readouts --- */

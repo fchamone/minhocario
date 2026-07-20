@@ -248,6 +248,21 @@
   grid-template-columns: auto minmax(0, 1fr) minmax(260px, 320px);
 }
 
+/* V13: widen the readouts track at wide viewports so its sub-grid has room to
+   go two-up. Without this the density pass is inert — `auto-fit` lays out one
+   column at every width, silently, because two 220px columns plus their gap
+   cannot fit inside the 340px the track is capped at below this breakpoint.
+   1600px is the width at which surrendering ~200px of stage buys a second
+   readout column and still leaves the centre wider than the sidebars.
+
+   Lower specificity than the `:has()` rule above by design: a collapsed panel
+   keeps its `auto` track at every viewport, wide ones included. */
+@media (min-width: 1600px) {
+  .screen--game {
+    grid-template-columns: minmax(480px, 560px) minmax(0, 1fr) minmax(260px, 320px);
+  }
+}
+
 /* An instrument strip: hairline-divided cells rather than free-floating chips.
    The rules are what make it read as one panel of six gauges instead of six
    unrelated labels, and they cost nothing but a border. */
@@ -300,6 +315,30 @@ body.dev-mode .hud { padding-top: 44px; }
    where it stays reusable. Every region of this grid claims its area here, next
    to the template that declares it; tests/css.test.js checks the two match. */
 .internals { grid-area: readouts; }
+
+/* V13 density pass. The four groups are independent blocks, so letting them
+   flow into columns costs one rule — `auto-fit` collapses to a single column on
+   its own wherever a second will not fit, which is what makes 1366px degrade
+   gracefully without a second breakpoint.
+
+   `align-items: start` keeps each group its natural height; stretching them to
+   match the tallest (the food queue) would open ragged gaps under the short
+   ones. The gap replaces the per-group `margin-bottom` that used to do the
+   stacking — margins would add to the gap, and `:last-child` stops meaning
+   "bottom row" the moment there are two columns.
+
+   The 220px minimum only produces a second column if the track is wide enough
+   to hold two; that arithmetic spans two files and is asserted in
+   tests/css.test.js rather than trusted. */
+#internals-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+/* The model/capacity line describes the whole bin, so it spans the row rather
+   than becoming a cell beside the first group. */
+.internals__model { grid-column: 1 / -1; }
 
 .stage {
   grid-area: stage;
