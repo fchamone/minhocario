@@ -18,7 +18,6 @@ export const ptBR = {
     shop: 'Loja',
     setup: 'Preparação',
     game: 'Fazenda',
-    addCoins: '+500 moedas (dev)',
   },
 
   home: {

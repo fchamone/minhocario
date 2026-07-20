@@ -16,7 +16,6 @@ export const en = {
     shop: 'Shop',
     setup: 'Setup',
     game: 'Farm',
-    addCoins: '+500 coins (dev)',
   },
 
   home: {

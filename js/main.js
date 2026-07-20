@@ -660,31 +660,6 @@ function showScreen(name) {
   SCREEN_ENTER[name]?.();
 }
 
-/**
- * DEV ONLY — top up the wallet so mid-game flows (notably the upgrade shop) can
- * be exercised without first playing out the economy. Lives on the temporary
- * dev-nav bar and is removed with it before release (T23).
- * @param {number} [amount]
- */
-function devAddCoins(amount = 500) {
-  if (gameProfile) {
-    gameProfile = { ...gameProfile, wallet: gameProfile.wallet + amount };
-    persistGame();
-    refreshGameUi();
-  } else {
-    const loaded = load();
-    if (loaded.status !== LOAD_STATUS.OK) return; // never touch a corrupt/future save
-    const stored = loaded.save;
-    save({
-      ...stored,
-      profile: { ...stored.profile, wallet: (stored.profile?.wallet ?? 0) + amount },
-    });
-  }
-  // Repaint whatever screen is showing so the new balance is visible at once
-  // (the shop reads the wallet on entry).
-  if (currentScreen !== 'game') SCREEN_ENTER[currentScreen]?.();
-}
-
 /** Wire click handlers for anything carrying a `data-nav` attribute. */
 function wireNavigation() {
   for (const el of document.querySelectorAll('[data-nav]')) {
@@ -707,7 +682,6 @@ function init() {
 
   applyStrings();
   wireNavigation();
-  document.getElementById('dev-coins')?.addEventListener('click', () => devAddCoins());
 
   // Bottom speed bar → adjust the tick timer; freeze/resume + autosave on tab
   // visibility changes (killing the tab persists the exact game hour, no catch-up).
