@@ -22,12 +22,16 @@ import {
   Texture,
   Raycaster,
   Vector3,
+  Vector2,
+  LatheGeometry,
+  ExtrudeGeometry,
 } from '../vendor/three.module.min.js';
 import {
   buildComposterMesh,
   composterCavity,
   composterFootprint,
   disposeComposterMesh,
+  LATHE_SEGMENTS,
 } from '../js/render/composter3d.js';
 import { COMPOSTERS } from '../js/sim/composters.js';
 
@@ -214,6 +218,87 @@ test('every footprint covers the cavity it encloses', () => {
 test('an unknown id yields no footprint', () => {
   for (const id of [null, undefined, '', 'nope']) {
     assert.equal(composterFootprint(id), null, `composterFootprint(${JSON.stringify(id)})`);
+  }
+});
+
+// --- Lathe / extrude silhouettes (V18) ---------------------------------------
+
+test('the lathe segment count reaches full radius on both ground axes', () => {
+  // Not an aesthetic constant. A lathe puts vertices at j * 2pi / N, so its
+  // bounding box only reaches the profile radius on a ground axis if a vertex
+  // lands there — which needs N divisible by 4. At N = 10 (the value first
+  // shipped here) the widest vertex sits at 72 degrees, so the eco barrel was
+  // 1.902r across in X while composterFootprint reported 2r, and the contact
+  // shadow quietly stopped matching the silhouette. Asserted directly so the
+  // next segment-count tweak fails with the reason rather than with arithmetic.
+  assert.equal(LATHE_SEGMENTS % 4, 0, `LATHE_SEGMENTS ${LATHE_SEGMENTS} is not a multiple of 4`);
+  assert.ok(LATHE_SEGMENTS >= 8 && LATHE_SEGMENTS <= 12, 'the art direction mandates 8-12 segments');
+
+  const geometry = new LatheGeometry([new Vector2(1, 0), new Vector2(1, 2)], LATHE_SEGMENTS);
+  geometry.computeBoundingBox();
+  const { min, max } = geometry.boundingBox;
+  assert.ok(Math.abs(max.x - min.x - 2) < 1e-6, `X span ${max.x - min.x} is not 2r`);
+  assert.ok(Math.abs(max.z - min.z - 2) < 1e-6, `Z span ${max.z - min.z} is not 2r`);
+});
+
+/** Count meshes under a group whose geometry is of the given constructor. */
+function countGeometry(group, Ctor) {
+  let n = 0;
+  group.traverse((obj) => {
+    if (obj.isMesh && obj.geometry instanceof Ctor) n += 1;
+  });
+  return n;
+}
+
+test('the models that V18 reshaped actually use lathes and extrusions', () => {
+  // Without this, reverting a builder to primitives is invisible: the cavity and
+  // footprint tests pass either way, since both were written to survive the
+  // reshape rather than to require it.
+  // Labelled explicitly: the vendored Three is minified, so `Ctor.name` reads
+  // "hu" or "Ku" and a failure message built from it says nothing.
+  const expectations = [
+    ['eco', LatheGeometry, 'LatheGeometry', 1],
+    ['buried', LatheGeometry, 'LatheGeometry', 3],
+    ['tier2', ExtrudeGeometry, 'ExtrudeGeometry', 4],
+    ['tier3', ExtrudeGeometry, 'ExtrudeGeometry', 5],
+    ['tier4', ExtrudeGeometry, 'ExtrudeGeometry', 6],
+  ];
+  for (const [id, Ctor, label, atLeast] of expectations) {
+    const mesh = buildComposterMesh(id);
+    const found = countGeometry(mesh, Ctor);
+    assert.ok(found >= atLeast, `${id}: expected at least ${atLeast} ${label} meshes, found ${found}`);
+    disposeComposterMesh(mesh);
+  }
+});
+
+test('the tray tiers still read their tier count in geometry', () => {
+  // The AC's "tier counts visible". V18 rewrote the loop that builds them, and a
+  // tier that quietly lost a tray would still pass every dimensional test here —
+  // the trays are stacked, so the cavity and footprint stay plausible.
+  for (const [id, trays] of [['tier2', 2], ['tier3', 3], ['tier4', 4]]) {
+    const mesh = buildComposterMesh(id);
+    let bodies = 0;
+    mesh.traverse((obj) => {
+      if (obj.isMesh && obj.userData.shellBody) bodies += 1;
+    });
+    // One collector base plus one box per tray.
+    assert.equal(bodies, trays + 1, `${id}: expected ${trays} trays over a collector base`);
+    disposeComposterMesh(mesh);
+  }
+});
+
+test('every model surface stays flat-shaded', () => {
+  // `flatShading: true` is a stated identity in DESIGN.md, not a default that
+  // happens to be on. A lathe or extrusion built with a bare material would go
+  // smooth and read as a different, glossier project — and only on the models
+  // V18 touched, which is the hardest kind of inconsistency to spot.
+  for (const id of IDS) {
+    const mesh = buildComposterMesh(id);
+    mesh.traverse((obj) => {
+      if (!obj.isMesh || obj.name === 'contactShadow') return;
+      assert.equal(obj.material.flatShading, true, `${id}: a ${obj.geometry.type} is smooth-shaded`);
+    });
+    disposeComposterMesh(mesh);
   }
 });
 

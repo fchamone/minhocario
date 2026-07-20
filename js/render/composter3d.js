@@ -33,6 +33,10 @@ import {
   BoxGeometry,
   CylinderGeometry,
   PlaneGeometry,
+  LatheGeometry,
+  ExtrudeGeometry,
+  Shape,
+  Vector2,
   MeshStandardMaterial,
   MeshBasicMaterial,
 } from '../../vendor/three.module.min.js';
@@ -115,6 +119,99 @@ function addBox(group, size, pos, color, emissive = 0) {
  */
 function addCyl(group, rTop, rBottom, height, pos, color, segments = 8) {
   const mesh = new Mesh(new CylinderGeometry(rTop, rBottom, height, segments), makeMaterial(color));
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  group.add(mesh);
+  return mesh;
+}
+
+/**
+ * Segment count for every lathe (V18). Inside the plan's mandated 8–12: enough to
+ * read as round at this camera distance, few enough that `flatShading: true`
+ * still facets the surface. A smooth lathe breaks the art direction more than it
+ * helps — `DESIGN.md` states the low segment count as an identity, not a shortcut.
+ *
+ * MUST BE A MULTIPLE OF 4, which is not an aesthetic choice. A lathe places
+ * vertices at `j * 2π / N`, so its bounding box only reaches the profile's full
+ * radius on a ground axis if some vertex lands on that axis. N = 12 puts vertices
+ * at 0°/90°/180°/270° and spans exactly `2 * radius` on both. N = 10 does not:
+ * its widest vertex is at 72°, so the model is only `1.902 * radius` across in X
+ * while `composterFootprint` still reports `2 * radius` — and the contact shadow
+ * silently stops matching the silhouette it is cast by. This was the value first
+ * written here, and the footprint test caught it.
+ */
+export const LATHE_SEGMENTS = 12;
+
+/**
+ * Add a surface of revolution about the Y axis (V18).
+ *
+ * The profile is a list of `[radius, y]` pairs read bottom-to-top. Two points at
+ * the same y with different radii make a flat annulus; a run ending at radius 0
+ * caps the shape. Nothing here may exceed the model's structural radius — see
+ * {@link LATHE_SEGMENTS} for why the bounding box is load-bearing.
+ * @param {Group} group
+ * @param {Array<[number, number]>} profile [radius, y] pairs, bottom to top
+ * @param {[number, number, number]} pos [x, y, z] origin of the profile's frame
+ * @param {number} color
+ * @returns {Mesh}
+ */
+function addLathe(group, profile, pos, color) {
+  const points = profile.map(([radius, y]) => new Vector2(radius, y));
+  const mesh = new Mesh(new LatheGeometry(points, LATHE_SEGMENTS), makeMaterial(color));
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  group.add(mesh);
+  return mesh;
+}
+
+/**
+ * A rounded rectangle in the XY plane, for the extruded tray rims (V18).
+ * @param {number} width
+ * @param {number} depth
+ * @param {number} radius corner radius, clamped to fit
+ * @returns {Shape}
+ */
+function roundedRectShape(width, depth, radius) {
+  const w = width / 2;
+  const d = depth / 2;
+  const r = Math.min(radius, w, d);
+  const shape = new Shape();
+  shape.moveTo(-w + r, -d);
+  shape.lineTo(w - r, -d);
+  shape.quadraticCurveTo(w, -d, w, -d + r);
+  shape.lineTo(w, d - r);
+  shape.quadraticCurveTo(w, d, w - r, d);
+  shape.lineTo(-w + r, d);
+  shape.quadraticCurveTo(-w, d, -w, d - r);
+  shape.lineTo(-w, -d + r);
+  shape.quadraticCurveTo(-w, -d, -w + r, -d);
+  return shape;
+}
+
+/**
+ * Add an extruded rounded-rectangle slab, lying flat (thickness along Y) — the
+ * tray rims and lids (V18). `pos` is the CENTRE, matching {@link addBox}, so the
+ * call sites keep the coordinates they already had.
+ *
+ * `curveSegments: 2` keeps the corners faceted rather than smooth, for the same
+ * reason the lathes stay at 12 segments.
+ * @param {Group} group
+ * @param {[number, number, number]} size [w, thickness, d]
+ * @param {[number, number, number]} pos [x, y, z] centre
+ * @param {number} color
+ * @param {number} [radius] corner radius
+ * @returns {Mesh}
+ */
+function addRim(group, size, pos, color, radius = 0.07) {
+  const [width, thickness, depth] = size;
+  const geometry = new ExtrudeGeometry(roundedRectShape(width, depth, radius), {
+    depth: thickness,
+    bevelEnabled: false,
+    curveSegments: 2,
+  });
+  // Extrude runs along +Z in the shape's own frame; lay it flat so the thickness
+  // becomes Y, then recentre so `pos` means the centre like every other helper.
+  geometry.rotateX(-Math.PI / 2);
+  geometry.translate(0, -thickness / 2, 0);
+  const mesh = new Mesh(geometry, makeMaterial(color));
   mesh.position.set(pos[0], pos[1], pos[2]);
   group.add(mesh);
   return mesh;
@@ -233,27 +330,64 @@ function buildTrayStack(group, s, spec) {
 
   // The stack: one box per tray, each capped by a darker rim line so the tier
   // count is unmistakable.
+  // Rims are EXTRUDED rounded rectangles rather than boxes (V18) — a moulded
+  // plastic rim has a radius on it, and at this camera distance that rounding is
+  // most of what separates "stacked trays" from "stacked cubes". They sit
+  // slightly proud of the trays and are deliberately NOT body-tagged, so they
+  // extend the silhouette without widening the model's footprint.
   for (let i = 0; i < trays; i += 1) {
     const cy = trayBottom + i * trayH + trayH / 2;
     markBody(addBox(group, [w, trayH, d], [0, cy, zc], spec.body));
-    addBox(group, [w + 0.05, 0.07, d + 0.05], [0, trayBottom + (i + 1) * trayH - 0.02, zc], RIM_DARK);
+    addRim(group, [w + 0.05, 0.07, d + 0.05], [0, trayBottom + (i + 1) * trayH - 0.02, zc], RIM_DARK);
   }
 
   // Lid + handle.
-  addBox(group, [w + 0.08, 0.16, d + 0.08], [0, lidY + 0.08, zc], RIM_DARK);
-  addBox(group, [w * 0.3, 0.08, 0.12], [0, lidY + 0.2, zc], RIM_DARK);
+  addRim(group, [w + 0.08, 0.16, d + 0.08], [0, lidY + 0.08, zc], RIM_DARK, 0.1);
+  addRim(group, [w * 0.3, 0.08, 0.12], [0, lidY + 0.2, zc], RIM_DARK, 0.04);
 }
 
-/** In-ground bin: the drum sinks below y=0; only a collar + domed lid show. */
+/**
+ * In-ground bin: the drum sinks below y=0; only a collar + domed lid show.
+ *
+ * DEVIATION (V18): the plan asks for "one lathe replaces three cylinders". Three
+ * lathes replace three cylinders instead, because the three parts carry three
+ * DIFFERENT colours — a dark sunken drum, a tan collar at ground level, an olive
+ * dome — and one lathe is one material. Merging them would have collapsed the
+ * colour break at the ground line, which is the main thing that reads "this bin
+ * is in the ground" at a glance, and that read is this task's own acceptance
+ * criterion. The geometry win is kept and put where it matters: each part now has
+ * a shape a cylinder cannot express — a capped drum, a flared collar, and a
+ * genuinely curved dome in place of the truncated cone.
+ */
 function buildBuried(group, s) {
   const { r, zc, underH, top } = s;
+  const bottom = top - underH;
 
-  // Drum, mostly below ground (top just breaks the surface).
-  markBody(addCyl(group, r, r, underH, [0, top - underH / 2, zc], BURIED_BODY, 8));
-  // Raised collar at the surface + a domed (truncated-cone) lid + handle.
-  addCyl(group, r * 1.06, r * 1.06, 0.18, [0, 0.09, zc], BURIED_RIM, 8);
-  addCyl(group, r * 0.55, r * 1.0, 0.24, [0, 0.3, zc], BURIED_LID, 8);
-  addBox(group, [0.16, 0.08, 0.16], [0, 0.46, zc], BURIED_RIM);
+  // Sunken drum, capped at the bottom so the x-ray cutaway shows a closed vessel
+  // rather than an open pipe.
+  markBody(addLathe(group, [
+    [0, bottom],
+    [r, bottom],
+    [r, top],
+  ], [0, 0, zc], BURIED_BODY));
+
+  // Collar at the surface, flaring outward toward its lip.
+  addLathe(group, [
+    [r, top],
+    [r * 1.06, top + 0.06],
+    [r * 1.06, 0.18],
+  ], [0, 0, zc], BURIED_RIM);
+
+  // Domed lid — curved, not a truncated cone.
+  addLathe(group, [
+    [r * 1.0, 0.18],
+    [r * 0.94, 0.28],
+    [r * 0.74, 0.38],
+    [r * 0.42, 0.46],
+    [0, 0.5],
+  ], [0, 0, zc], BURIED_LID);
+
+  addBox(group, [0.16, 0.08, 0.16], [0, 0.52, zc], BURIED_RIM);
 }
 
 /** Largest model: a peaked barrel/drum on feet with a front access hatch. */
@@ -265,7 +399,24 @@ function buildEco(group, s) {
   const zs = [r - r * 0.6, r + r * 0.6];
   for (const x of xs) for (const z of zs) addBox(group, [0.16, legH, 0.16], [x, legH / 2, z], ECO_DARK);
 
-  markBody(addCyl(group, r, r, bodyH, [0, legH + bodyH / 2, zc], ECO_BODY, 8));
+  // Ribbed barrel (V18): a lathe whose profile steps in and out, so the drum
+  // reads as corrugated rather than as a plain tube.
+  //
+  // The ribs cut INWARD from the barrel's structural radius, never outward. A
+  // lathe's bounding box is exactly 2 x its widest profile radius, and
+  // `composterFootprint` reports 2r for this model — so a rib bulging past r
+  // would widen the real silhouette while the contact shadow kept the old size,
+  // and nothing on screen would look wrong enough to notice. Grooves read as
+  // ribbing just as well and keep the two in agreement.
+  const RIBS = 5;
+  const profile = [[0, legH], [r, legH]];
+  for (let i = 1; i <= RIBS; i += 1) {
+    profile.push([r * 0.93, legH + ((i - 0.5) * bodyH) / RIBS]);
+    profile.push([r, legH + (i * bodyH) / RIBS]);
+  }
+  profile.push([0, topY]);
+  markBody(addLathe(group, profile, [0, 0, zc], ECO_BODY));
+
   // Front hatch door.
   addBox(group, [r * 0.8, bodyH * 0.4, 0.1], [0, legH + bodyH * 0.4, zc + r * 0.86], ECO_DARK);
   // Lid rim + a peaked cone lid (the gabled top is the eco's tell).
