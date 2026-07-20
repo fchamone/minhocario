@@ -258,8 +258,10 @@ instrument. It justifies both the low-poly diorama and the requested density, an
 ### ~~V5. `ResizeObserver` on the canvas~~ — ✅ done (`64c3158`)
 Shipped ahead of the phase as standalone correctness work. ResizeObserver on the canvas, feature-
 detected, disconnected in `disposeScene`. No feedback loop (`resizeScene` passes `updateStyle=false`).
-**Still needs its browser check** — resize the window and drag the bin at several widths; it must
-stay pinned under the cursor. Carried as an open item in the todo.
+**Browser check done and clean, 2026-07-20** — resized the window and dragged the bin at several
+widths; it stayed pinned under the cursor. Carried through both Phase-A and Phase-B checkpoints
+without being folded into either, because it is drag-raycast *correctness* and both gates were
+*appearance* reviews.
 
 ### ~~V6. `DIMS` extraction in `composter3d.js`~~ — ✅ done (`c0ae33e`)
 `structureOf()` now feeds both the builders and `composterCavity`; verified bit-identical across all
@@ -580,7 +582,7 @@ with a useful message before trusting it.** The first V6 containment test passed
 |---|---|
 | sun-patch ↔ `solarGain` coupling | Never touch `updateSunPatch`'s sampling; `SUN_PATCH_STRENGTH` is display-only. At noon the bright band must track the bin's temperature advantage as the slider moves. |
 | x-ray fade/restore protocol | Toggle x-ray ≥3× on each of the 6 models; upgrade *while* x-rayed; buried↔tier3 while x-rayed (exercises the cutaway reconciliation at `scene.js:680`). Shell must return fully opaque every time. |
-| drag raycast | Drag the bin at 3+ window widths and with panels collapsed/expanded. Drift means a stale `camera.aspect`. **Includes the outstanding V5 browser check.** |
+| drag raycast | Drag the bin at 3+ window widths and with panels collapsed/expanded. Drift means a stale `camera.aspect`. V5's own check passed 2026-07-20; **re-walk after V12**, which is the first task where a collapsing panel resizes the canvas. |
 | `<details>` memoization | Collapse each panel, let ≥1 tick pass, re-expand — content must be current, not stale or blank. Repeat while paused (the case the memo exists for). |
 | i18n key parity | `node --test tests/i18n.test.js`. Keys don't change, since icons carry no text. |
 | Food-suitability guard | Existing guards + the new icon tests. **Manual, and the one thing no test covers:** lay all 14 food icons out in the chooser grid and confirm they do not cluster into two families. |

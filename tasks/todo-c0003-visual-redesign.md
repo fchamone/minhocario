@@ -57,8 +57,9 @@
       Excluded from the FTP upload deliberately — it names the mechanic the food list hides.
 - [x] **V5** `ResizeObserver` on the canvas → `resizeScene()` (S) — deps: none
       Landed early as standalone correctness work (`64c3158`). Feature-detected, disconnected in
-      `disposeScene`, no feedback loop (`updateStyle=false`). **Browser check still outstanding —
-      see Open items.**
+      `disposeScene`, no feedback loop (`updateStyle=false`). **Browser check done and clean,
+      2026-07-20** — the bin stays pinned under the cursor at several window widths. That closes
+      the last item carried out of Phase A, and with it the only gate on V12.
 - [x] **V6** `DIMS` extraction: one source for `buildX` + `composterCavity` (M) — deps: none
       Landed early (`c0ae33e`). `structureOf()` feeds both sides; bit-identical across all 6 models
       (cavities + every mesh position). `tests/composter3d.test.js` (7 tests) holds it. The first
@@ -255,10 +256,18 @@
       it actually sits on. That test caught an over-broad assumption in **itself** on first run —
       a blanket surface list failed `--ink-faint` on `--surface-2`, a pairing that never occurs —
       so it now carries a per-ink surface map with the reason for each restriction.
-- [ ] **V5 browser check (carried).** ResizeObserver has no automated coverage — it needs a real
-      browser. `npx serve .`, resize the window, and drag the bin at several widths; it must stay
-      pinned under the cursor. Do this **before** V12, since V12 is the task that would otherwise
-      expose the bug it fixes.
+- [x] **RESOLVED — V5 browser check, 2026-07-20.** Walked by the maintainer: resize the window,
+      drag the bin at several widths, and it stays pinned under the cursor. ResizeObserver has no
+      automated coverage and never will here — it needs a real browser, a real layout change and a
+      real pointer, none of which `node --test` has.
+      Carried deliberately from Phase A through two checkpoints rather than being folded into
+      either: CPV1 and CPV2 were both *appearance* gates, and this is drag-raycast **correctness**.
+      Ticking it inside an aesthetic sign-off would have buried a functional check in a list of
+      visual ones — which is exactly how a stale `camera.aspect` ships unnoticed.
+      **This was the last gate on V12**, which is the task that would otherwise have re-exposed
+      the bug V5 fixed: V12 changes the grid *and* makes a collapsing panel resize the canvas, so
+      it exercises the ResizeObserver path far harder than anything shipped so far. Re-walk the
+      drag check at the end of V12 — the verify step there is not a formality.
 - [ ] Decide whether C-0003 warrants a formal `.harn/devy/changes/C-0003-*/spec.md`. The decisions
       are captured in the plan's "Decisions locked" table; a spec was not written because this
       started as a design interview rather than a feature request.
@@ -281,8 +290,8 @@ V9 went first despite being nominally parallel: V8 adds decomposition rings to
 the internals queue rows that V9 relocates, so landing V9 first kept V8 a clean
 diff against a shared `buildStat` instead of a merge against a moving one.
 
-Next: **V12** (three-column grid), gated on the V5 browser check below — the one
-Phase-B item CPV2 deliberately did *not* close.
+Next: **V12** (three-column grid) — **now fully unblocked.** The V5 browser check
+was the last gate on it and was walked clean 2026-07-20.
 
 Worth noting for CPV3 and CPV4: CPV2 differed from CPV1 in kind. CPV1's visual
 calls were *accepted on judgement* because nothing could measure them; CPV2's
@@ -291,10 +300,13 @@ check. The later gates (x-ray legibility under ACES, day/night readability) are
 CPV1-shaped again — they need the 3D visual matrix actually walked, not inferred
 from a green suite.
 
-Carried into Phase B, unclosed by CPV1:
-- The **V5 browser check** — correctness, not aesthetics; due before V12. Still
-  open, and explicitly **not** closed by CPV2: it is a different exercise
-  (resize the window, drag the bin at several widths) from anything CPV2 covered.
+Carried into Phase B, unclosed by CPV1 — **both now resolved:**
+- ~~The **V5 browser check**~~ — **DONE 2026-07-20.** Walked separately from CPV2
+  on purpose: it is drag-raycast correctness, not appearance, and folding a
+  functional check into an aesthetic sign-off is how a stale `camera.aspect`
+  ships unnoticed. **Re-walk it at the end of V12** — that task changes the grid
+  *and* makes a collapsing panel resize the canvas, so it exercises the
+  ResizeObserver path harder than anything shipped so far.
 - ~~The **`--surface-3` contrast gap**~~ — **RESOLVED in V10.** It got its first
   users (hovered species row + language rung), so the pairing had to be decided
   rather than deferred. `--ink`/`--ink-dim`/`--accent` clear AA on it;
