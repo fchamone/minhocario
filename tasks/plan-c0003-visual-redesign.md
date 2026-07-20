@@ -143,27 +143,83 @@ stating `index.html` is the source of truth for order.
   and are joined by V3's token-resolution and no-stray-hex checks.
 
 ### V2. `css/tokens.css` + mechanical migration — M
-Add the full token set, then rewrite existing declarations to reference tokens **producing
-identical computed values**.
-- **Type scale** — `--text-2xs` .6875 → `--text-xl` 1.5 (7 steps), replacing the ~20 ad-hoc literals
-  (lines 69, 104, 171-176, 292, 302, 312, 387, 398, 435). Plus `--leading-tight` 1.2,
-  `--leading-body` 1.4, `--tracking-caps` .04em (already used verbatim in three places).
+> **Split in two, 2026-07-20 (approved during implementation).** As written, V2 asked for two
+> incompatible things: *"every computed value identical to before ... no visual diff"* **and**
+> *"de-saturate the upper steps — `--panel` and `--panel-2` are both green-tinted, which flattens
+> perceived depth."* De-saturating `--panel` changes its computed value on every surface using it.
+> The same tension sits in the type scale (a designed `.6875 → 1.5` ramp cannot land on today's
+> ad-hoc `.75/.8/.85/.9/.95/1` without moving sizes), in the spacing scale (a 4px grid cannot express
+> today's `2/3/6/10/14px` values), and in elevation (three shadow tokens cannot come from two
+> existing literals without inventing one).
+>
+> **V2a — naming, zero visual change.** Introduce the token layer with every token set to *exactly*
+> the value it replaces, and migrate declarations to reference it. Off-grid literals stay literal.
+> Provable by machine (see the new AC); this is what keeps Phase A's "invisible to the player"
+> promise honest.
+>
+> **V2b — retuning, visual by design.** Change token *values*: de-saturate the surface ramp, snap
+> spacing to the 4px grid, rationalize the type ramp toward `.6875 → 1.5`, collapse the eight stray
+> durations into the three `--dur-*` steps, add the third shadow step. Because V2a landed first, this
+> is a small diff **inside `tokens.css`** rather than a redesign spread across four files — which is
+> the entire payoff of having a token layer, and makes CPV1's human review a review of one file.
+
+### V2a. `css/tokens.css` + mechanical migration — M
+Add the token set at today's values, then rewrite existing declarations to reference tokens
+**producing identical computed values**.
+Every token below is defined at **the value it replaces**, so nothing moves on screen. Where today's
+values do not fit the intended scale, the token set stays *incomplete* rather than approximate — the
+missing steps are added by V2b when the ramp is re-authored, so no token ever ships as a lie.
+- **Type scale** — six steps covering today's literals exactly: `--text-2xs` .75 / `--text-xs` .8 /
+  `--text-sm` .85 (the workhorse, 10 uses) / `--text-md` .9 / `--text-lg` .95 / `--text-xl` 1.
+  The designed `.6875 → 1.5` ramp is **V2b** — it cannot land on these values. Plus `--leading-body`
+  1.4 and `--tracking-caps` .04em (both already used verbatim); `--leading-tight` waits for a user.
 - **Spacing scale** — 4px base, `--space-1` … `--space-8`. `--gap` stays as an alias for `--space-3`
-  for one release so the five existing uses don't move in the same commit.
-- **Radius** — `--radius-sm` 4 / `--radius` 8 / `--radius-lg` 12.
-- **Elevation** — `--shadow-1/-2/-3`, extracted from the two literals already present (`.banner`,
-  `.shop-card:hover`).
-- **Motion** — `--dur-fast` 120 / `--dur` 160 / `--dur-slow` 300 + `--ease`; every existing duration
-  collapses into these four.
-- **Semantic colour roles** — surface ramp `--surface-0…3` (de-saturate the upper steps: `--panel`
-  and `--panel-2` are both green-tinted, which flattens perceived depth); `--ink` / `--ink-dim` /
-  `--ink-faint`; **`--state-warn(-bg)` / `--state-alert(-bg)` named to match `markFillLevel`'s
-  vocabulary** so CSS and JS use one word per meaning; `--accent-soft` for the gauge fills currently
-  hardcoded twice.
-- **AC:** every computed value identical to before (spot-checked in devtools on each screen); no
-  visual diff; `tests/css.test.js` green.
-- **Verify:** `npx serve .` + devtools computed-style spot checks; `node --test tests/*.test.js`.
-- **Deps:** V1. **Files:** `css/tokens.css`, `css/*.css`.
+  for one release so the five existing uses don't move in the same commit. Today's off-grid values
+  (`2/3/6/10/14/44/56px`) stay literal; **V2b** snaps them.
+- **Radius** — `--radius-sm` 4 / `--radius` 8. `--radius-lg` 12 has no user yet — **V2b**.
+- **Elevation** — `--shadow-1` / `--shadow-2`, extracted from the two literals present (`.banner`,
+  `.shop-card:hover`). The third step is invented, so it is **V2b**.
+- **Motion** — `--dur-fast` .12s / `--dur` .16s / `--dur-slow` .3s + `--ease`, applied only where the
+  value already matches exactly. The eight remaining durations (.06/.15/.18/.2/.22/.28/1.2/1.4s)
+  stay literal until **V2b** collapses them. Authored in seconds, not ms, so the text-level
+  equivalence check below stays exact.
+- **Semantic colour roles** — surface ramp `--surface-0…2` renamed from `--bg`/`--panel`/`--panel-2`;
+  `--ink` / `--ink-dim`; **`--state-warn(-bg)` / `--state-alert(-bg)` named to match `markFillLevel`'s
+  vocabulary** so CSS and JS use one word per meaning; `--accent-soft` / `--accent-soft-strong` for
+  the two gauge fills. **De-saturating the ramp, `--surface-3`, `--ink-faint` and `--state-warn-bg`
+  are all V2b** — the first changes values, the rest have no user yet.
+  **No deprecated aliases.** The plan borrowed the `--gap` precedent here, but it does not transfer:
+  `--gap` survives because 5 sites still reference it, whereas keeping `--bg`/`--panel`/`--warn`
+  after migrating every usage would leave dead tokens that no test can catch. All usages moved.
+- **Colour literals reach zero as a side effect.** Tokenizing every colour needed four names the
+  plan did not anticipate but which are all genuine values, not conveniences: `--surface-1-alpha`
+  (the internals panel's translucent fill), `--scrim` / `--scrim-dim` (dialog backdrop, dev bar),
+  `--stage-sky` (the WebGL-failure gradient — load-bearing for graceful degradation), and
+  `--state-alert-glow(-0)` (the pulse, whose rest state is the same hue at zero alpha rather than
+  `transparent`, so it cannot interpolate through black). **V3's "no hex outside `tokens.css`" rule
+  therefore already passes on arrival.**
+- **AC:** with every `var()` recursively resolved against its own `:root`, the five files produce
+  **exactly the same multiset of applied rule blocks** as the pre-split baseline — i.e. computed
+  values are provably unchanged, not spot-checked; `tests/css.test.js` green.
+- **Verify:** `node --test tests/*.test.js`; `npx serve .` → walk all four screens.
+- **Deps:** V1. **Files:** `css/tokens.css`, `css/*.css`, `tests/css.test.js`.
+
+> **The AC upgrade is the point of the split.** The original AC ("spot-checked in devtools on each
+> screen") is exactly the kind of guard the V6 lesson warns about — it cannot fail in CI and depends
+> on a human noticing a 1px shift. Resolving `var()` and comparing against the frozen baseline turns
+> "no visual diff" into a machine-checkable claim for the whole mechanical phase. It only works
+> because V2a changes no values; V2b retires it.
+
+### V2b. Retune token values — M
+Purely value edits inside `tokens.css` (plus deleting the deprecated aliases). De-saturate
+`--surface-2`/`--surface-3`, snap spacing to the 4px grid, re-author the type ramp toward
+`.6875 → 1.5`, collapse the stray durations, add `--shadow-3` / `--radius-lg` / `--ink-faint` /
+`--state-warn-bg`. **Visual by design**, so V2a's resolved-equivalence test and
+`tests/fixtures/style.baseline.css` are deleted here.
+- **AC:** the diff is confined to `tokens.css` plus alias removal; all four screens walked in all
+  three locales; no element loses legibility (the gauges' warn/alert tiers stay distinguishable).
+- **Verify:** `npx serve .`; CPV1 human review.
+- **Deps:** V2a. **Files:** `css/tokens.css`, `css/*.css`.
 
 ### V3. Static guard tests — S/M
 - `tests/css.test.js` — every `var(--token)` across `css/*.css` is defined in `tokens.css`; **no hex

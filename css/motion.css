@@ -7,6 +7,11 @@
    components and screens. Loading this file last is what lets both win without
    reaching for !important — moving it earlier silently breaks reduced-motion.
 
+   V2a NOTE — only the durations that already matched a token step were moved
+   onto one (.12s → --dur-fast, .16s → --dur, .3s → --dur-slow). The rest stay
+   literal on purpose: collapsing .15s or .22s into a step would change timing,
+   and this task is not allowed to change anything. V2b collapses them.
+
    ============================================================================
    T22 — UX polish: transitions, focus/press feedback, and explicit edge states.
    Colors and weights carry the meaning; motion is decorative and fully opts out
@@ -15,20 +20,20 @@
 
 /* Screen entry: a brief fade/rise so switching screens is not a hard cut. Runs
    on every reveal because [hidden] removes the section from the render tree. */
-.screen:not([hidden]) { animation: screen-in 0.16s ease-out both; }
+.screen:not([hidden]) { animation: screen-in var(--dur) ease-out both; }
 @keyframes screen-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
 
 /* Shop / setup cards lift on hover for affordance; disabled ones stay put. */
-.shop-card { transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease; }
+.shop-card { transition: border-color 0.15s var(--ease), transform var(--dur-fast) var(--ease), box-shadow 0.15s var(--ease); }
 .shop-card:not(.shop-card--disabled):hover {
   border-color: var(--accent);
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-2);
 }
-.setup-species { transition: background-color 0.12s ease; }
+.setup-species { transition: background-color var(--dur-fast) var(--ease); }
 
 /* Action feedback line: flash on each new message so a repeated outcome (e.g.
    two rejected clicks) still registers. showFeedback re-applies the class with a
@@ -50,7 +55,7 @@ dialog.chooser[open]::backdrop { animation: backdrop-in 0.18s ease-out; }
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-.chooser__option { transition: background-color 0.12s ease, border-color 0.12s ease; }
+.chooser__option { transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
 
 /* Colony-dead banner: slide in so the interruption is noticed (edge state). */
 .banner { animation: banner-in 0.22s ease-out; }
@@ -70,14 +75,14 @@ dialog.chooser[open]::backdrop { animation: backdrop-in 0.18s ease-out; }
    the distinction — and under prefers-reduced-motion (below) colour is carrying
    the whole message anyway. The static `--warn` tier lives here rather than in
    components.css so the two tiers of one signal stay readable side by side. */
-.actions__btn--warn { border-color: var(--warn); }
+.actions__btn--warn { border-color: var(--state-warn); }
 .actions__btn--alert {
-  border-color: var(--danger);
+  border-color: var(--state-alert);
   animation: urgent-pulse 1.4s ease-in-out infinite;
 }
 @keyframes urgent-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 86, 63, 0); }
-  50%      { box-shadow: 0 0 0 4px rgba(192, 86, 63, 0.28); }
+  0%, 100% { box-shadow: 0 0 0 0 var(--state-alert-glow-0); }
+  50%      { box-shadow: 0 0 0 4px var(--state-alert-glow); }
 }
 
 /* An env variable outside its comfort band gently pulses its marker/value, so a

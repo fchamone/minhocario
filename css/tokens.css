@@ -4,22 +4,111 @@
 
    This file holds custom properties ONLY. Nothing here selects an element, so
    it can never win or lose a cascade fight — which is what lets every later
-   file reference it freely. */
+   file reference it freely.
+
+   V2a NOTE — every token below is set to *exactly* the value it replaced, so
+   introducing this layer changed nothing on screen (proved by the resolved-
+   equivalence test in tests/css.test.js). Where today's values do not fit the
+   intended scale, the scale is left INCOMPLETE rather than approximated: the
+   missing steps are marked `V2b` and arrive when the ramp is re-authored, so no
+   token ever ships claiming a value it does not have. */
 
 :root {
-  --bg: #1b2a1b;
-  --panel: #223322;
-  --panel-2: #2c3f2c;
+  /* --- Surfaces -----------------------------------------------------------
+     A depth ramp, darkest first. V2b de-saturates the upper steps: --surface-1
+     and --surface-2 are both green-tinted today, which flattens the perceived
+     distance between a panel and the page behind it. --surface-3 arrives there
+     too — there is no fourth surface in the current design to name. */
+  --surface-0: #1b2a1b;
+  --surface-1: #223322;
+  --surface-2: #2c3f2c;
+  /* The internals panel floats over the 3D stage, so it needs the panel colour
+     with the scene showing through. Not a ramp step — a one-off translucency. */
+  --surface-1-alpha: rgba(34, 51, 34, 0.92);
+
+  /* --- Ink ---
+     --ink-faint is V2b: no element needs a third text tier yet. */
   --ink: #eaf2e6;
   --ink-dim: #a9bda2;
+
+  /* --- Accent --- */
   --accent: #7bc043;
   --accent-ink: #14210f;
-  /* The "filling up" tier, one step before --danger. Warm enough to read as a
-     caution against the green panels, and light enough to stay legible as a
-     value colour on the dark background (the readouts tint text, not just
-     borders). Distinct from --accent so a warned gauge never reads as healthy. */
-  --warn: #e0b13c;
-  --danger: #c0563f;
+  /* Two weights, because the gauges genuinely use two: the comfort band sits
+     behind the marker and must stay quiet, while the fill bar IS the readout. */
+  --accent-soft: rgba(123, 192, 67, 0.35);
+  --accent-soft-strong: rgba(123, 192, 67, 0.55);
+
+  /* --- State ---
+     Named to match markFillLevel()'s vocabulary in js/ui/actions.js, so CSS and
+     JS use one word per meaning. --state-warn-bg is V2b: the warn tier has no
+     filled background today, only a border and a text colour. */
+  --state-warn: #e0b13c;
+  --state-alert: #c0563f;
+  --state-alert-bg: rgba(192, 86, 63, 0.12);
+  --state-alert-glow: rgba(192, 86, 63, 0.28);
+  /* The pulse's rest state. Deliberately the same hue at zero alpha rather than
+     `transparent` (= rgba(0,0,0,0)), which some engines interpolate through
+     black — the glow would flicker dark on every cycle. */
+  --state-alert-glow-0: rgba(192, 86, 63, 0);
+
+  /* --- Scrims --- */
+  --scrim: rgba(0, 0, 0, 0.55);
+  --scrim-dim: rgba(0, 0, 0, 0.35);
+
+  /* --- Stage ---
+     The CSS backdrop behind the 3D canvas. Load-bearing for graceful
+     degradation: it is what the player sees if WebGL fails, so it is a real
+     token and not a decorative gradient. */
+  --stage-sky: #2a3a4a;
+
+  /* --- Type ---
+     Six steps covering today's literals exactly. This is not yet a designed
+     ramp — the 0.05rem gaps between --text-sm/-md/-lg are the ad-hoc values
+     this task inherited. V2b re-authors it toward .6875 → 1.5. */
+  --text-2xs: 0.75rem;
+  --text-xs: 0.8rem;
+  --text-sm: 0.85rem;
+  --text-md: 0.9rem;
+  --text-lg: 0.95rem;
+  --text-xl: 1rem;
+  --leading-body: 1.4;
+  --tracking-caps: 0.04em;
+
+  /* --- Space ---
+     4px base. Today's off-grid values (2/3/6/10/14/44/56px) are deliberately
+     left as literals in the sheets rather than rounded to the nearest step —
+     snapping them moves pixels, which is V2b's job, not this task's. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  /* Kept as an alias so the five existing `gap: var(--gap)` sites don't move in
+     the same commit as the scale that replaces them. */
+  --gap: var(--space-3);
+
+  /* --- Radius ---
+     --radius-lg 12px is V2b: nothing uses a third radius yet. */
+  --radius-sm: 4px;
   --radius: 8px;
-  --gap: 12px;
+
+  /* --- Elevation ---
+     Extracted from the only two shadows in the design. A third step would have
+     to be invented rather than extracted, so --shadow-3 is V2b. */
+  --shadow-1: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, 0.3);
+
+  /* --- Motion ---
+     Authored in seconds, matching the values they replace, so the equivalence
+     test compares like for like. The eight remaining durations in motion.css
+     (.06/.15/.18/.2/.22/.28/1.2/1.4s) stay literal until V2b collapses them
+     into these three steps. */
+  --dur-fast: 0.12s;
+  --dur: 0.16s;
+  --dur-slow: 0.3s;
+  --ease: ease;
 }

@@ -77,6 +77,54 @@ function parseBlocks(css, prefix = '') {
 
 const blocksOf = (css) => parseBlocks(stripComments(css)).sort();
 
+// --- var() resolution -------------------------------------------------------
+// V2a moves declarations onto tokens without changing what they compute to. To
+// check that by machine rather than by eye, both sides are resolved down to
+// literals against their OWN :root before being compared. Tokens are authored
+// in the same units and spacing as the values they replace (seconds, not ms)
+// precisely so this text-level comparison stays exact.
+
+/** Collect `--name: value` pairs from every :root block. @returns {Map<string,string>} */
+function tokenMap(css) {
+  const tokens = new Map();
+  for (const block of parseBlocks(stripComments(css))) {
+    if (!block.startsWith(':root{')) continue;
+    const body = block.slice(block.indexOf('{') + 1, -1);
+    for (const decl of body.split(';')) {
+      const at = decl.indexOf(':');
+      if (at === -1) continue;
+      const name = decl.slice(0, at).trim();
+      if (name.startsWith('--')) tokens.set(name, decl.slice(at + 1).trim());
+    }
+  }
+  return tokens;
+}
+
+/** Substitute var(--x) until no references remain. Tokens may reference tokens. */
+function resolveVars(text, tokens) {
+  let out = text;
+  for (let pass = 0; pass < 10 && out.includes('var('); pass += 1) {
+    out = out.replace(/var\(\s*(--[\w-]+)\s*\)/g, (whole, name) =>
+      tokens.has(name) ? tokens.get(name) : whole,
+    );
+  }
+  return out;
+}
+
+/**
+ * Applied (non-:root) rule blocks, fully resolved to literal values.
+ * :root itself is excluded: the token layer is an implementation detail, and
+ * comparing definitions would only prove the two files declare the same
+ * variables — which is exactly what V2a is allowed to change.
+ */
+function appliedBlocks(css) {
+  const tokens = tokenMap(css);
+  return parseBlocks(stripComments(css))
+    .filter((block) => !block.startsWith(':root{'))
+    .map((block) => resolveVars(block, tokens))
+    .sort();
+}
+
 // --- Structure: the five-file split is real and ordered ---------------------
 
 test('index.html links exactly the five stylesheets in cascade order', () => {
@@ -101,23 +149,35 @@ test('no stylesheet uses @import', () => {
   }
 });
 
-// --- Equivalence: the split moved rules, it did not edit them ---------------
-// V1 regroups style.css by rule kind, so the files are NOT contiguous slices of
-// the original and their concatenation is not byte-identical to it. This checks
-// the property that AC was actually protecting: every rule survived the move
-// unedited, and none were invented.
+// --- Equivalence: the refactors move rules, they do not change what renders --
+// V1 regrouped style.css by rule kind (so the files are NOT contiguous slices of
+// the original, and their concatenation is not byte-identical to it). V2a then
+// moved declarations onto tokens. Neither is allowed to change a single computed
+// value, and this is what proves it: resolve every var() on both sides and
+// compare the applied rules as multisets.
 //
-// RETIRES AT V2: the token migration rewrites declarations by design, at which
-// point this test and tests/fixtures/style.baseline.css are both deleted.
+// RETIRES AT V2b, which retunes token values — a visual change by design. This
+// test and tests/fixtures/style.baseline.css are deleted together there.
 
-test('the five files carry exactly the rules the pre-split style.css had', () => {
-  const baseline = blocksOf(read('./fixtures/style.baseline.css'));
-  const split = blocksOf(SHEETS.map(readSheet).join('\n'));
+test('the five files compute exactly what the pre-token style.css computed', () => {
+  const baseline = appliedBlocks(read('./fixtures/style.baseline.css'));
+  const current = appliedBlocks(SHEETS.map(readSheet).join('\n'));
 
-  const missing = baseline.filter((b) => !split.includes(b));
-  const added = split.filter((b) => !baseline.includes(b));
+  const missing = baseline.filter((b) => !current.includes(b));
+  const added = current.filter((b) => !baseline.includes(b));
 
-  assert.deepEqual(missing, [], 'rules lost or edited by the split');
-  assert.deepEqual(added, [], 'rules invented by the split');
-  assert.deepEqual(split, baseline);
+  assert.deepEqual(missing, [], 'rules lost, or now computing a different value');
+  assert.deepEqual(added, [], 'rules invented, or now computing a different value');
+  assert.deepEqual(current, baseline);
+});
+
+test('no var() reference survives resolution against tokens.css', () => {
+  const current = appliedBlocks(SHEETS.map(readSheet).join('\n'));
+  const dangling = current.filter((block) => block.includes('var('));
+
+  assert.deepEqual(
+    dangling,
+    [],
+    'a var() referenced a token that tokens.css does not define',
+  );
 });

@@ -17,9 +17,21 @@
       broken deliberately first** (reordered links, injected `@import`, silently edited
       `.gauge__marker` width; each failed naming the exact cause). Suite 289 → 292.
       The equivalence test + fixture **retire at V2**, which rewrites declarations by design.
-- [ ] **V2** `css/tokens.css` + migrate declarations to tokens, identical computed values (M) — deps: V1
-- [ ] **V3** `tests/css.test.js` + `tests/markup.test.js` static guards (S/M) — deps: V2
-- [ ] **V4** `DESIGN.md` at root + `CLAUDE.md` pointer + release-checklist exclusion (S) — deps: V2
+- [x] **V2a** `css/tokens.css` at today's values + migrate declarations, **zero visual change** (M) — deps: V1
+      Split out of V2, which asked for identical computed values *and* a de-saturated surface ramp —
+      mutually exclusive. V2a is naming only; every token equals the value it replaces.
+      43 tokens, 213 `var()` references. **AC upgraded from devtools spot-checks to a machine proof:**
+      `tests/css.test.js` now resolves every `var()` recursively against each side's own `:root` and
+      compares applied (non-`:root`) rule blocks against the frozen baseline — so "no visual diff" is
+      checked in CI, not by eye. Broken first: drifting `--radius`, `--space-2` and `--surface-2`, and
+      a dangling token reference, each failed clearly. Suite 292 → 293.
+      Side effect: **zero colour literals outside `tokens.css`**, so V3's hex rule already passes.
+      Off-grid spacing (`2/3/6/10/14/44/56px`) and 8 stray durations left literal for V2b.
+- [ ] **V2b** Retune token values: de-saturate ramp, snap 4px grid, re-author type ramp (M) — deps: V2a
+      Visual by design, and confined to `tokens.css` — that confinement is the payoff of V2a.
+      Deletes V2a's resolved-equivalence test and `tests/fixtures/style.baseline.css`.
+- [ ] **V3** `tests/css.test.js` + `tests/markup.test.js` static guards (S/M) — deps: V2a
+- [ ] **V4** `DESIGN.md` at root + `CLAUDE.md` pointer + release-checklist exclusion (S) — deps: V2a
 - [x] **V5** `ResizeObserver` on the canvas → `resizeScene()` (S) — deps: none
       Landed early as standalone correctness work (`64c3158`). Feature-detected, disconnected in
       `disposeScene`, no feedback loop (`updateStyle=false`). **Browser check still outstanding —
