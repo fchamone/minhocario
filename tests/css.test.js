@@ -75,14 +75,9 @@ function parseBlocks(css, prefix = '') {
   return blocks;
 }
 
-const blocksOf = (css) => parseBlocks(stripComments(css)).sort();
-
 // --- var() resolution -------------------------------------------------------
-// V2a moves declarations onto tokens without changing what they compute to. To
-// check that by machine rather than by eye, both sides are resolved down to
-// literals against their OWN :root before being compared. Tokens are authored
-// in the same units and spacing as the values they replace (seconds, not ms)
-// precisely so this text-level comparison stays exact.
+// Resolving down to literals is what lets a test reason about what a rule
+// actually renders, rather than about the text someone typed.
 
 /** Collect `--name: value` pairs from every :root block. @returns {Map<string,string>} */
 function tokenMap(css) {
@@ -149,27 +144,15 @@ test('no stylesheet uses @import', () => {
   }
 });
 
-// --- Equivalence: the refactors move rules, they do not change what renders --
-// V1 regrouped style.css by rule kind (so the files are NOT contiguous slices of
-// the original, and their concatenation is not byte-identical to it). V2a then
-// moved declarations onto tokens. Neither is allowed to change a single computed
-// value, and this is what proves it: resolve every var() on both sides and
-// compare the applied rules as multisets.
+// --- Token hygiene ----------------------------------------------------------
+// V1 and V2a were guarded by a resolved-equivalence test against a frozen copy
+// of the pre-token stylesheet: it proved neither refactor changed a single
+// computed value. V2b retunes token values by design, so that test and its
+// fixture were retired there — its final output is preserved as a
+// property-level diff in tasks/v2b-computed-value-diff.md.
 //
-// RETIRES AT V2b, which retunes token values — a visual change by design. This
-// test and tests/fixtures/style.baseline.css are deleted together there.
-
-test('the five files compute exactly what the pre-token style.css computed', () => {
-  const baseline = appliedBlocks(read('./fixtures/style.baseline.css'));
-  const current = appliedBlocks(SHEETS.map(readSheet).join('\n'));
-
-  const missing = baseline.filter((b) => !current.includes(b));
-  const added = current.filter((b) => !baseline.includes(b));
-
-  assert.deepEqual(missing, [], 'rules lost, or now computing a different value');
-  assert.deepEqual(added, [], 'rules invented, or now computing a different value');
-  assert.deepEqual(current, baseline);
-});
+// What survives is the part that stays true forever: tokens must resolve, and
+// colours must live in exactly one file.
 
 test('no var() reference survives resolution against tokens.css', () => {
   const current = appliedBlocks(SHEETS.map(readSheet).join('\n'));
@@ -180,4 +163,38 @@ test('no var() reference survives resolution against tokens.css', () => {
     [],
     'a var() referenced a token that tokens.css does not define',
   );
+});
+
+test('every token referenced anywhere is defined in tokens.css specifically', () => {
+  const defined = new Set(tokenMap(readSheet('tokens.css')).keys());
+
+  for (const name of SHEETS) {
+    const referenced = [
+      ...stripComments(readSheet(name)).matchAll(/var\(\s*(--[\w-]+)\s*\)/g),
+    ].map((m) => m[1]);
+
+    for (const token of referenced) {
+      assert.ok(
+        defined.has(token),
+        `${name} references ${token}, which is not defined in tokens.css — ` +
+          'tokens must have exactly one home, or the layer decays',
+      );
+    }
+  }
+});
+
+// The token layer is enforced, not offered. Without this, a colour system is a
+// suggestion that decays back into literals one "just this once" at a time.
+test('no colour literal appears outside tokens.css', () => {
+  const COLOUR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\s*\(/g;
+
+  for (const name of SHEETS.filter((n) => n !== 'tokens.css')) {
+    const found = [...stripComments(readSheet(name)).matchAll(COLOUR)].map((m) => m[0]);
+
+    assert.deepEqual(
+      found,
+      [],
+      `${name} carries colour literals (${found.join(', ')}) — define them in tokens.css`,
+    );
+  }
 });

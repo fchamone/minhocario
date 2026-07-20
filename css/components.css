@@ -11,8 +11,8 @@
 .shop-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 14px;
+  gap: var(--space-2);
+  padding: var(--space-4);
   background: var(--surface-1);
   border: 1px solid var(--surface-2);
   border-radius: var(--radius);
@@ -48,7 +48,7 @@
 .internals > summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   color: var(--ink-dim);
 }
 .internals[open] > summary { margin-bottom: var(--space-2); }
@@ -58,7 +58,7 @@
    `.internals` in this file. */
 .internals--right { left: auto; right: var(--space-3); }
 .internals h4 {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-2);
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
@@ -66,10 +66,10 @@
 }
 .internals__group { margin-bottom: var(--space-3); }
 .internals__group:last-child { margin-bottom: 0; }
-.internals__empty { margin: 0; color: var(--ink-dim); }
+.internals__empty { margin: 0; color: var(--ink-faint); }
 
 /* --- Readouts --- */
-.stat { display: flex; justify-content: space-between; gap: var(--space-2); padding: 2px 0; }
+.stat { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-05) 0; }
 .stat__label { color: var(--ink-dim); }
 .stat__value { font-variant-numeric: tabular-nums; }
 .stat--warn .stat__value { color: var(--state-warn); font-weight: 600; }
@@ -80,8 +80,8 @@
 .gauge {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 2px var(--space-2);
-  padding: 3px 0;
+  gap: var(--space-05) var(--space-2);
+  padding: var(--space-1) 0;
 }
 .gauge__label { color: var(--ink-dim); }
 .gauge__value { font-variant-numeric: tabular-nums; }
@@ -109,7 +109,7 @@
   background: var(--ink);
   border-radius: 2px;
   /* Glide to the new value each tick instead of jumping (T22 polish). */
-  transition: left var(--dur-slow) var(--ease), background-color 0.2s var(--ease);
+  transition: left var(--dur-slow) var(--ease), background-color var(--dur) var(--ease);
 }
 .gauge--warn .gauge__value { color: var(--state-warn); font-weight: 600; }
 .gauge--warn .gauge__marker { background: var(--state-warn); }
@@ -126,7 +126,7 @@
   left: 0;
   height: 100%;
   background: var(--accent-soft-strong);
-  transition: width var(--dur-slow) var(--ease), background-color 0.2s var(--ease);
+  transition: width var(--dur-slow) var(--ease), background-color var(--dur) var(--ease);
 }
 .gauge--warn .gauge__fill { background: var(--state-warn); }
 .gauge--alert .gauge__fill { background: var(--state-alert); }
@@ -134,7 +134,7 @@
 /* --- Statistics box (score detail) --- */
 /* Sits in the .actions sidebar flow, not over the stage — see js/ui/stats.js. */
 .stats {
-  padding: var(--space-2) 10px;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   background: var(--surface-2);
   border-radius: var(--radius);
@@ -151,7 +151,7 @@
   letter-spacing: var(--tracking-caps);
   color: var(--ink-dim);
 }
-.stats__group { margin-top: 10px; }
+.stats__group { margin-top: var(--space-3); }
 /* The bar's own track reads as a hole against the lighter box background, so it
    borrows the panel color here instead of the page background it uses on the
    (darker) internals overlay. */
@@ -165,14 +165,14 @@
   color: var(--ink);
   background: var(--surface-1);
   border: 1px solid var(--surface-2);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
 }
 .chooser::backdrop { background: var(--scrim); }
-.chooser h3 { margin: 0 0 var(--space-3); font-size: var(--text-xl); }
+.chooser h3 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
 .chooser__options {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 6px;
+  gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
 .chooser__option { text-align: left; }
@@ -191,11 +191,11 @@
   text-align: center;
   background: var(--surface-1);
   border: 1px solid var(--state-alert);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-1);
 }
 .banner strong { color: var(--state-alert); display: block; margin-bottom: var(--space-1); }
-.banner p { margin: 0 0 10px; font-size: var(--text-md); color: var(--ink-dim); }
+.banner p { margin: 0 0 var(--space-3); font-size: var(--text-md); color: var(--ink-dim); }
 .banner button { background: var(--accent); color: var(--accent-ink); }
 
 /* --- Shop: mid-farm upgrade extras --- */
@@ -203,7 +203,7 @@
 .shop-card--current { border-color: var(--accent); }
 
 .internals__model {
-  margin: -4px 0 10px;
+  margin: calc(var(--space-1) * -1) 0 var(--space-3);
   padding-bottom: var(--space-2);
   font-weight: 600;
   color: var(--accent);

@@ -27,11 +27,34 @@
       a dangling token reference, each failed clearly. Suite 292 → 293.
       Side effect: **zero colour literals outside `tokens.css`**, so V3's hex rule already passes.
       Off-grid spacing (`2/3/6/10/14/44/56px`) and 8 stray durations left literal for V2b.
-- [ ] **V2b** Retune token values: de-saturate ramp, snap 4px grid, re-author type ramp (M) — deps: V2a
-      Visual by design, and confined to `tokens.css` — that confinement is the payoff of V2a.
-      Deletes V2a's resolved-equivalence test and `tests/fixtures/style.baseline.css`.
-- [ ] **V3** `tests/css.test.js` + `tests/markup.test.js` static guards (S/M) — deps: V2a
-- [ ] **V4** `DESIGN.md` at root + `CLAUDE.md` pointer + release-checklist exclusion (S) — deps: V2a
+- [x] **V2b** Retune token values: de-saturate ramp, snap 4px grid, re-author type ramp (M) — deps: V2a
+      **First task in C-0003 that changes what the player sees.** 144 selectors before and after —
+      no rule added, moved or removed; 80 declarations changed value plus one new
+      (`.actions__btn--warn { background }`). Full property-level computed-value diff captured in
+      `tasks/v2b-computed-value-diff.md` **before** the baseline fixture was retired — it is the
+      substitute for the screenshot diff this project has no tooling for, and the input to CPV1.
+      Caught during the task: `--ink-faint` as first drafted (`#7d8f78`) measured **4.36:1**, under
+      WCAG AA, on real copy — lightened to `#879a82` (5.0/4.7/4.1) before shipping.
+      Deviations, each argued in the plan and recorded in `DESIGN.md`: no `--shadow-3` (would be
+      invented, not extracted); the two infinite pulses kept out of the three duration steps
+      (collapsing a 1.2s breath into 0.3s strobes); `--space-05` half-step added for the sub-4px
+      readout gaps. Deleted V2a's equivalence test and `tests/fixtures/style.baseline.css`.
+- [x] **V3** `tests/css.test.js` + `tests/markup.test.js` static guards (S/M) — deps: V2a
+      6 new guards. `css.test.js`: tokens resolve, every token defined in `tokens.css` specifically,
+      **no colour literal outside `tokens.css`** (hex *and* `rgb/rgba/hsl`). `markup.test.js`: no
+      `[data-string]` element contains an `<svg>` (finding #1 tripwire), every `data-action` is
+      wired, every literal `getElementById` id exists or is created in `js/`.
+      **All five broken deliberately first**, each failing with a useful message. The `<svg>` rule is
+      currently vacuous (no icons yet), so it ships with a companion test asserting the walker
+      detects a planted violation — the V6 lesson applied to a rule that cannot yet fire.
+      Two things the guards had to encode rather than assume: `data-action="openShop"` has **no**
+      handler in `actions.js` and works purely via `data-nav="shop"`; `setup-waste-food` /
+      `setup-waste-liters` are created at runtime by `setup.js`, not present in `index.html`.
+- [x] **V4** `DESIGN.md` at root + `CLAUDE.md` pointer + release-checklist exclusion (S) — deps: V2a
+      Records the two registers, the measured contrast table, type/space/motion rationale, the icon
+      rules incl. the 14-food uniform-treatment discipline, a V7 placeholder for webfont provenance,
+      and a deviations table. `CLAUDE.md` points at it and now states the five-file cascade rule.
+      Excluded from the FTP upload deliberately — it names the mechanic the food list hides.
 - [x] **V5** `ResizeObserver` on the canvas → `resizeScene()` (S) — deps: none
       Landed early as standalone correctness work (`64c3158`). Feature-detected, disconnected in
       `disposeScene`, no feedback loop (`updateStyle=false`). **Browser check still outstanding —
@@ -83,6 +106,17 @@
 
 ## Open items
 
+- [ ] **DECISION NEEDED — `--state-alert` fails WCAG AA on every surface.** Found while measuring
+      contrast for V2b's new `--ink-faint` tier. `#c0563f` measures **3.3 / 3.1 / 2.7 : 1** against
+      `--surface-0/-1/-2`; the 2.7 case is `.stat--alert .stat__value` inside the stats box, which is
+      below even AA-large. It carries text in six places (stat values, HUD status, paused label,
+      error feedback, banner heading, shop reason).
+      **Pre-existing since v1 and NOT introduced by C-0003** — left unchanged deliberately rather
+      than fixed silently, because reaching AA on all three surfaces means lightening it to roughly
+      `#d79484`, which reads noticeably pinker and costs the colour its alarm quality. That is an
+      identity call, not a mechanical one. Options: (a) accept and document, (b) lighten to ~`#d79484`,
+      (c) lighten only enough for `--surface-0/-1` (~`#d0806d`) and give the stats box a darker
+      backing. Recorded in `DESIGN.md` under Colour.
 - [ ] **V5 browser check (carried).** ResizeObserver has no automated coverage — it needs a real
       browser. `npx serve .`, resize the window, and drag the bin at several widths; it must stay
       pinned under the cursor. Do this **before** V12, since V12 is the task that would otherwise
@@ -100,6 +134,12 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: not started (Phase A pending)
+## Status: Phase A complete except V7 (webfont)
 
-V5 and V6 are banked. Phases A–E are open; nothing else has been touched.
+V1, V2a, V2b, V3, V4, V5, V6 all landed. Suite 289 → **298 green**.
+Remaining before CPV1: **V7** (base64 webfont, independent of everything else).
+
+CPV1's promise of "zero visual change except the typeface" **no longer holds as
+written** — V2b retunes values by design, which is why it was split out and why
+`tasks/v2b-computed-value-diff.md` exists. Review that diff at CPV1 alongside the
+token vocabulary and the `DESIGN.md` art direction.

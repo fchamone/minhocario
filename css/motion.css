@@ -7,10 +7,13 @@
    components and screens. Loading this file last is what lets both win without
    reaching for !important — moving it earlier silently breaks reduced-motion.
 
-   V2a NOTE — only the durations that already matched a token step were moved
-   onto one (.12s → --dur-fast, .16s → --dur, .3s → --dur-slow). The rest stay
-   literal on purpose: collapsing .15s or .22s into a step would change timing,
-   and this task is not allowed to change anything. V2b collapses them.
+   V2b NOTE — every transition and entrance now runs on --dur-fast / --dur /
+   --dur-slow; the eight stray durations V2a left literal are gone. The two
+   infinite pulses deliberately did NOT collapse into those steps: they are not
+   transitions but a condition breathing for as long as it holds, and folding a
+   1.2s breath into 0.3s turns a calm warning into a strobe. They keep their own
+   --dur-pulse / --dur-pulse-urgent, and stay unequal so a stressed gauge and an
+   urgent button never lock into one metronome beat.
 
    ============================================================================
    T22 — UX polish: transitions, focus/press feedback, and explicit edge states.
@@ -27,7 +30,7 @@
 }
 
 /* Shop / setup cards lift on hover for affordance; disabled ones stay put. */
-.shop-card { transition: border-color 0.15s var(--ease), transform var(--dur-fast) var(--ease), box-shadow 0.15s var(--ease); }
+.shop-card { transition: border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
 .shop-card:not(.shop-card--disabled):hover {
   border-color: var(--accent);
   transform: translateY(-2px);
@@ -38,15 +41,15 @@
 /* Action feedback line: flash on each new message so a repeated outcome (e.g.
    two rejected clicks) still registers. showFeedback re-applies the class with a
    forced reflow every call, restarting the animation. */
-.actions__feedback--flash { animation: feedback-in 0.28s ease-out; }
+.actions__feedback--flash { animation: feedback-in var(--dur-slow) ease-out; }
 @keyframes feedback-in {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: none; }
 }
 
 /* Modal chooser: fade the backdrop and pop the dialog in. */
-dialog.chooser[open] { animation: dialog-in 0.18s ease-out; }
-dialog.chooser[open]::backdrop { animation: backdrop-in 0.18s ease-out; }
+dialog.chooser[open] { animation: dialog-in var(--dur) ease-out; }
+dialog.chooser[open]::backdrop { animation: backdrop-in var(--dur) ease-out; }
 @keyframes dialog-in {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to   { opacity: 1; transform: none; }
@@ -58,7 +61,7 @@ dialog.chooser[open]::backdrop { animation: backdrop-in 0.18s ease-out; }
 .chooser__option { transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
 
 /* Colony-dead banner: slide in so the interruption is noticed (edge state). */
-.banner { animation: banner-in 0.22s ease-out; }
+.banner { animation: banner-in var(--dur) ease-out; }
 @keyframes banner-in {
   from { opacity: 0; transform: translate(-50%, -10px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
@@ -75,10 +78,10 @@ dialog.chooser[open]::backdrop { animation: backdrop-in 0.18s ease-out; }
    the distinction — and under prefers-reduced-motion (below) colour is carrying
    the whole message anyway. The static `--warn` tier lives here rather than in
    components.css so the two tiers of one signal stay readable side by side. */
-.actions__btn--warn { border-color: var(--state-warn); }
+.actions__btn--warn { border-color: var(--state-warn); background: var(--state-warn-bg); }
 .actions__btn--alert {
   border-color: var(--state-alert);
-  animation: urgent-pulse 1.4s ease-in-out infinite;
+  animation: urgent-pulse var(--dur-pulse-urgent) ease-in-out infinite;
 }
 @keyframes urgent-pulse {
   0%, 100% { box-shadow: 0 0 0 0 var(--state-alert-glow-0); }
@@ -88,7 +91,7 @@ dialog.chooser[open]::backdrop { animation: backdrop-in 0.18s ease-out; }
 /* An env variable outside its comfort band gently pulses its marker/value, so a
    stressed colony is noticeable even before it turns critical. */
 .gauge--alert .gauge__marker,
-.stat--alert .stat__value { animation: alert-pulse 1.2s ease-in-out infinite; }
+.stat--alert .stat__value { animation: alert-pulse var(--dur-pulse) ease-in-out infinite; }
 @keyframes alert-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.5; }

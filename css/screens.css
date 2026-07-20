@@ -23,9 +23,9 @@
   font-size: var(--text-sm);
 }
 .lang-select__label { color: var(--ink-dim); }
-.lang-select__options { display: flex; gap: 6px; }
+.lang-select__options { display: flex; gap: var(--space-2); }
 .lang-select__btn {
-  padding: var(--space-1) 10px;
+  padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
   background: var(--surface-2);
 }
@@ -47,7 +47,7 @@
   margin-top: var(--space-5);
 }
 .home__nickname strong { color: var(--ink); }
-.home__nickname button { padding: var(--space-1) 10px; font-size: var(--text-sm); }
+.home__nickname button { padding: var(--space-1) var(--space-3); font-size: var(--text-sm); }
 .home__notice {
   color: var(--state-alert);
   background: var(--state-alert-bg);
@@ -62,10 +62,10 @@
 .ranking__table th,
 .ranking__table td {
   text-align: left;
-  padding: 6px var(--space-2);
+  padding: var(--space-2);
   border-bottom: 1px solid var(--surface-2);
 }
-.ranking__empty { color: var(--ink-dim); }
+.ranking__empty { color: var(--ink-faint); }
 
 /* --- Shop / Setup --- */
 .shop__list {
@@ -82,14 +82,14 @@
 
 .setup-species {
   display: flex;
-  gap: 10px;
+  gap: var(--space-3);
   align-items: flex-start;
   padding: var(--space-2);
   border-radius: var(--radius);
   cursor: pointer;
 }
 .setup-species:hover { background: var(--surface-2); }
-.setup-species__body { display: grid; gap: 2px; }
+.setup-species__body { display: grid; gap: var(--space-05); }
 .setup-species__latin { color: var(--ink-dim); font-size: var(--text-sm); }
 .setup-species__desc { font-size: var(--text-md); }
 .setup-species__price { color: var(--accent); font-size: var(--text-sm); }
@@ -99,12 +99,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-3);
 }
 .setup-bedding__row input,
 .setup-waste__amount input { width: 90px; }
 #setup-waste { display: grid; gap: var(--space-2); }
-#setup-waste select { padding: 6px; }
+#setup-waste select { padding: var(--space-2); }
 
 /* --- Game screen grid --- */
 /* Regions: HUD across the top, stage (3D canvas) fills the middle,
@@ -126,11 +126,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
-  padding: 10px var(--space-4);
+  padding: var(--space-3) var(--space-4);
   background: var(--surface-1);
   border-bottom: 1px solid var(--surface-2);
 }
-/* Same clearance deal as `.screen` — only dev mode has a bar to clear. */
+/* Same clearance deal as `.screen` — only dev mode has a bar to clear, and 44px
+   is measured off that bar rather than picked from the scale. */
 body.dev-mode .hud { padding-top: 44px; }
 .hud__item { color: var(--ink-dim); }
 .hud__item span:last-child { color: var(--ink); font-weight: 600; }
@@ -160,12 +161,12 @@ body.dev-mode .hud { padding-top: 44px; }
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 10px var(--space-4);
+  padding: var(--space-3) var(--space-4);
   background: var(--surface-1);
   border-top: 1px solid var(--surface-2);
 }
-.speed__buttons { display: flex; gap: 6px; }
-.speed__buttons button { padding: 6px var(--space-3); }
+.speed__buttons { display: flex; gap: var(--space-2); }
+.speed__buttons button { padding: var(--space-2) var(--space-3); }
 
 .actions__feedback {
   margin: var(--space-1) 0 0;

@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Minhocário — a browser-based vermicomposting (worm farm) simulator game. Fully static site (upload via FTP = deploy), no build step, no npm install, no bundler. The full spec is at `.harn/devy/changes/C-0001-worm-farm-simulator/spec.md` — read it before implementing features; it defines v1 scope, acceptance criteria, and out-of-scope items (notably: global ranking/backend is phase 2 and starts only when explicitly requested).
 
+**Visual work goes through `DESIGN.md`** (repo root) — the art direction, the colour/type/spacing
+token rationale, and the icon rules, including the food-icon anti-spoiler discipline. Read it before
+touching `css/` or `js/render/`. Constants there are transcribed from `css/tokens.css`, never the
+reverse. It is maintainer-only and excluded from the FTP upload.
+
 ## Commands
 
 | Task | Command |
@@ -54,5 +59,9 @@ Cross-cutting modules: `js/strings.js` (ALL pt-BR user-facing strings — single
 ## Code style
 
 - Vanilla ES modules for modern evergreen browsers; no transpilation, no polyfills.
+- CSS lives in five files loaded in cascade order: `tokens` → `base` → `components` → `screens` →
+  `motion`. `index.html` is the source of truth for that order; **never `@import`**, and `motion.css`
+  must stay last or the `prefers-reduced-motion` override silently stops winning. **Every colour
+  belongs in `tokens.css`** — `tests/css.test.js` fails on a colour literal in any other sheet.
 - JSDoc type annotations (`@param`/`@returns`/`@typedef`) on all `js/sim/` public functions.
 - `const` by default; small focused modules; plain objects + functions over classes where they suffice.

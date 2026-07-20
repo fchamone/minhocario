@@ -122,8 +122,14 @@ and the game is live.
 ### C.1 Files uploaded (ship set)
 Include: `index.html`, `css/`, `js/`, `vendor/`.
 Exclude from the upload: `tests/`, `.harn/`, `.claude/`, `tasks/`, `docs/`,
-`.git/`. (Practically also skip `CLAUDE.md` and `.gitignore` — repo metadata,
-never referenced by `index.html`; harmless if they tag along.)
+`DESIGN.md`, `.git/`. (Practically also skip `CLAUDE.md` and `.gitignore` — repo
+metadata, never referenced by `index.html`; harmless if they tag along.)
+
+`DESIGN.md` (C-0003 / V4) is maintainer documentation in the same category as
+`CLAUDE.md`: it records the art direction, the token rationale and the icon
+rules. `index.html` never references it. It is excluded deliberately rather than
+incidentally, because it also states the food-icon anti-spoiler discipline and
+therefore names the mechanic the food list is built to hide.
 
 ### C.2 `docs/` exclusion decision (the plan left this open — DECIDED: **exclude**)
 `docs/game-reference.md` is a **developer/maintainer** reference, never referenced
