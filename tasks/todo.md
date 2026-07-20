@@ -122,3 +122,7 @@ either from here needs explicit approval and a migration, per `CLAUDE.md`.
 
 Out of scope for v1 and not started: the global ranking backend (spec phase 2),
 which begins only when explicitly requested.
+
+**Active post-v1 work lives elsewhere:** the visual & layout redesign is tracked in
+`tasks/plan-c0003-visual-redesign.md` / `tasks/todo-c0003-visual-redesign.md`.
+This file is the closed v1 record and is not amended further.
