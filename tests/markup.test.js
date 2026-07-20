@@ -149,6 +149,169 @@ test('every HUD readout is tagged for tabular numerals', () => {
   );
 });
 
+// --- Finding #3: the <details> guard fails open ------------------------------
+// Both panels early-return on `if (!panel.open) return` (actions.js,
+// stats.js). `open` is a property of HTMLDetailsElement and nothing else, so
+// the day either panel becomes a plain <div> the guard reads `undefined`,
+// falsies, and the panel goes PERMANENTLY BLANK — no error, no failing test,
+// no console warning. The plan calls this the most likely silent regression in
+// the project, which is exactly why it gets a tripwire rather than a comment.
+//
+// V12 promoted #internals out of the stage overlay into its own grid column,
+// which is the kind of edit that invites "it's just a box now, make it a div".
+// If either panel ever legitimately stops being collapsible, the guard in the
+// JS must become `if (panel.open === false) return` in the SAME commit.
+
+/** Panels whose repaint guard depends on `.open` being a real property. */
+const COLLAPSIBLE_PANELS = ['internals', 'stats'];
+
+/**
+ * Report every panel that is not an open <details>.
+ * @param {string} source
+ * @returns {string[]} human-readable violations
+ */
+function collapsiblePanelViolations(source) {
+  const violations = [];
+
+  for (const id of COLLAPSIBLE_PANELS) {
+    const tag = new RegExp(`<([a-zA-Z][\\w-]*)([^>]*\\bid="${id}"[^>]*)>`).exec(source);
+
+    if (!tag) {
+      violations.push(`#${id} is not in index.html at all`);
+      continue;
+    }
+    if (tag[1].toLowerCase() !== 'details') {
+      violations.push(
+        `#${id} is a <${tag[1]}>, not <details> — its repaint guard reads ` +
+          '`panel.open`, which is undefined on any other element, so the panel ' +
+          'will render blank forever. Keep it <details>, or change the guard to ' +
+          '`panel.open === false` in the same edit.',
+      );
+      continue;
+    }
+    // Matched against the whole tag, not the captured attributes: `open` is a
+    // bare boolean attribute and is usually written last, so the lookahead needs
+    // the closing `>` to land on.
+    if (!/\sopen(?=[\s>=])/.test(tag[0])) {
+      violations.push(
+        `#${id} is a <details> without \`open\` — it starts collapsed, so the ` +
+          'player sees an empty panel on first load',
+      );
+    }
+  }
+
+  return violations;
+}
+
+test('both readout panels are open <details>, so their repaint guard works', () => {
+  assert.deepEqual(collapsiblePanelViolations(html()), []);
+});
+
+test('the collapsible-panel walker actually detects a violation', () => {
+  // Guards the guard (the V6 lesson): the rule above passes trivially today, so
+  // prove it sees each way the invariant can break.
+  assert.equal(collapsiblePanelViolations('<div id="internals"></div><details id="stats" open>').length, 1);
+  assert.equal(collapsiblePanelViolations('<details id="internals"><details id="stats" open>').length, 1);
+  assert.equal(collapsiblePanelViolations('<details id="stats" open>').length, 1, 'missing panel');
+  assert.deepEqual(
+    collapsiblePanelViolations('<details class="x" id="internals" open><details id="stats" open>'),
+    [],
+  );
+});
+
+// --- V12: the internals panel is a grid region, not a stage overlay ----------
+// Until V12 the panel was absolutely positioned inside .stage, which is the
+// whole reason `internalsSide`/`placeInternals` existed: the bin could slide
+// underneath it, so the panel had to dodge. Promoting it into its own grid
+// column deleted that machinery outright.
+//
+// Putting it back inside .stage would not fail visibly — it would just start
+// overlapping the composter again, silently, with no dodge left to save it.
+
+/**
+ * Attributes of every open ancestor of the element carrying `id`, outermost
+ * first, or null if no such element. Same stack walk as svgsUnderDataString.
+ * @param {string} source
+ * @param {string} id
+ * @returns {string[]|null}
+ */
+function ancestorAttrs(source, id) {
+  const stack = [];
+  const wanted = new RegExp(`\\bid="${id}"`);
+
+  for (const m of source.matchAll(/<(\/?)([a-zA-Z][a-zA-Z0-9-]*)([^>]*?)(\/?)>/g)) {
+    const [, closing, rawTag, attrs, selfClosing] = m;
+    const tag = rawTag.toLowerCase();
+
+    if (closing) {
+      const at = stack.map((e) => e.tag).lastIndexOf(tag);
+      if (at !== -1) stack.length = at;
+      continue;
+    }
+
+    if (wanted.test(attrs)) return stack.map((e) => e.attrs);
+    if (!VOID_TAGS.has(tag) && !selfClosing) stack.push({ tag, attrs });
+  }
+
+  return null;
+}
+
+test('the internals panel is a grid child of the game screen, not a stage overlay', () => {
+  const ancestors = ancestorAttrs(html(), 'internals');
+  assert.ok(ancestors, '#internals is not in index.html');
+
+  assert.ok(
+    !ancestors.some((a) => /\bid="stage"/.test(a)),
+    '#internals sits inside #stage again — it would overlay the composter, and ' +
+      'the dodge machinery (internalsSide/placeInternals) was deleted in V12',
+  );
+  assert.ok(
+    ancestors.some((a) => /\bclass="[^"]*\bscreen--game\b/.test(a)),
+    '#internals must be a child of .screen--game so its grid-area applies',
+  );
+});
+
+test('the ancestor walker actually detects a violation', () => {
+  const nested = '<section class="screen screen--game"><div id="stage"><details id="internals">';
+  assert.ok(ancestorAttrs(nested, 'internals').some((a) => /\bid="stage"/.test(a)));
+
+  const promoted = '<section class="screen screen--game"><div id="stage"></div><details id="internals">';
+  assert.ok(!ancestorAttrs(promoted, 'internals').some((a) => /\bid="stage"/.test(a)));
+
+  assert.equal(ancestorAttrs('<div id="other">', 'internals'), null);
+});
+
+// --- V12: the dodge machinery is gone, with no danglers ----------------------
+// Deleting a feature by half is worse than not deleting it: a leftover CSS
+// modifier or a call to a removed function is dead weight that reads as live
+// code. The panel cannot be slid under any more, so every trace of the
+// hysteresis goes.
+//
+// Deliberately blunt — it matches comments as well as code, and that is a
+// feature rather than a limitation to work around. A comment explaining a
+// function that no longer exists is exactly the stale rule CLAUDE.md's
+// discipline notes call a bug; prose describing the deletion can say what was
+// removed without naming identifiers a reader would then fail to grep.
+
+test('no trace of the internals dodge machinery survives', () => {
+  const DEAD = ['internalsSide', 'placeInternals', 'internals--right', 'INTERNALS_FLIP_TO_'];
+  const sources = uiSources().concat([
+    ['css/components.css', read('../css/components.css')],
+    ['css/screens.css', read('../css/screens.css')],
+    ['index.html', html()],
+  ]);
+
+  for (const [file, src] of sources) {
+    for (const name of DEAD) {
+      assert.ok(
+        !src.includes(name),
+        `${file} still references \`${name}\` — V12 deleted the stage-overlay ` +
+          'dodge, so this is a dangling reference to machinery that no longer exists',
+      );
+    }
+  }
+});
+
 // --- Every getElementById target exists -------------------------------------
 
 test('every literal getElementById id exists in index.html or is created in js/', () => {

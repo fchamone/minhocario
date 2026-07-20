@@ -207,18 +207,45 @@
 #setup-waste { display: grid; gap: var(--space-2); }
 
 /* --- Game screen grid --- */
-/* Regions: HUD across the top, stage (3D canvas) fills the middle,
-   actions on the right, speed bar across the bottom. */
+/* Three columns (V12). Left: the internals/x-ray readouts, promoted out of the
+   canvas overlay — the densest content on screen was in the most constrained
+   container, and moving it is the single biggest density win available.
+   Centre: the 3D stage and the colony-dead banner. Right: actions and stats.
+   HUD and speed bar span all three.
+
+   `minmax(0, 1fr)` on the stage column AND row is load-bearing: a bare `1fr` is
+   `minmax(auto, 1fr)`, whose auto minimum refuses to shrink below the content's
+   size, so the canvas would push the grid wider than the viewport instead of
+   giving way. Named areas are checked both ways by tests/css.test.js — a
+   `grid-area` typo places the element in an implicit track rather than warning,
+   which on a WebGL region reads as a stretched scene, not as a CSS bug. */
 .screen--game {
   padding: 0;
   height: 100vh;
   display: grid;
-  grid-template-columns: 1fr 260px;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'hud     hud'
-    'stage   actions'
-    'speed   speed';
+    'hud      hud    hud'
+    'readouts stage  actions'
+    'speed    speed  speed';
+}
+
+/* Collapsing the readouts hands the column back to the 3D scene, which is the
+   behaviour the panel had as an overlay and would otherwise have lost — a fixed
+   track would leave a 280px empty gutter instead. `auto` sizes the column to the
+   collapsed <summary>.
+
+   This is also what keeps V12's own acceptance criterion honest: "drag stays
+   pinned with panels collapsed/expanded" can only fail if collapsing actually
+   resizes the canvas, and with fixed tracks it never does. The resize is picked
+   up by the ResizeObserver added in V5 — a window-resize listener alone would
+   miss it, which is precisely the stale-`camera.aspect` bug V5 fixed.
+
+   `:has()` degrades silently where unsupported (the layout simply keeps the
+   fixed column), so this is a progressive enhancement, not a dependency. */
+.screen--game:has(#internals:not([open])) {
+  grid-template-columns: auto minmax(0, 1fr) minmax(260px, 320px);
 }
 
 /* An instrument strip: hairline-divided cells rather than free-floating chips.
@@ -268,6 +295,11 @@ body.dev-mode .hud { padding-top: 44px; }
 /* The nickname is set once and never ticks, so it needs neither the reserved
    width nor the alignment that reservation implies. */
 .hud__item--player .hud__value { min-width: 0; text-align: left; }
+
+/* Placement only — the panel's own appearance is in components.css, which is
+   where it stays reusable. Every region of this grid claims its area here, next
+   to the template that declares it; tests/css.test.js checks the two match. */
+.internals { grid-area: readouts; }
 
 .stage {
   grid-area: stage;

@@ -26,9 +26,11 @@
   --surface-1: #232e25;  /* S 14%  L 16%  — panels, HUD, chooser, cards */
   --surface-2: #2d3830;  /* S 11%  L 20%  — controls, borders, stats box */
   --surface-3: #38423a;  /* S  8%  L 24%  — raised/hover, reserved for Phase B */
-  /* The internals panel floats over the 3D stage, so it needs the panel colour
-     with the scene showing through. Tracks --surface-1 exactly. */
-  --surface-1-alpha: rgba(35, 46, 37, 0.92);
+  /* --surface-1-alpha (92% --surface-1) was deleted in V12: it existed only so
+     the internals panel could float over the 3D stage with the scene showing
+     through. The panel is now its own opaque grid column, so the token had zero
+     users — and a token nothing references is exactly the kind of dead weight
+     V2a refused to leave behind, since no test can catch it. */
 
   /* --- Ink ---
      Three tiers: values, labels, and incidental copy that should recede

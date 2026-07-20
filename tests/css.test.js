@@ -249,9 +249,10 @@ const contrast = (a, b) => {
 // Fills and borders (--state-warn, --state-alert) are deliberately absent —
 // they carry no text and have no contrast floor.
 //
-// The internals panel's real background is --surface-1-alpha (92% --surface-1
-// over the 3D stage). --surface-1 is the right proxy: the stage behind it is
-// comparably dark, and the 8% bleed cannot move the ratio meaningfully.
+// The internals panel used to need a proxy here: as a stage overlay it was
+// painted in a 92%-opaque --surface-1 and measured against the opaque step.
+// V12 made it its own grid column, so it is painted in --surface-1 directly and
+// the pairing is now measured rather than approximated.
 //
 // V10 gave --surface-3 its first users (the hovered species row and language
 // button). Only three inks can reach it, and the two that CANNOT are the point
@@ -292,9 +293,8 @@ test('every text colour clears WCAG AA on every surface it can sit on', () => {
 // question. This is what forces it — paint a surface anywhere and it must appear
 // in INK_SURFACES, which means someone had to decide which inks may sit on it.
 //
-// Scoped to the four opaque steps on purpose. --surface-1-alpha is proxied by
-// --surface-1 (see above); --scrim/--scrim-dim are backdrops that carry no text
-// of their own; --stage-sky sits behind a canvas.
+// Scoped to the four opaque steps on purpose: --scrim/--scrim-dim are backdrops
+// that carry no text of their own, and --stage-sky sits behind a canvas.
 test('every surface painted in the sheets is covered by the contrast map', () => {
   const measured = new Set(Object.values(INK_SURFACES).flat());
 
@@ -374,6 +374,84 @@ test('the off-scale length walker actually detects a violation', () => {
   assert.deepEqual(offScaleLengths('.a { margin-left: -1px; }'), [], 'negatives are geometry');
   assert.deepEqual(offScaleLengths('.a { padding-top: 44px; }'), [], 'documented clearance');
   assert.deepEqual(offScaleLengths('.a { width: 90px; height: 8px; border-radius: 2px; }'), []);
+});
+
+// --- Named grid areas resolve both ways --------------------------------------
+// V12 moved the game screen onto a three-column named-area grid, which makes
+// area names a new class of silent failure. `grid-area: readouts` against a
+// template spelling it `readout` does not warn: the element is placed into an
+// implicit track instead, so it still renders, just in the wrong place and at
+// the wrong size — and on a screen where one of the regions is a WebGL canvas,
+// "wrong size" reads as a stretched scene rather than as a CSS bug.
+//
+// Checked in both directions. An unused area name means the template reserves
+// space for a region that no longer exists (an empty column), which is exactly
+// what a half-finished layout edit leaves behind.
+
+/**
+ * Area names declared by `grid-template-areas`, and names claimed by
+ * `grid-area`. The `.` placeholder is a deliberate empty cell, not a name.
+ * @param {string} css
+ * @returns {{declared: Set<string>, used: Set<string>}}
+ */
+function gridAreaNames(css) {
+  const stripped = stripComments(css);
+  const declared = new Set();
+  const used = new Set();
+
+  for (const [, value] of stripped.matchAll(/grid-template-areas\s*:\s*([^;}]+)/g)) {
+    for (const [, row] of value.matchAll(/["']([^"']*)["']/g)) {
+      for (const cell of row.split(/\s+/).filter(Boolean)) {
+        if (cell !== '.') declared.add(cell);
+      }
+    }
+  }
+
+  for (const [, value] of stripped.matchAll(/(?:^|[;{])\s*grid-area\s*:\s*([^;}]+)/g)) {
+    const name = squash(value);
+    // The shorthand form (`grid-area: 1 / 2 / 3 / 4`) places by line, not name.
+    if (/^[a-zA-Z][\w-]*$/.test(name)) used.add(name);
+  }
+
+  return { declared, used };
+}
+
+test('every grid-area name resolves to a declared template area, and vice versa', () => {
+  // One sheet at a time: an area declared in screens.css and claimed from
+  // components.css would be a cross-file coupling worth failing on anyway.
+  for (const name of SHEETS) {
+    const { declared, used } = gridAreaNames(readSheet(name));
+    if (declared.size === 0 && used.size === 0) continue;
+
+    for (const area of used) {
+      assert.ok(
+        declared.has(area),
+        `${name}: \`grid-area: ${area}\` names no area in any grid-template-areas — ` +
+          'the element lands in an implicit track instead, silently misplaced',
+      );
+    }
+    for (const area of declared) {
+      assert.ok(
+        used.has(area),
+        `${name}: grid-template-areas reserves \`${area}\`, which nothing claims — ` +
+          'that is an empty track left by a half-finished layout edit',
+      );
+    }
+  }
+});
+
+test('the grid-area walker actually detects a violation both ways', () => {
+  // Guards the guard (the V6 lesson).
+  const typo = ".g { grid-template-areas: 'hud hud' 'stage actions'; } .a { grid-area: action; }";
+  const { declared, used } = gridAreaNames(typo);
+  assert.ok(!declared.has('action') && used.has('action'), 'typo must be visible as unresolved');
+  assert.ok(declared.has('actions') && !used.has('actions'), 'and as an unclaimed area');
+
+  // The `.` placeholder is an empty cell, and the line-number shorthand is not a name.
+  const fine = ".g { grid-template-areas: 'a .'; } .a { grid-area: a; } .b { grid-area: 1 / 2 / 3 / 4; }";
+  const both = gridAreaNames(fine);
+  assert.deepEqual([...both.declared], ['a']);
+  assert.deepEqual([...both.used], ['a']);
 });
 
 // The token layer is enforced, not offered. Without this, a colour system is a

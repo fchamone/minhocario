@@ -4,8 +4,13 @@
 
    Widgets that are not tied to one screen: cards, panels, readouts, gauges,
    the modal chooser, the colony-dead banner. Rules keep their original relative
-   order within this file, because several pairs rely on it (`.internals` then
-   `.internals--right`, `.gauge__fill` then its `--warn`/`--alert` variants). */
+   order within this file, because several pairs rely on it (`.gauge__fill` then
+   its `--warn`/`--alert` variants).
+
+   Appearance only: where a widget sits on a screen belongs to screens.css. The
+   internals panel is the case that makes the rule visible — it is styled here
+   but placed by the game screen's `grid-area: readouts`, declared alongside the
+   grid that defines that area rather than split away from it. */
 
 /* --- Icons --- */
 /* The sprite lives at the top of <body>. It must stay in the render tree for
@@ -74,24 +79,22 @@
 .shop-card__reason { color: var(--state-alert-ink); font-size: var(--text-xs); margin: 0; }
 
 /* --- Internals panel --- */
-/* Overlays the stage. Always present (the x-ray toggle no longer hides it), so
-   the player collapses it themselves via the <details> disclosure — and a
-   collapsed panel shrinks to its summary instead of leaving a 280px empty bar,
-   handing the 3D scene its area back. */
+/* The game screen's left grid column since V12 — no longer an overlay on the
+   stage. Always present (the x-ray toggle no longer hides it), so the player
+   collapses it themselves via the <details> disclosure; collapsing shrinks the
+   whole grid column, handing the 3D scene its area back exactly as the overlay
+   did (see the `:has()` rule in screens.css).
+   `min-height: 0` lets it scroll inside the `minmax(0, 1fr)` stage row rather
+   than stretching the row to fit the queue. */
 .internals {
-  position: absolute;
-  top: var(--space-3);
-  left: var(--space-3);
-  width: 280px;
-  max-height: calc(100% - var(--space-6));
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-3);
   font-size: var(--text-sm);
-  background: var(--surface-1-alpha);
-  border: 1px solid var(--surface-2);
-  border-radius: var(--radius);
+  background: var(--surface-1);
+  border-right: 1px solid var(--surface-2);
 }
-.internals:not([open]) { width: auto; overflow: visible; }
+.internals:not([open]) { overflow: visible; }
 /* Mirrors `.stats > summary` — the same disclosure affordance in the other box. */
 .internals > summary {
   cursor: pointer;
@@ -100,11 +103,6 @@
   color: var(--ink-dim);
 }
 .internals[open] > summary { margin-bottom: var(--space-2); }
-/* Flipped to the far side when the player slides the composter under the panel
-   (see `internalsSide` in js/ui/actions.js). `left: auto` releases the default
-   anchor above, which is otherwise still in play — so this rule MUST stay after
-   `.internals` in this file. */
-.internals--right { left: auto; right: var(--space-3); }
 .internals h4 {
   margin: 0 0 var(--space-2);
   font-size: var(--text-xs);
@@ -277,14 +275,19 @@
 .chooser__cancel { width: 100%; }
 
 /* --- Colony-dead banner (§2.1) --- */
-/* Centered over the stage: production has stopped, so it should interrupt. */
+/* Centered over the stage: production has stopped, so it should interrupt.
+   The 340px cap was sized against a full-width stage; V12 put the stage in the
+   centre column between two sidebars, where 340px can exceed the whole track at
+   narrow widths and the banner would bleed under them. `min()` keeps the
+   original size wherever it fits and falls back to the track width less a
+   margin, so it stays inside the stage at every width. */
 .banner {
   position: absolute;
   top: var(--space-3);
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
-  max-width: 340px;
+  max-width: min(340px, calc(100% - var(--space-6)));
   padding: var(--space-3) var(--space-4);
   text-align: center;
   background: var(--surface-1);

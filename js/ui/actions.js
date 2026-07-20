@@ -355,66 +355,11 @@ export function internalsSnapshot(farm) {
   };
 }
 
-// --- Internals panel placement -----------------------------------------------
-// The panel overlays the stage, so it can end up on top of the composter itself.
-// The bin's on-screen position is driven entirely by `wallPosition` (0 = pushed
-// to the far left of the usable span, 1 = far right), so the side to dodge to is
-// a pure function of that number — no camera projection needed, and it stays
-// testable under Node. The render layer's camera/canvas/span are module-private
-// by design; reaching for them here would couple UI to render for no gain.
-
-/** Below this the bin is far enough left that the left-anchored panel overlaps. */
-const INTERNALS_FLIP_TO_RIGHT = 0.35;
-
-/** Above this the bin has cleared the left anchor and the panel can come home. */
-const INTERNALS_FLIP_TO_LEFT = 0.5;
-
-/**
- * Which side of the stage the internals panel should sit on, given where the
- * player has slid the composter. Pure.
- *
- * The two thresholds deliberately do NOT coincide: a single threshold would make
- * the panel flap left/right on every pointer sample while a drag hovers around
- * it, since `input` fires continuously. The dead band between
- * `INTERNALS_FLIP_TO_RIGHT` and `INTERNALS_FLIP_TO_LEFT` resolves to `current`
- * instead, so the panel only moves once per crossing and then stays put — the
- * player has to drag meaningfully past the flip point to move it back.
- *
- * Callers pass the side the panel is on RIGHT NOW (read back off the DOM), which
- * is what gives the hysteresis its state; this function keeps none of its own.
- * @param {number} wallPosition  0..1 slider/drag position of the composter
- * @param {'left'|'right'} [current='left']  side the panel currently occupies
- * @returns {'left'|'right'} side the panel should occupy
- */
-export function internalsSide(wallPosition, current = 'left') {
-  // A non-number (or NaN/Infinity) means we cannot know where the bin is —
-  // fall back to the CSS default rather than pinning the panel somewhere odd.
-  if (typeof wallPosition !== 'number' || !Number.isFinite(wallPosition)) return 'left';
-  if (wallPosition < INTERNALS_FLIP_TO_RIGHT) return 'right';
-  if (wallPosition > INTERNALS_FLIP_TO_LEFT) return 'left';
-  return current === 'right' ? 'right' : 'left';
-}
-
 // --- DOM (not unit-tested) ---------------------------------------------------
 // The readout primitives this panel renders with — buildStat, buildGauge,
 // buildGroup, markFillLevel, fill and the formatters — live in components.js,
 // shared with the statistics box. See the note at the top of that file for what
 // had drifted before they were consolidated.
-
-/**
- * Move the internals panel out from under the composter. Reads the side the
- * panel is on back off its own class list so `internalsSide`'s hysteresis has
- * real state to compare against (see the dead-band note there), then writes the
- * decision back as a class. Called from every path that changes `wallPosition`
- * so the panel tracks a live drag, not just the next repaint.
- * @param {number} wallPosition
- */
-function placeInternals(wallPosition) {
-  const panel = document.getElementById('internals');
-  if (!panel) return;
-  const current = panel.classList.contains('internals--right') ? 'right' : 'left';
-  panel.classList.toggle('internals--right', internalsSide(wallPosition, current) === 'right');
-}
 
 /**
  * Whether the 3D x-ray view is on. Module-local because it is a pure VIEW
@@ -454,8 +399,6 @@ export function updateInternals(farm) {
     panel.addEventListener('toggle', () => updateInternals(lastInternals));
   }
   if (!panel.open) return;
-
-  if (farm) placeInternals(farm.wallPosition);
 
   const snap = internalsSnapshot(farm);
   if (!snap) {
@@ -809,21 +752,12 @@ export function initActions(deps) {
   const slider = document.getElementById('wall-position');
   if (slider) {
     const farm = getFarm();
-    if (farm) {
-      slider.value = String(farm.wallPosition);
-      placeInternals(farm.wallPosition);
-    }
+    if (farm) slider.value = String(farm.wallPosition);
     // `input` (not `change`) so the composter tracks the slider live. This is the
     // slider → 3D half of the bidirectional sync (T19): it dispatches the SAME
     // `onMove` action the 3D drag does, and the reverse (3D drag → slider) lands
     // through `syncWallSlider` on the resulting repaint.
-    slider.addEventListener('input', () => {
-      const next = Number(slider.value);
-      // Reposition from the slider value directly rather than waiting for the
-      // repaint, so the panel gets out of the way during the drag itself.
-      placeInternals(next);
-      onMove(next);
-    });
+    slider.addEventListener('input', () => onMove(Number(slider.value)));
   }
 }
 
@@ -840,9 +774,6 @@ function syncWallSlider(farm) {
   if (slider && farm && document.activeElement !== slider) {
     slider.value = String(farm.wallPosition);
   }
-  // Outside the focus guard: a 3D drag moves the bin without touching the
-  // slider, and the panel has to dodge that too.
-  if (farm) placeInternals(farm.wallPosition);
 }
 
 /**

@@ -438,6 +438,27 @@
         </span>
       </header>
 
+      <!-- Internals panel: the numeric gauge layer, ALWAYS present. It is the
+           instrument the player reads the farm with, so it is deliberately not
+           gated behind the x-ray toggle (which now only affects the 3D bin) —
+           collapsing it is the player's choice, via the <details> disclosure.
+           Populated by js/ui/actions.js on every tick while open.
+
+           V12 promoted it out of the .stage overlay into its own grid column:
+           it is the densest content on screen and it was in the most
+           constrained container. The bin can no longer slide underneath it, so
+           the dodge machinery that used to flip the panel side to side was
+           deleted outright rather than left inert.
+
+           It must stay a <details>: both this panel and #stats early-return on
+           `if (!panel.open) return`, and `open` is undefined on every other
+           element, so a <div> here renders blank forever with no error.
+           tests/markup.test.js holds both facts. -->
+      <details class="internals" id="internals" open>
+        <summary data-string="game.internalsTitle"></summary>
+        <div id="internals-body"></div>
+      </details>
+
       <div class="stage" id="stage">
         <!-- Three.js canvas mounts here (T16+) -->
         <canvas id="scene-canvas"></canvas>
@@ -452,16 +473,6 @@
             <span data-string="game.repopulate"></span>
           </button>
         </div>
-
-        <!-- Internals panel: the numeric gauge layer, ALWAYS present. It is the
-             instrument the player reads the farm with, so it is deliberately not
-             gated behind the x-ray toggle (which now only affects the 3D bin) —
-             collapsing it is the player's choice, via the <details> disclosure.
-             Populated by js/ui/actions.js on every tick while open. -->
-        <details class="internals" id="internals" open>
-          <summary data-string="game.internalsTitle"></summary>
-          <div id="internals-body"></div>
-        </details>
       </div>
 
       <!-- Every icon is a SIBLING of the [data-string] span, never a child of it.

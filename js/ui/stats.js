@@ -8,11 +8,12 @@
 // multiplier, the age feeding it, and what the tray would pay if harvested this
 // instant — the three numbers the frozen formula is made of.
 //
-// PLACEMENT: this lives in the `.actions` SIDEBAR COLUMN, not as a `.stage`
-// overlay. `.actions` is already a scrolling flex column, so the box just joins
-// the flow; a second absolutely-positioned overlay would compete with the x-ray
-// internals panel for the same right-hand edge (and `internalsSide`'s dodge
-// logic only knows how to avoid the composter, not a sibling panel).
+// PLACEMENT: this lives in the `.actions` SIDEBAR COLUMN, which is the game
+// screen's right grid track. `.actions` is already a scrolling flex column, so
+// the box just joins the flow. Since V12 neither readout panel overlays the
+// stage: the internals panel holds the left track and this one the right, so
+// the two can no longer compete for an edge — nor with the composter, which is
+// why V12 could delete the dodge logic outright.
 //
 // Layering: a UI module, mirroring the internalsSnapshot/updateInternals split
 // in actions.js — `statsSnapshot` is pure and Node-tested, `updateStats` is the

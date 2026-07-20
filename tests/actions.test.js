@@ -6,7 +6,6 @@ import {
   portionOptions,
   sawdustPortion,
   gauge,
-  internalsSide,
   internalsSnapshot,
   QUEUE_PREVIEW_LIMIT,
   WARN_FILL,
@@ -266,42 +265,6 @@ test('gauge clamps the ratio to the display domain', () => {
 test('gauge tolerates a degenerate domain without dividing by zero', () => {
   const g = gauge(5, band, { min: 3, max: 3 });
   assert.ok(Number.isFinite(g.ratio));
-});
-
-// --- internalsSide: keeping the panel off the composter ----------------------
-
-test('internalsSide flips the panel away from a bin slid to the far left', () => {
-  assert.equal(internalsSide(0.1), 'right');
-  assert.equal(internalsSide(0), 'right');
-});
-
-test('internalsSide keeps the panel on its default side for a bin on the right', () => {
-  assert.equal(internalsSide(0.9), 'left');
-  assert.equal(internalsSide(1), 'left');
-});
-
-test('internalsSide holds the current side inside the dead band', () => {
-  // 0.4 sits between the two thresholds, so neither side is forced: whichever
-  // side the panel already occupies wins. This is what stops it flapping while
-  // a drag hovers around the flip point.
-  assert.equal(internalsSide(0.4, 'right'), 'right');
-  assert.equal(internalsSide(0.4, 'left'), 'left');
-});
-
-test('internalsSide only flips back once the bin clears the return threshold', () => {
-  // Sweeping right out of the dead band flips home; sweeping back left again
-  // does not flip until past the (lower) rightward threshold.
-  assert.equal(internalsSide(0.55, 'right'), 'left');
-  assert.equal(internalsSide(0.45, 'left'), 'left');
-  assert.equal(internalsSide(0.3, 'left'), 'right');
-});
-
-test('internalsSide falls back to the default side for unusable input', () => {
-  assert.equal(internalsSide(NaN), 'left');
-  assert.equal(internalsSide(undefined), 'left');
-  assert.equal(internalsSide(Infinity), 'left');
-  assert.equal(internalsSide('0.1'), 'left'); // a string is not a position
-  assert.equal(internalsSide(null, 'right'), 'left');
 });
 
 // --- internalsSnapshot: the x-ray data panel's whole model -------------------
