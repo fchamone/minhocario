@@ -162,6 +162,35 @@ test('formatLiters is defined exactly once across the UI layer', () => {
   );
 });
 
+// --- The tiled chooser needs a definite width -------------------------------
+// A <dialog> is `width: fit-content`, and `auto-fit`/`auto-fill` inside an
+// intrinsically-sized box resolves to exactly one column — so a tiled chooser
+// without an explicit width lays 14 foods out as one tall scroll. Nothing
+// throws, nothing looks broken in the markup, and the CSS still "works": it is
+// precisely the kind of silent layout regression this project keeps getting
+// bitten by, so both halves of the fix are pinned here.
+
+test('the tiled chooser declares a definite width in CSS', () => {
+  const css = readFileSync(new URL('../css/components.css', import.meta.url), 'utf8');
+  const rule = /\.chooser--grid\s*\{([^}]*)\}/.exec(stripComments(css));
+
+  assert.ok(rule, '.chooser--grid is gone — the tiled chooser collapses to one column without it');
+  assert.match(
+    rule[1],
+    /(^|[;\s])width\s*:/,
+    '.chooser--grid must set an explicit width; a fit-content dialog cannot resolve auto-fit tracks',
+  );
+});
+
+test('actions.js applies the tiled-chooser class when options carry icons', () => {
+  const src = stripComments(readFileSync(new URL('../js/ui/actions.js', import.meta.url), 'utf8'));
+  assert.match(
+    src,
+    /chooser--grid/,
+    'nothing applies .chooser--grid, so the CSS above can never take effect',
+  );
+});
+
 test('the duplication guards actually detect a violation', () => {
   // Guards the guards (the V6 lesson): these rules pass trivially the moment
   // they are satisfied, so prove the patterns match the markup they describe.

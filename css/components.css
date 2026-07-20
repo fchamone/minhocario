@@ -209,19 +209,33 @@
 .chooser {
   min-width: 260px;
   max-width: 90vw;
+  /* Many rows of tiles must scroll INSIDE the dialog rather than growing it off
+     a short screen. */
+  max-height: 88vh;
+  overflow-y: auto;
   padding: var(--space-4);
   color: var(--ink);
   background: var(--surface-1);
   border: 1px solid var(--surface-2);
   border-radius: var(--radius-lg);
 }
+/* A <dialog> is `width: fit-content`, and `auto-fit`/`auto-fill` inside an
+   intrinsically-sized box can NEVER resolve to more than one column — the track
+   count is computed against the available inline size, and here that size is
+   itself derived from the content. The 14-food chooser therefore laid out as a
+   single tall column and scrolled. The grid needs a DEFINITE width to divide up.
+   660px less 32px of padding leaves 628px, which fits five 112px tracks with
+   8px gaps — so 14 foods land in three rows instead of fourteen. */
+.chooser--grid { width: min(90vw, 660px); }
 .chooser::backdrop { background: var(--scrim); }
 .chooser h3 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
 .chooser__options {
   display: grid;
   /* 112px suits a tile (a 52px glyph over a centred, wrapping name) and still
-     holds the text-only worm-pack options comfortably. */
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+     holds the text-only worm-pack options comfortably. `auto-fit` rather than
+     `auto-fill` so a prompt with fewer options than tracks (the four portion
+     rungs) stretches to fill instead of leaving dead columns. */
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }

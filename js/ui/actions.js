@@ -607,6 +607,11 @@ function chooseFrom(titleKey, options) {
     const title = document.createElement('h3');
     title.textContent = t(titleKey);
 
+    // A tiled prompt needs a definite width or its grid collapses to one column
+    // (see `.chooser--grid`). Toggled per prompt because the same <dialog> also
+    // serves text-only prompts, which should stay shrink-wrapped and compact.
+    dialog.classList.toggle('chooser--grid', options.some((option) => option.icon));
+
     const list = document.createElement('div');
     list.className = 'chooser__options';
     for (const option of options) {
