@@ -207,6 +207,13 @@ let ready = false;
 /** Bound resize handler, retained so it can be removed on dispose. */
 let onWindowResize = null;
 /**
+ * Observes the canvas box itself, retained so it can be disconnected on dispose.
+ * A window resize is not the only thing that changes the canvas size — the
+ * game-screen grid, a collapsing side panel, or a docked devtools pane all
+ * resize it with NO resize event. See initScene for why a stale size matters.
+ */
+let canvasObserver = null;
+/**
  * The live composter mesh group (T17) and the catalog id it was built from. The
  * mesh is rebuilt only when the id changes, so a mid-farm upgrade swaps the model
  * live while plain re-renders just reposition it.
@@ -472,6 +479,18 @@ export function initScene(canvas) {
   resizeScene();
   onWindowResize = () => resizeScene();
   globalThis.addEventListener?.('resize', onWindowResize);
+
+  // ...but the window is not the only thing that resizes the canvas. Any layout
+  // change does — a grid edit, a collapsing side panel, devtools docking — and
+  // none of those fire a resize event. A stale size costs more than a stretched
+  // picture: `camera.aspect` feeds the drag raycast's unprojection, so the bin
+  // silently drifts away from the cursor mid-drag. Observing the canvas's own
+  // box catches every case. No feedback loop — resizeScene passes
+  // updateStyle=false, so it never writes back the CSS size it just read.
+  if (typeof ResizeObserver === 'function') {
+    canvasObserver = new ResizeObserver(() => resizeScene());
+    canvasObserver.observe(canvas);
+  }
 
   return true;
 }
@@ -878,6 +897,8 @@ export function enableDragMove(onWallPositionChange) {
 export function disposeScene() {
   if (onWindowResize) globalThis.removeEventListener?.('resize', onWindowResize);
   onWindowResize = null;
+  canvasObserver?.disconnect();
+  canvasObserver = null;
   if (dragEnabled && dragListeners) {
     if (sceneCanvas) {
       sceneCanvas.removeEventListener('pointerdown', dragListeners.down);
