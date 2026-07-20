@@ -136,8 +136,55 @@
       cannot grow back — no module but `components.js` may build a `.gauge` row, a `.stat` row or a
       group section, and `formatLiters` must have exactly one definition. All broken first.
       Suite 300 → 313.
-- [ ] **V10** Home / shop / setup restyle (M) — deps: V2, V7, V8, V9
-- [ ] **V11** HUD + speed bar restyle (S/M) — deps: V2, V8
+- [x] **V10** Home / shop / setup restyle (M) — deps: V2, V7, V8, V9
+      The three pre-game screens against the V2b vocabulary. Beyond styling: the
+      language selector became one segmented control (three bordered buttons read as
+      three decisions; one box with three positions reads as the single choice it is);
+      the setup form's inputs were **UA-default white boxes on a dark UI** — on the one
+      screen a first-time player must complete unaided — so `base.css` now styles
+      `input`/`select` and sets `accent-color`; `#setup-confirm` was visually identical
+      to Reroll and is now the primary action it is; the selected species row gets an
+      inset accent rule via `:has(input:checked)`.
+      **h1/h2 finally use `--text-xl`/`--text-lg`** — both shipped in V2b with no user
+      at all while headings ran at the UA's 2em, which made half the type ramp a claim
+      the code did not back.
+      **`--surface-3` gets its first users** (hovered species row + language rung),
+      closing the gap carried out of CPV1. Only `--ink` (9.2), `--ink-dim` (5.3) and
+      `--accent` (4.75) clear AA against it; `--state-alert-ink` is **4.3** and
+      `--ink-faint` **3.5**. That decided a design question rather than merely recording
+      one: **the shop card raises its border on hover instead of its fill**, because its
+      "cannot afford" line is `--state-alert-ink` and a raised fill would have pushed it
+      under the floor.
+      Three guards, each broken against the real sheets first: off-scale spacing/type
+      literals (the thing that makes the AC's "no stray literals" able to fail —
+      allowlist is exactly the two documented dev-nav clearances), a companion proving
+      that walker fires, and **every surface painted in the sheets is covered by the
+      contrast map** — the one that would have caught the actual bug, since `--surface-3`
+      sat unmeasured for four tasks precisely because nothing forced the question.
+      Suite 330 → 333.
+- [x] **V11** HUD + speed bar restyle (S/M) — deps: V2, V8
+      Six chips → one hairline-divided panel of six gauges (glyph + tracked micro-label
+      + tabular value), six new chrome symbols, and the speed bar given the matching
+      treatment with its multipliers opting back out of the uppercasing.
+      `ico-status` is a **dial, not a tick or a warning triangle**: the same glyph shows
+      for "tudo certo" and for a dead colony, so it must stay neutral about the state the
+      label and its colour carry. Now an icon rule in `DESIGN.md`.
+      **The AC's "stops jittering" was only half-served by tabular numerals.** They fix
+      each digit's width so a value never reflows within itself — but a number that GAINS
+      a digit still widens, and in a flex row that shoves every cell after it. The score
+      crossing 99 → 100 moved four cells with tabular figures fully in effect.
+      `.hud__value` also reserves `min-width: 4ch`; past four digits the strip reflows
+      once more, a rare event rather than a per-tick twitch. `DESIGN.md` states the
+      reservation as part of the requirement, since the same trap waits at every readout
+      with neighbours.
+      Guards (broken first): HUD readouts tagged for tabular numerals — with the id list
+      **derived from `hud.js`**, so the real failure (a seventh readout added without the
+      markup) is what it catches — plus a check that `.hud__value` actually declares
+      `tabular-nums`; and every `[data-speed]` is a value `initSpeed` accepts, which
+      silently ignores anything else and leaves a button that looks live and does
+      nothing. Suite 333 → **335**.
+      The colon text nodes left the HUD, home and shop: a bare text node in a flex row
+      becomes its own flex item, so each ":" floated between two gaps. No i18n key moved.
 - [ ] **CPV2** — chrome restyled in all three locales.
       Review: icon set, and specifically the **14-food clustering check** (no test can enforce it)
 
@@ -201,28 +248,36 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phase A approved — Phase B underway (V8, V9 landed)
+## Status: Phase B code complete — CPV2 is the next gate
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
-V8 and V9 landed 2026-07-20. Suite 289 → **327 green**.
+V8, V9, V10, V11 landed 2026-07-20. Suite 289 → **335 green**.
 
 V9 went first despite being nominally parallel: V8 adds decomposition rings to
 the internals queue rows that V9 relocates, so landing V9 first kept V8 a clean
 diff against a shared `buildStat` instead of a merge against a moving one.
 
-Next: **V10** (home/shop/setup restyle) and **V11** (HUD + speed bar), both now
-unblocked. V11 is the last gate before V12's layout rebuild.
+Next: **CPV2**, then V12's layout rebuild. Every Phase-B task is coded and every
+suite is green, but **CPV2 cannot be signed off from this side** — its review
+items are the ones no test in this project can reach (see the browser work owed
+below). Do not treat "335 green" as Phase B being verified.
 
 Carried into Phase B, unclosed by CPV1:
-- The **V5 browser check** — correctness, not aesthetics; due before V12.
-- The **`--surface-3` contrast gap** — `--ink-faint` is only 3.5:1 against it, so
-  the day V8/V10 gives `--surface-3` a user, `tests/css.test.js` must gain that
-  pairing and one of the two values must move. **V8 did not give it a user**
-  (icons colour from `--ink-dim`, `--accent` and `--surface-2`), so this is still
-  open and now falls to V10.
+- The **V5 browser check** — correctness, not aesthetics; due before V12. Still open.
+- ~~The **`--surface-3` contrast gap**~~ — **RESOLVED in V10.** It got its first
+  users (hovered species row + language rung), so the pairing had to be decided
+  rather than deferred. `--ink`/`--ink-dim`/`--accent` clear AA on it;
+  `--state-alert-ink` (4.3) and `--ink-faint` (3.5) do not and **must not be
+  placed there**. The constraint changed a design decision: the shop card raises
+  its border on hover rather than its fill, because its "cannot afford" line is
+  `--state-alert-ink`. A new guard now fails on **any** surface painted in the
+  sheets that no ink has been measured against, so the next `--surface-N` cannot
+  repeat this — sitting unmeasured for four tasks was possible only because
+  nothing forced the question.
 
-**Owed from V8 — browser verification, not yet done.** These need a real browser
-and are the V8 verify step, carried until someone runs it:
+**Owed from V8 and V10/V11 — browser verification, not yet done.** These need a
+real browser and are the verify steps for all three tasks, carried until someone
+runs them:
 - Switch pt-BR/en/es on the game screen and confirm no icon is wiped
   (finding #1's failure mode is a language switch, not first paint).
 - **Lay all 14 food icons out in the chooser grid and confirm they do not
@@ -230,6 +285,21 @@ and are the V8 verify step, carried until someone runs it:
   anti-spoiler rule no test can enforce — the guards cover the frame, the weight,
   the canvas and the palette, but not whether the 14 *glyphs* inside those
   identical frames read as organic-vs-manufactured.
+- **V10:** walk shop → setup in all three locales and confirm a first-time
+  player still completes it unaided (the T22 criterion, and V10's own AC). The
+  form-control styling and the primary-action treatment were added *for* that
+  criterion, so they are exactly what needs a human to judge.
+- **V10:** confirm `:has(input:checked)` actually paints the selected species
+  row. It degrades silently to the bare radio if the engine lacks `:has()`, and
+  no test here can see either outcome.
+- **V11:** watch the HUD at 20× for digit jitter, **including a score crossing
+  99 → 100 and 999 → 1000**. The `min-width: 4ch` reservation is what the second
+  of those exercises, and the first is what proved tabular numerals alone were
+  not enough.
+- **V11:** confirm the six new HUD glyphs survive a language switch (they are
+  siblings of the `[data-string]` spans, but finding #1's failure mode is the
+  switch, not first paint) and that `body.dev-mode` still clears the dev nav —
+  the HUD's vertical padding moved from the container onto the cells.
 
 CPV1 has been restated in the plan: its original "zero visual change except the
 typeface" described a Phase A that no longer exists, since splitting V2b put a
