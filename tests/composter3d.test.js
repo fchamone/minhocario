@@ -14,7 +14,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Box3 } from '../vendor/three.module.min.js';
+import { Box3, Mesh, BoxGeometry, MeshStandardMaterial, Texture } from '../vendor/three.module.min.js';
 import { buildComposterMesh, composterCavity, disposeComposterMesh } from '../js/render/composter3d.js';
 import { COMPOSTERS } from '../js/sim/composters.js';
 
@@ -119,6 +119,71 @@ test('the buried model is the one cavity that sits below ground', () => {
     if (id === 'buried') assert.ok(cav.yMin < 0, 'buried cavity should sit below y=0');
     else assert.ok(cav.yMin >= 0, `${id}: only the buried model may sit below y=0 (yMin ${cav.yMin})`);
   }
+});
+
+// --- Texture disposal (V15) --------------------------------------------------
+// `disposeComposterMesh` freed geometry and material but NOT the textures hanging
+// off the material, so every model swap leaked whatever maps its materials
+// carried. The composter builders use flat colours today, so nothing leaks YET —
+// which is exactly why this needs a test rather than a browser memory check:
+// there is currently no way to SEE the bug, and the first builder to take a map
+// (V18's lathe silhouettes, or any later surfacing pass) would start leaking with
+// nothing failing. The tests plant the maps the builders do not have.
+
+/**
+ * A Texture that records its own disposal. Three's `Texture.dispose()` dispatches
+ * a 'dispose' event — that is the disposal, so listening for it tests the real
+ * contract rather than a stub of it.
+ */
+function spyTexture() {
+  const texture = new Texture();
+  texture.userData.disposed = false;
+  texture.addEventListener('dispose', () => {
+    texture.userData.disposed = true;
+  });
+  return texture;
+}
+
+test('disposing a mesh frees the textures on its materials, not just the material', () => {
+  const group = buildComposterMesh('electric');
+  const planted = [];
+  group.traverse((obj) => {
+    if (!obj.isMesh) return;
+    // Two different slots: `map` is the one the plan names, `roughnessMap` proves
+    // the fix is not a special case for that single property. A surfacing pass
+    // adds both at once, and disposing only `map` leaks half of it silently.
+    obj.material.map = spyTexture();
+    obj.material.roughnessMap = spyTexture();
+    planted.push(obj.material.map, obj.material.roughnessMap);
+  });
+  assert.ok(planted.length > 0, 'no material found to plant a texture on');
+
+  disposeComposterMesh(group);
+
+  const leaked = planted.filter((t) => !t.userData.disposed);
+  assert.equal(
+    leaked.length,
+    0,
+    `${leaked.length}/${planted.length} textures survived disposeComposterMesh — ` +
+      'every model swap leaks them.',
+  );
+});
+
+test('texture disposal reaches materials held in an array', () => {
+  // BoxGeometry supports a per-face material array; a builder that ever uses one
+  // would otherwise slip past a fix written only for the single-material case.
+  const group = buildComposterMesh('electric');
+  const a = new MeshStandardMaterial();
+  const b = new MeshStandardMaterial();
+  a.map = spyTexture();
+  b.map = spyTexture();
+  const multi = new Mesh(new BoxGeometry(1, 1, 1), [a, b]);
+  group.add(multi);
+
+  disposeComposterMesh(group);
+
+  assert.ok(a.map.userData.disposed, 'texture on the first array material leaked');
+  assert.ok(b.map.userData.disposed, 'texture on the second array material leaked');
 });
 
 test('an unknown or null id yields neither mesh nor cavity', () => {

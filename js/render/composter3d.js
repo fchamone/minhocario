@@ -345,9 +345,38 @@ export function composterCavity(composterId) {
 }
 
 /**
- * Free every geometry + material under a composter group and detach it from its
- * parent. Called on upgrade (T17) before building the replacement mesh so
+ * Free a material AND every texture hanging off it (V15).
+ *
+ * `Material.dispose()` does NOT free the material's textures — Three deliberately
+ * leaves that to the caller, because one texture is routinely shared by several
+ * materials and disposing it with the first of them would break the rest. Here
+ * nothing is shared: every builder constructs its own materials, so the material
+ * is the texture's only owner and freeing them together is correct.
+ *
+ * Walked generically rather than as `material.map`: a surfacing pass sets several
+ * slots at once (`map` + `roughnessMap` + `normalMap`), and a fix written for the
+ * one property the plan happened to name would leak the rest with nothing
+ * failing. Anything on the material that says it is a texture gets freed.
+ * @param {import('three').Material|null|undefined} material
+ */
+function disposeMaterial(material) {
+  if (!material) return;
+  for (const value of Object.values(material)) {
+    if (value?.isTexture) value.dispose();
+  }
+  material.dispose?.();
+}
+
+/**
+ * Free every geometry + material + texture under a composter group and detach it
+ * from its parent. Called on upgrade (T17) before building the replacement mesh so
  * swapping models does not leak GPU resources.
+ *
+ * The composter builders use flat colours and carry no textures today, so this
+ * leaks nothing yet — the texture handling is here because V15 is the task that
+ * makes textures a normal thing in the render layer, and the leak it would cause
+ * is invisible until it has been growing for a while. `tests/composter3d.test.js`
+ * plants the maps the builders do not have, so the guard is not vacuous.
  * @param {Group|null} group
  */
 export function disposeComposterMesh(group) {
@@ -356,8 +385,8 @@ export function disposeComposterMesh(group) {
     if (!obj.isMesh) return;
     obj.geometry?.dispose?.();
     const material = obj.material;
-    if (Array.isArray(material)) material.forEach((m) => m?.dispose?.());
-    else material?.dispose?.();
+    if (Array.isArray(material)) material.forEach(disposeMaterial);
+    else disposeMaterial(material);
   });
   group.parent?.remove(group);
 }
