@@ -26,7 +26,13 @@ import { getComposter } from '../sim/composters.js';
 import { carryingCapacity } from '../sim/worms.js';
 import { scorePoints, POINTS_PER_LITER } from '../sim/scoring.js';
 import { formatAmount } from './hud.js';
-import { buildStat, fillOf, markFillLevel } from './actions.js';
+import {
+  buildStat,
+  buildFillBar,
+  buildGroup,
+  fillOf,
+  formatLiters,
+} from './components.js';
 
 // --- Pure helpers (Node-tested) ---------------------------------------------
 
@@ -113,55 +119,10 @@ export function statsSnapshot(farm, wallet = 0) {
 }
 
 // --- DOM (not unit-tested) ---------------------------------------------------
-
-/** Format a liter volume for display: at most two decimals, no trailing zeros. */
-function formatLiters(liters) {
-  return `${Math.round(liters * 100) / 100} ${t('common.liters')}`;
-}
-
-/**
- * Build a simple fill bar (no comfort band): the `.gauge` family with a filled
- * portion instead of a band + marker, since a tray has no "too empty" edge — it
- * only matters when it approaches full.
- * @param {string} labelKey i18n key path
- * @param {{fill: number, warn: boolean, full: boolean}} f descriptor from `fillOf`
- * @param {string} valueText pre-formatted display value
- * @returns {HTMLElement}
- */
-function buildFillBar(labelKey, f, valueText) {
-  const row = document.createElement('div');
-  row.className = 'gauge';
-  markFillLevel(row, f, 'gauge');
-
-  const label = document.createElement('span');
-  label.className = 'gauge__label';
-  label.textContent = t(labelKey);
-
-  const value = document.createElement('span');
-  value.className = 'gauge__value';
-  value.textContent = valueText;
-
-  const bar = document.createElement('div');
-  bar.className = 'gauge__bar';
-
-  const level = document.createElement('div');
-  level.className = 'gauge__fill';
-  level.style.width = `${f.fill * 100}%`;
-
-  bar.append(level);
-  row.append(label, value, bar);
-  return row;
-}
-
-/** Build a titled group section for the box. */
-function buildGroup(titleKey, ...rows) {
-  const section = document.createElement('section');
-  section.className = 'stats__group';
-  const title = document.createElement('h4');
-  title.textContent = t(titleKey);
-  section.append(title, ...rows);
-  return section;
-}
+// The readout primitives this box renders with — buildStat, buildFillBar,
+// buildGroup and formatLiters — live in components.js, shared with the internals
+// panel. `buildFillBar` in particular used to be a near-identical unmerged
+// sibling of the internals panel's banded gauge builder.
 
 /**
  * The last state handed to `updateStats`, kept so re-opening a collapsed box can
@@ -218,6 +179,7 @@ export function updateStats(farm, wallet) {
   );
 
   const score = buildGroup(
+    'stats',
     'game.statsScoreTitle',
     buildStat('game.hudScore', formatAmount(snap.score)),
     nextHarvest,
@@ -227,6 +189,7 @@ export function updateStats(farm, wallet) {
   );
 
   const pop = buildGroup(
+    'stats',
     'game.popTitle',
     buildStat('game.popCocoons', formatAmount(snap.population.cocoons)),
     buildStat('game.popJuveniles', formatAmount(snap.population.juveniles)),
@@ -238,6 +201,7 @@ export function updateStats(farm, wallet) {
   );
 
   const bin = buildGroup(
+    'stats',
     'game.tanksTitle',
     buildFillBar(
       'game.humusLabel',

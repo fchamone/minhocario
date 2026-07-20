@@ -25,6 +25,18 @@
 // `tests/actions.test.js` guards that.
 
 import { t } from '../strings.js';
+import {
+  clamp01,
+  fillOf,
+  formatLiters,
+  formatPercent,
+  fill,
+  buildStat,
+  buildGauge,
+  buildGroup,
+  markFillLevel,
+  WARN_FILL,
+} from './components.js';
 import { listFoods, decompositionFraction } from '../sim/foods.js';
 import { getComposter } from '../sim/composters.js';
 import { getSpecies, carryingCapacity, PH_COMFORT, TOX_THRESHOLD } from '../sim/worms.js';
@@ -35,6 +47,12 @@ import {
   absoluteTick,
   BIN_REFERENCE_CAPACITY,
 } from '../sim/engine.js';
+
+// Re-exported for one release (V9): these four primitives moved to
+// components.js, and keeping the old names live here means no existing caller
+// or test file had to move in the same commit. js/ui/stats.js already imports
+// them from their new home.
+export { buildStat, fillOf, markFillLevel, WARN_FILL };
 
 /** How many queue entries the panel previews; the rest are counted, not hidden. */
 export const QUEUE_PREVIEW_LIMIT = 6;
@@ -144,19 +162,11 @@ const PH_DOMAIN = { min: 0, max: 14 };
 const TOXICITY_DOMAIN = { min: 0, max: 1 };
 const TEMPERATURE_DOMAIN = { min: 0, max: 45 };
 
-/** Slack for "full" comparisons on floating-point volumes (matches engine EPS). */
-const EPS = 1e-9;
-
 /** Fallback comfort bands for a farm with no species chosen yet. */
 const FALLBACK_MOISTURE_BAND = { min: 0.4, max: 0.85 };
 const FALLBACK_TEMP_BAND = { min: 10, max: 30 };
 
 // --- Pure helpers (Node-tested) ---------------------------------------------
-
-/** Clamp to [0, 1]. */
-function clamp01(x) {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
-}
 
 /**
  * The add-waste list: every catalog food as `{id, name}`, in catalog order.
@@ -280,50 +290,6 @@ export function gauge(value, band, domain) {
 }
 
 /**
- * Fraction of a tray/tank at which it starts reading as "filling up" and the
- * readout turns from calm to yellow. A FRACTION, not a volume: the catalog spans
- * 5x from the electric bin's 8 L tray to eco's 40 L (and 4 L to 20 L of tank), so
- * any absolute margin that gave a small bin useful warning would fire almost
- * immediately on a large one.
- *
- * The point of the tier is LEAD TIME. `full` already exists and is where the
- * §2.8 chains actually bite — a full tray halts processing, a full tank
- * re-saturates the bedding — but by then the damage has started; at 0.7 there is
- * still a comfortable margin to harvest or drain in.
- */
-export const WARN_FILL = 0.7;
-
-/**
- * Fill descriptor for a bounded tank/tray. Exported (and imported by
- * js/ui/stats.js) so the two readouts cannot disagree about what "full" or
- * "filling up" means — they used to carry independent copies of this.
- *
- * `warn` and `full` are MUTUALLY EXCLUSIVE by construction: a full tray is not
- * "approaching full", it has arrived, and the two states carry different colours
- * and different urgency. Rendering both at once would stack a yellow rule and a
- * red one on the same node and let source order decide the winner.
- * @param {number} liters
- * @param {number} capacity
- * @returns {{liters: number, capacity: number, fill: number, warn: boolean, full: boolean}}
- */
-export function fillOf(liters, capacity) {
-  const fill = capacity > 0 ? clamp01(liters / capacity) : 0;
-  const full = capacity > 0 && liters >= capacity - EPS;
-  return {
-    liters,
-    capacity,
-    fill,
-    // Same `EPS` slack the `full` comparison uses, for the same reason: a level
-    // computed as `capacity * WARN_FILL` does not necessarily divide back to
-    // exactly WARN_FILL in binary floating point (12 * 0.7 = 8.399999999999999,
-    // which is a hair UNDER the threshold), so a bare `>=` would silently skip
-    // the tier for whole families of capacities.
-    warn: !full && capacity > 0 && fill >= WARN_FILL - EPS,
-    full,
-  };
-}
-
-/**
  * The complete data model behind the internals (x-ray) panel: everything the
  * player can see about the bin's insides, derived from state alone. Pure — a
  * snapshot, so rendering it never perturbs the sim (a T20 acceptance criterion
@@ -429,103 +395,10 @@ export function internalsSide(wallPosition, current = 'left') {
 }
 
 // --- DOM (not unit-tested) ---------------------------------------------------
-
-/** Format a liter volume for display: at most two decimals, no trailing zeros. */
-function formatLiters(liters) {
-  return `${Math.round(liters * 100) / 100} ${t('common.liters')}`;
-}
-
-/** Format a whole-number percentage. */
-function formatPercent(fraction) {
-  return `${Math.round(fraction * 100)}%`;
-}
-
-/** Replace an element's children, tolerating a missing element. */
-function fill(id, ...nodes) {
-  const el = document.getElementById(id);
-  if (el) el.replaceChildren(...nodes);
-  return el;
-}
-
-/**
- * Build one labelled gauge row: a bar showing the comfort band as a highlighted
- * zone with a marker at the current value.
- * @param {string} labelKey i18n key path
- * @param {Gauge} g
- * @param {string} valueText pre-formatted display value
- * @returns {HTMLElement}
- */
-function buildGauge(labelKey, g, valueText) {
-  const row = document.createElement('div');
-  row.className = 'gauge';
-  if (!g.ok) row.classList.add('gauge--alert');
-
-  const label = document.createElement('span');
-  label.className = 'gauge__label';
-  label.textContent = t(labelKey);
-
-  const value = document.createElement('span');
-  value.className = 'gauge__value';
-  value.textContent = valueText;
-
-  const bar = document.createElement('div');
-  bar.className = 'gauge__bar';
-
-  const comfort = document.createElement('div');
-  comfort.className = 'gauge__comfort';
-  comfort.style.left = `${g.bandStart * 100}%`;
-  comfort.style.width = `${(g.bandEnd - g.bandStart) * 100}%`;
-
-  const marker = document.createElement('div');
-  marker.className = 'gauge__marker';
-  marker.style.left = `${g.ratio * 100}%`;
-
-  bar.append(comfort, marker);
-  row.append(label, value, bar);
-  return row;
-}
-
-/**
- * Build one `label: value` line. Exported because the statistics box
- * (js/ui/stats.js) renders the same `.stat` / `.stat__label` / `.stat__value`
- * trio — one builder keeps the two panels typographically identical, and the
- * tabular-nums alignment in particular only holds if both use this markup.
- * @param {string} labelKey i18n key path
- * @param {string} valueText pre-formatted display value
- * @returns {HTMLElement}
- */
-export function buildStat(labelKey, valueText) {
-  const row = document.createElement('div');
-  row.className = 'stat';
-
-  const label = document.createElement('span');
-  label.className = 'stat__label';
-  label.textContent = t(labelKey);
-
-  const value = document.createElement('span');
-  value.className = 'stat__value';
-  value.textContent = valueText;
-
-  row.append(label, value);
-  return row;
-}
-
-/**
- * Paint a row with the two-tier fill state of the tray/tank it reports: yellow
- * while it is filling up, red once it is full. Shared by the `stat` rows here
- * and the `gauge` fill bars in js/ui/stats.js (hence the block-name argument) so
- * a single descriptor drives every readout of the same number identically.
- *
- * Both classes are toggled on every call rather than only added, so a row reused
- * across repaints cannot keep a stale tier after the player harvests or drains.
- * @param {HTMLElement} row
- * @param {{warn: boolean, full: boolean}} f  descriptor from `fillOf`
- * @param {'stat'|'gauge'} block BEM block name to suffix
- */
-export function markFillLevel(row, f, block) {
-  row.classList.toggle(`${block}--warn`, f.warn);
-  row.classList.toggle(`${block}--alert`, f.full);
-}
+// The readout primitives this panel renders with — buildStat, buildGauge,
+// buildGroup, markFillLevel, fill and the formatters — live in components.js,
+// shared with the statistics box. See the note at the top of that file for what
+// had drifted before they were consolidated.
 
 /**
  * Move the internals panel out from under the composter. Reads the side the
@@ -602,12 +475,9 @@ export function updateInternals(farm) {
   }
 
   // Population by stage, against carrying capacity.
-  const pop = document.createElement('section');
-  pop.className = 'internals__group';
-  const popTitle = document.createElement('h4');
-  popTitle.textContent = t('game.popTitle');
-  pop.append(
-    popTitle,
+  const pop = buildGroup(
+    'internals',
+    'game.popTitle',
     buildStat('game.popCocoons', String(Math.round(snap.population.cocoons))),
     buildStat('game.popJuveniles', String(Math.round(snap.population.juveniles))),
     buildStat('game.popAdults', String(Math.round(snap.population.adults))),
@@ -618,12 +488,9 @@ export function updateInternals(farm) {
   );
 
   // Environment gauges.
-  const env = document.createElement('section');
-  env.className = 'internals__group';
-  const envTitle = document.createElement('h4');
-  envTitle.textContent = t('game.envTitle');
-  env.append(
-    envTitle,
+  const env = buildGroup(
+    'internals',
+    'game.envTitle',
     buildGauge('game.envMoisture', snap.env.moisture, formatPercent(snap.env.moisture.value)),
     buildGauge('game.envPh', snap.env.ph, snap.env.ph.value.toFixed(1)),
     buildGauge('game.envToxicity', snap.env.toxicity, formatPercent(snap.env.toxicity.value)),
@@ -635,10 +502,6 @@ export function updateInternals(farm) {
   );
 
   // Humus / leachate fill.
-  const tanks = document.createElement('section');
-  tanks.className = 'internals__group';
-  const tanksTitle = document.createElement('h4');
-  tanksTitle.textContent = t('game.tanksTitle');
   const humusRow = buildStat(
     'game.humusLabel',
     `${formatLiters(snap.humus.liters)} / ${formatLiters(snap.humus.capacity)}`,
@@ -649,14 +512,10 @@ export function updateInternals(farm) {
     `${formatLiters(snap.leachate.liters)} / ${formatLiters(snap.leachate.capacity)}`,
   );
   markFillLevel(leachateRow, snap.leachate, 'stat');
-  tanks.append(tanksTitle, humusRow, leachateRow);
+  const tanks = buildGroup('internals', 'game.tanksTitle', humusRow, leachateRow);
 
   // Recent food queue.
-  const queue = document.createElement('section');
-  queue.className = 'internals__group';
-  const queueTitle = document.createElement('h4');
-  queueTitle.textContent = t('game.queueTitle');
-  queue.append(queueTitle);
+  const queue = buildGroup('internals', 'game.queueTitle');
   if (snap.queue.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'internals__empty';
