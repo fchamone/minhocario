@@ -263,8 +263,30 @@
       failure mode is invisible — no error, no visible breakage, just a density pass that never
       happens. It is the bug this task shipped with, so it is asserted, not eyeballed.
       Suite 337 → **338**.
-- [ ] **CPV3** — desktop layout complete.
-      Review: density, drag accuracy, and the `<details>` collapse→tick→expand repaint
+- [x] **CPV3 — APPROVED by the maintainer, 2026-07-20.** Phase C signed off; Phase D unblocked.
+      **Machine-verified at the gate:** 338 tests green; both readout panels are open
+      `<details>` (finding #3); `#internals` is a grid child of `.screen--game` and never
+      inside `#stage`; every `grid-area` resolves to a declared template area and back; no
+      dangling reference to the deleted dodge machinery in code or prose; the wide-viewport
+      track provably fits two sub-grid columns; and every guard carried over from CPV1/CPV2
+      still holds — no colour or off-scale literal outside `tokens.css`, every text colour
+      ≥ WCAG AA on the surfaces it occupies, every painted surface covered by the contrast map.
+      **Walked in a real browser by the maintainer, and clean.** Recorded as the **blanket
+      confirmation it was given as** — "everything runs fine" — rather than itemised: the five
+      checks listed under Open items were the ones put to the maintainer, and inventing
+      per-item findings they did not report is exactly the sort of dressed-up record CPV2 was
+      careful to avoid. What that gate did differently was state which calls were *measured*
+      and which were *accepted on judgement*; this one is a single confirmation covering the
+      set, and the set is written down above it.
+      **Unchanged since the CP9 freeze, and not touched by either task:** the scoring formula
+      and the save schema. Phase C moved layout only — no `js/sim/` file appears in either
+      commit. CPV5 re-asserts this explicitly; noting it here keeps the claim continuous
+      rather than reconstructed at the ship gate.
+      **The load-bearing item was the drag re-walk.** It is the one thing carried unclosed
+      through CPV1 and CPV2 on the grounds that it is *correctness*, not appearance, and V12
+      is the task that re-armed it: collapsing the panel now genuinely resizes the canvas via
+      the `:has()` track shrink, so the ResizeObserver path was exercised by a layout change
+      rather than a window resize for the first time. That is what closes it properly.
 
 ## Phase D — 3D richness
 
@@ -314,7 +336,10 @@
       the bug V5 fixed: V12 changes the grid *and* makes a collapsing panel resize the canvas, so
       it exercises the ResizeObserver path far harder than anything shipped so far. Re-walk the
       drag check at the end of V12 — the verify step there is not a formality.
-- [ ] **Owed before CPV3 — browser verification of V12/V13.** None of this is reachable by
+- [x] **RESOLVED — browser verification of V12/V13, 2026-07-20.** Walked by the maintainer and
+      confirmed clean across the set below. This also closes the **V5 drag re-walk**, which had
+      been carried deliberately through CPV1 and CPV2 as a correctness item rather than an
+      aesthetic one; V12 is the task it was being held for. None of this is reachable by
       `node --test`, and three of the items below are of the kind CPV2 proved a diff-read cannot
       catch either. To be walked on desktop with `npx serve .`:
       - **The drag re-walk (V5's check, re-armed).** Drag the bin at 3+ window widths **and with
@@ -347,15 +372,19 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phase C code-complete — CPV3 is the next gate
+## Status: Phases A–C complete and approved — Phase D (V14) next
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
 V8, V9, V10, V11 landed and **CPV2 approved 2026-07-20**.
-V12 and V13 landed 2026-07-20. Suite 289 → **338 green**.
+V12, V13 landed and **CPV3 approved 2026-07-20**. Suite 289 → **338 green**.
 
-**CPV3 cannot be claimed from a green suite — see "Owed before CPV3" below.**
-Both Phase C tasks changed layout, and layout is the thing this project's tests
-explicitly do not cover. Everything asserted here is structure.
+All three chrome/layout phases are signed off and every browser item carried
+out of them is closed, including the V5 drag re-walk that survived two gates.
+**Phase D starts from a clean ledger** — nothing owed, nothing deferred.
+
+Next: **V14** (ACES tone mapping + retiring `LIGHT_GAIN`). Note it depends only
+on V5 ✅, so it was never actually blocked by Phase C — Phase D has been
+available since V5 landed and was simply sequenced behind the serial spine.
 
 **What Phase C says about the plan itself.** Both tasks had a specified design
 that could not do what the task's own AC claimed, and in both cases the failure
@@ -373,12 +402,22 @@ diff against a shared `buildStat` instead of a merge against a moving one.
 Next: **V12** (three-column grid) — **now fully unblocked.** The V5 browser check
 was the last gate on it and was walked clean 2026-07-20.
 
-Worth noting for CPV3 and CPV4: CPV2 differed from CPV1 in kind. CPV1's visual
+Worth noting for CPV4: the three gates so far differed in kind. CPV1's visual
 calls were *accepted on judgement* because nothing could measure them; CPV2's
-were **walked in a browser and confirmed**, including the 14-food clustering
-check. The later gates (x-ray legibility under ACES, day/night readability) are
-CPV1-shaped again — they need the 3D visual matrix actually walked, not inferred
-from a green suite.
+were **walked in a browser and confirmed** item by item, including the 14-food
+clustering check; CPV3's were walked and confirmed as a **set**, against a list
+of five checks fixed in advance.
+
+**CPV4 is CPV1-shaped again, and that is the risk.** X-ray legibility under
+ACES and day/night readability cannot be measured by anything in this repo, and
+unlike CPV1 there is no `tasks/v2b-computed-value-diff.md` equivalent to review
+in place of seeing it — a computed-value diff exists for CSS tokens and has no
+analogue for a tone curve. The 3D visual matrix (dawn/noon/dusk/midnight ×
+x-ray on/off × 6 composters) **is** the artifact, so it has to be walked and
+recorded in `tasks/visual-overhaul-playtest.md`, not inferred from a green
+suite. Phase C is also a warning here: both its tasks shipped a spec whose own
+numbers did not work, silently, and V19's 2 ms shadow gate is the same shape of
+claim — check Phase D's numbers against each other before implementing them.
 
 Carried into Phase B, unclosed by CPV1 — **both now resolved:**
 - ~~The **V5 browser check**~~ — **DONE 2026-07-20.** Walked separately from CPV2
