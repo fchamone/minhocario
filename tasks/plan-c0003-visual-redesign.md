@@ -279,6 +279,25 @@ unsubsetted face is 100KB+ of base64. Ships as `css/font.css` with
 - **Verify:** `npx serve .` + devtools Network tab (no font request) + offline reload.
 - **Deps:** none. **Files:** `css/font.css`, `index.html`, `DESIGN.md`.
 
+> **Shipped:** IBM Plex Sans 3.201, SIL OFL 1.1, **variable** (wght 400–700) rather than static
+> weights — the CSS uses 400/600/700 and one variable face covers all three plus the UA bold in a
+> single data URI. `wdth` pinned. 234 glyphs / 27,100 B woff2 / 36,136 B base64. Built in a throwaway
+> venv so nothing was installed globally.
+>
+> **The plan's premise was wrong in an instructive way.** It specified "a face with a strong
+> tabular-numeral set", assuming tabular figures come from a `tnum` feature. IBM Plex Sans has **no
+> `tnum` at all** — and needs none, because every digit is 600 units wide by default. Had the face
+> been chosen on the presence of `tnum`, this one would have been wrongly rejected; had it been
+> chosen without checking either, a proportional face would have shipped and every readout would
+> jitter with **nothing failing loudly**. The property to test is digit *advance widths*, not feature
+> tags. Verified at all three weights after subsetting and again from the served data URI, and
+> written into `DESIGN.md` as a requirement on any future face swap.
+>
+> Two things this added beyond the plan: `css/IBMPlexSans-OFL.txt` ships in the **upload set** (the
+> OFL requires its text to travel with redistributed font software, and a `data:` URI is
+> redistribution), and `tests/css.test.js` gained a no-external-URL guard — a `src` fallback pointing
+> at a CDN is the one mistake here that works in dev and fails offline.
+
 > **CPV1 (after V1, V2a, V2b, V3, V4, V7).** *Restated 2026-07-20 — the original wording
 > ("**zero visual change** except the new typeface") described a phase that no longer exists. It was
 > written when V2 was one task claiming identical computed values; splitting out V2b put a

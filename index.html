@@ -6,10 +6,13 @@
   <!-- Title is set from strings.js by main.js on load -->
   <title>Minhocário</title>
   <!-- Cascade order is load order, and this list is its source of truth.
-       tokens → base → components → screens → motion. motion.css must stay last:
-       its prefers-reduced-motion block is a blanket `*` override that only wins
-       from here. Five <link>s, never @import (which serialises round trips). -->
+       tokens -> font -> base -> components -> screens -> motion. motion.css must
+       stay last: its prefers-reduced-motion block is a blanket `*` override that
+       only wins from here. tokens.css and font.css select nothing, so they sit
+       first harmlessly and let the face resolve before the rules that use it.
+       Six <link>s, never @import (which serialises round trips). -->
   <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/font.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/screens.css">

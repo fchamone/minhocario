@@ -3,11 +3,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 /**
- * The five stylesheets, in the exact cascade order index.html must link them.
+ * The stylesheets, in the exact cascade order index.html must link them.
  * motion.css is last so its `prefers-reduced-motion` blanket override and the
- * T22 transition rules keep winning without `!important`.
+ * T22 transition rules keep winning without `!important`. tokens.css and
+ * font.css declare resources and select nothing, so they lead harmlessly.
  */
-const SHEETS = ['tokens.css', 'base.css', 'components.css', 'screens.css', 'motion.css'];
+const SHEETS = [
+  'tokens.css',
+  'font.css',
+  'base.css',
+  'components.css',
+  'screens.css',
+  'motion.css',
+];
 
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 const readSheet = (name) => read(`../css/${name}`);
@@ -122,15 +130,35 @@ function appliedBlocks(css) {
 
 // --- Structure: the five-file split is real and ordered ---------------------
 
-test('index.html links exactly the five stylesheets in cascade order', () => {
+test('index.html links exactly the expected stylesheets, in cascade order', () => {
   const html = read('../index.html');
-  const linked = [...html.matchAll(/<link[^>]+href="css\/([^"]+)"/g)].map((m) => m[1]);
+  const linked = [...html.matchAll(/<link[^>]+href="css\/([^"]+\.css)"/g)].map((m) => m[1]);
 
   assert.deepEqual(
     linked,
     SHEETS,
     'index.html is the source of truth for cascade order; motion.css must stay last',
   );
+});
+
+// "Fully static and self-contained: no CDN, no external network calls, works
+// offline after first load" is a project non-negotiable. The embedded webfont is
+// the first thing that could quietly violate it — a stray src fallback pointing
+// at a foundry or Google Fonts would work in dev and break offline.
+test('no stylesheet references an external URL', () => {
+  for (const name of SHEETS) {
+    const css = stripComments(readSheet(name));
+    const external = [...css.matchAll(/url\(\s*['"]?(?!data:)([^'")]+)['"]?\s*\)/g)]
+      .map((m) => m[1].trim())
+      .filter((u) => /^(https?:)?\/\//.test(u) || /^[\w.-]+\.(com|net|org|io)\b/.test(u));
+
+    assert.deepEqual(
+      external,
+      [],
+      `${name} points at ${external.join(', ')} — the game must work offline; ` +
+        'embed the asset as a data: URI instead',
+    );
+  }
 });
 
 test('no stylesheet uses @import', () => {

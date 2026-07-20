@@ -121,6 +121,11 @@ and the game is live.
 
 ### C.1 Files uploaded (ship set)
 Include: `index.html`, `css/`, `js/`, `vendor/`.
+
+**`css/IBMPlexSans-OFL.txt` must be uploaded**, not pruned as documentation. The
+SIL Open Font License requires its text to accompany redistributed font software,
+and `css/font.css` redistributes IBM Plex Sans as an embedded `data:` URI. It is
+the one `.txt` in the ship set and it is there for licence compliance.
 Exclude from the upload: `tests/`, `.harn/`, `.claude/`, `tasks/`, `docs/`,
 `DESIGN.md`, `.git/`. (Practically also skip `CLAUDE.md` and `.gitignore` — repo
 metadata, never referenced by `index.html`; harmless if they tag along.)

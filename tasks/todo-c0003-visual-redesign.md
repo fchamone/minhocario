@@ -65,7 +65,26 @@
       containment test **passed a real simulated drift** — the group's overall bbox includes the lid
       and vent stack and swallows almost any error. `markBody()` now tags the enclosing meshes, with
       a companion test asserting the tags exist. Suite 282 → 289.
-- [ ] **V7** Base64 webfont (SIL OFL, subset, `data:` URI in `css/font.css`) (S/M) — deps: none (∥)
+- [x] **V7** Base64 webfont (SIL OFL, subset, `data:` URI in `css/font.css`) (S/M) — deps: none (∥)
+      **IBM Plex Sans 3.201**, SIL OFL 1.1 — IBM's engineering/documentation face, which belongs to
+      the field-instrument register without being a coding monospace. Shipped **variable**
+      (wght 400–700) rather than three static weights: the CSS uses 400, 600 and 700, and one
+      variable face covers all of them plus the UA bold in a single data URI. `wdth` pinned to 100.
+      **234 glyphs, 27,100 bytes woff2, 36,136 bytes base64** — against the 100KB+ the plan warned an
+      unsubsetted face would cost. Built one-time with fontTools in a **throwaway venv**, so nothing
+      was installed into the machine's Python; command recorded verbatim in `DESIGN.md`.
+      **The find that nearly broke the design silently: this face has no `tnum` feature.** The whole
+      instrument register depends on `font-variant-numeric: tabular-nums`. It turned out to need
+      none — every digit is 600 units wide by default — verified at wght 400/600/700 after subsetting
+      *and* again by decoding the data URI out of the served CSS. The CSS declaration is kept
+      deliberately as a statement of the requirement; `DESIGN.md` warns that any face swap must
+      re-check this, because a proportional face with no `tnum` would make every readout jitter and
+      nothing would fail loudly.
+      Licence compliance: `css/IBMPlexSans-OFL.txt` ships **in the upload set**, since the OFL
+      requires its text to travel with redistributed font software.
+      Cascade is now six files (`font.css` at position 2 — it selects nothing, like `tokens.css`).
+      New guard: no stylesheet may reference an external URL (broken first with a `fonts.gstatic.com`
+      `src` fallback — the exact mistake that would work in dev and fail offline). Suite 299 → 300.
 - [ ] **CPV1** — suites green. V1/V2a/V3/V4 invisible by construction; **V2b visible by design**,
       V7 changes the typeface. (Restated — the original "zero visual change except the typeface"
       predates the V2a/V2b split and would point the reviewer at the wrong thing.)
@@ -140,10 +159,10 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phase A complete except V7 (webfont)
+## Status: Phase A COMPLETE — CPV1 is the next gate
 
-V1, V2a, V2b, V3, V4, V5, V6 all landed. Suite 289 → **299 green**.
-Remaining before CPV1: **V7** (base64 webfont, independent of everything else).
+V1, V2a, V2b, V3, V4, V5, V6, V7 all landed. Suite 289 → **300 green**.
+Nothing in Phase A is outstanding; **CPV1 needs human review before Phase B**.
 
 CPV1 has been restated in the plan: its original "zero visual change except the
 typeface" described a Phase A that no longer exists, since splitting V2b put a

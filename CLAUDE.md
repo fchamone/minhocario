@@ -59,9 +59,12 @@ Cross-cutting modules: `js/strings.js` (ALL pt-BR user-facing strings — single
 ## Code style
 
 - Vanilla ES modules for modern evergreen browsers; no transpilation, no polyfills.
-- CSS lives in five files loaded in cascade order: `tokens` → `base` → `components` → `screens` →
-  `motion`. `index.html` is the source of truth for that order; **never `@import`**, and `motion.css`
-  must stay last or the `prefers-reduced-motion` override silently stops winning. **Every colour
-  belongs in `tokens.css`** — `tests/css.test.js` fails on a colour literal in any other sheet.
+- CSS lives in six files loaded in cascade order: `tokens` → `font` → `base` → `components` →
+  `screens` → `motion`. `index.html` is the source of truth for that order; **never `@import`**, and
+  `motion.css` must stay last or the `prefers-reduced-motion` override silently stops winning.
+  **Every colour belongs in `tokens.css`** — `tests/css.test.js` fails on a colour literal in any
+  other sheet, on an external URL in any sheet, and on any text colour below WCAG AA.
+- `css/font.css` embeds IBM Plex Sans (SIL OFL) as a `data:` URI; `css/IBMPlexSans-OFL.txt` must ship
+  with it. Swapping the face requires re-checking tabular numerals — see `DESIGN.md`.
 - JSDoc type annotations (`@param`/`@returns`/`@typedef`) on all `js/sim/` public functions.
 - `const` by default; small focused modules; plain objects + functions over classes where they suffice.

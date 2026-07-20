@@ -240,13 +240,63 @@ families.
 
 ## Typeface
 
-> **Pending — C-0003 / V7.** When the webfont lands, record here: the face name,
-> version, the SIL OFL licence, and the exact subsetting command used before
-> base64 encoding. Requirements: SIL OFL only, a strong tabular-numeral set,
-> subset to Latin + Latin-1 Supplement (pt-BR/es accents) before encoding — an
-> unsubsetted face is 100KB+ of base64 — shipped as `css/font.css` with
-> `font-display: swap`, and **no network request on reload**, matching the
-> vendored-Three.js precedent.
+**IBM Plex Sans, Version 3.201** — variable, weight axis 400–700.
+Copyright © 2017 IBM Corp. with Reserved Font Name "Plex", licensed under the
+**SIL Open Font License 1.1**.
+
+Chosen because it is IBM's engineering-and-documentation face: a technical
+register that belongs to the field-instrument half of the identity without
+tipping into either a coding monospace or a generic UI grotesk.
+
+Embedded as a `data:` URI in `css/font.css` — zero network requests, so an
+offline reload still renders in it. `font-display: swap`. The full licence ships
+next to it as `css/IBMPlexSans-OFL.txt`: the OFL requires the licence to travel
+with the font, so it is part of the **upload set**, not a repo-only artifact.
+
+Source: `https://github.com/google/fonts/tree/main/ofl/ibmplexsans`
+(`IBMPlexSans[wdth,wght].ttf`). Built one-time with fontTools 4.63.0 in a
+throwaway venv — a dev step with no runtime dependency, exactly like the
+vendored Three.js precedent:
+
+```sh
+fonttools varLib.instancer "IBMPlexSans[wdth,wght].ttf" \
+  wdth=100 wght=400:700 -o plex-instanced.ttf
+
+pyftsubset plex-instanced.ttf \
+  --unicodes=U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2026,U+2212 \
+  --no-hinting --desubroutinize \
+  --flavor=woff2 --output-file=plex-subset.woff2
+```
+
+- **Variable, not three static weights.** The CSS uses 400, 600 and 700; one
+  variable face covers all of them (and the UA bold on `h1`/`h2`) in a single
+  data URI.
+- **`wdth` pinned to 100.** Nothing uses a condensed width, and dropping the axis
+  is most of the size saving.
+- **`--no-hinting`** saves ~6KB of base64; modern browsers use their own
+  rasterisers and ignore TrueType hinting (only legacy Windows GDI used it).
+- **Result: 234 glyphs, 27,100 bytes of woff2, 36,136 bytes of base64** — against
+  the 100KB+ an unsubsetted face would have cost.
+
+The subset covers Basic Latin + Latin-1 Supplement, which is where all the
+catalogs' pt-BR/es accents live (`ÁáãçéíñóôõúÊÔÜ¡¿`). The **em dash** is the only
+UI-reachable character outside that range (the nickname placeholder); the
+quotes, ellipsis and en dash are headroom for future translations, at six glyphs.
+
+> ### Tabular numerals: this face has no `tnum`, and needs none
+>
+> The instrument register depends on digits not shifting as values change, and
+> the sheets say `font-variant-numeric: tabular-nums`. IBM Plex Sans exposes **no
+> `tnum` feature** — because it has nothing to switch between: every digit is 600
+> units wide by default. Verified after subsetting at wght 400, 600 and 700, and
+> again by decoding the shipped data URI.
+>
+> The CSS declaration is therefore a **no-op with this face, and is kept
+> deliberately**: it states the requirement rather than relying on a property of
+> the current font, and it keeps the readouts correct if the face is ever swapped
+> for one that does distinguish tabular from proportional figures. Anyone
+> replacing the typeface must re-check this — a face with proportional defaults
+> and no `tnum` would make every readout jitter, and nothing would fail loudly.
 
 ---
 
