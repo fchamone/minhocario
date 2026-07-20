@@ -185,8 +185,32 @@
       nothing. Suite 333 → **335**.
       The colon text nodes left the HUD, home and shop: a bare text node in a flex row
       becomes its own flex item, so each ":" floated between two gaps. No i18n key moved.
-- [ ] **CPV2** — chrome restyled in all three locales.
-      Review: icon set, and specifically the **14-food clustering check** (no test can enforce it)
+- [x] **CPV2 — APPROVED by the maintainer, 2026-07-20.** Phase B signed off; Phase C unblocked.
+      **Machine-verified at the gate:** 335 tests green; every `<use>`/`icon()` resolves to a
+      symbol and no symbol is dead; the 14 food icons share one canvas, one byte-identical
+      frame, one stroke weight, one glyph-group tag and `currentColor`/`none` only; no
+      `[data-string]` element contains an `<svg>`; every text colour ≥ WCAG AA on the surfaces
+      it occupies; every surface painted in the sheets is measured against an ink; no colour
+      literal and no off-scale spacing/type literal outside `tokens.css`; every HUD readout
+      tagged for tabular numerals; every `[data-speed]` a value `initSpeed` accepts.
+      **Walked in a real browser by the maintainer, and clean** — these are the items no test
+      in this project can reach, and unlike CPV1 they were *measured by eye rather than
+      accepted on judgement*:
+      - **The 14-food clustering check.** All 14 laid out in the chooser grid; they do not read
+        as organic-irregular vs manufactured-regular. This is the one anti-spoiler rule no test
+        can enforce, and the whole uniform-treatment discipline exists to make it pass.
+      - Icons survive a pt-BR/en/es switch on the game screen — finding #1's actual failure
+        mode is the switch, not first paint, so the tripwire alone was never sufficient here.
+      - shop → setup completes unaided in all three locales (the T22 criterion, V10's AC).
+      - `:has(input:checked)` paints the selected species row (it degrades silently to the bare
+        radio, so no test and no reviewer of the diff could have told either way).
+      - No HUD digit jitter at 20×, across the 99 → 100 and 999 → 1000 crossings — the second
+        is what exercises the `min-width: 4ch` reservation, and the first is what proved
+        tabular numerals alone were not enough.
+      **Not closed by this approval:** the V5 browser check below. It is drag-raycast
+      correctness rather than appearance, it is a different exercise (resize + drag at several
+      widths), and it remains due before V12 — the task that would otherwise expose the bug
+      V5 fixed.
 
 ## Phase C — Game-screen layout
 
@@ -248,22 +272,29 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phase B code complete — CPV2 is the next gate
+## Status: Phase B complete and approved — Phase C (V12) next
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
-V8, V9, V10, V11 landed 2026-07-20. Suite 289 → **335 green**.
+V8, V9, V10, V11 landed and **CPV2 approved 2026-07-20**. Suite 289 → **335 green**.
 
 V9 went first despite being nominally parallel: V8 adds decomposition rings to
 the internals queue rows that V9 relocates, so landing V9 first kept V8 a clean
 diff against a shared `buildStat` instead of a merge against a moving one.
 
-Next: **CPV2**, then V12's layout rebuild. Every Phase-B task is coded and every
-suite is green, but **CPV2 cannot be signed off from this side** — its review
-items are the ones no test in this project can reach (see the browser work owed
-below). Do not treat "335 green" as Phase B being verified.
+Next: **V12** (three-column grid), gated on the V5 browser check below — the one
+Phase-B item CPV2 deliberately did *not* close.
+
+Worth noting for CPV3 and CPV4: CPV2 differed from CPV1 in kind. CPV1's visual
+calls were *accepted on judgement* because nothing could measure them; CPV2's
+were **walked in a browser and confirmed**, including the 14-food clustering
+check. The later gates (x-ray legibility under ACES, day/night readability) are
+CPV1-shaped again — they need the 3D visual matrix actually walked, not inferred
+from a green suite.
 
 Carried into Phase B, unclosed by CPV1:
-- The **V5 browser check** — correctness, not aesthetics; due before V12. Still open.
+- The **V5 browser check** — correctness, not aesthetics; due before V12. Still
+  open, and explicitly **not** closed by CPV2: it is a different exercise
+  (resize the window, drag the bin at several widths) from anything CPV2 covered.
 - ~~The **`--surface-3` contrast gap**~~ — **RESOLVED in V10.** It got its first
   users (hovered species row + language rung), so the pairing had to be decided
   rather than deferred. `--ink`/`--ink-dim`/`--accent` clear AA on it;
@@ -275,31 +306,20 @@ Carried into Phase B, unclosed by CPV1:
   repeat this — sitting unmeasured for four tasks was possible only because
   nothing forced the question.
 
-**Owed from V8 and V10/V11 — browser verification, not yet done.** These need a
-real browser and are the verify steps for all three tasks, carried until someone
-runs them:
-- Switch pt-BR/en/es on the game screen and confirm no icon is wiped
-  (finding #1's failure mode is a language switch, not first paint).
-- **Lay all 14 food icons out in the chooser grid and confirm they do not
-  cluster into two families.** This is the CPV2 review item and the one
-  anti-spoiler rule no test can enforce — the guards cover the frame, the weight,
-  the canvas and the palette, but not whether the 14 *glyphs* inside those
-  identical frames read as organic-vs-manufactured.
-- **V10:** walk shop → setup in all three locales and confirm a first-time
-  player still completes it unaided (the T22 criterion, and V10's own AC). The
-  form-control styling and the primary-action treatment were added *for* that
-  criterion, so they are exactly what needs a human to judge.
-- **V10:** confirm `:has(input:checked)` actually paints the selected species
-  row. It degrades silently to the bare radio if the engine lacks `:has()`, and
-  no test here can see either outcome.
-- **V11:** watch the HUD at 20× for digit jitter, **including a score crossing
-  99 → 100 and 999 → 1000**. The `min-width: 4ch` reservation is what the second
-  of those exercises, and the first is what proved tabular numerals alone were
-  not enough.
-- **V11:** confirm the six new HUD glyphs survive a language switch (they are
-  siblings of the `[data-string]` spans, but finding #1's failure mode is the
-  switch, not first paint) and that `body.dev-mode` still clears the dev nav —
-  the HUD's vertical padding moved from the container onto the cells.
+**~~Owed from V8 and V10/V11 — browser verification~~ — DONE, walked clean at
+CPV2 (2026-07-20).** All six items closed by the maintainer in a real browser:
+the 14-food clustering check, icon survival across a pt-BR/en/es switch, the
+unaided shop → setup flow in all three locales, `:has(input:checked)` painting
+the selected species row, HUD jitter at 20× across both digit-count crossings,
+and the `body.dev-mode` clearance after the HUD's vertical padding moved from the
+container onto the cells. Details in the CPV2 entry above.
+
+**The pattern worth keeping.** Every one of those six was invisible to the suite,
+and three of them could not have been caught by reading the diff either —
+`:has()` degrades silently, a wiped icon only appears on a *switch* rather than
+first paint, and digit jitter needs a value that actually grows. The tests guard
+structure; the browser is the only thing that sees behaviour. Phase D's matrix is
+the same deal at larger scale.
 
 CPV1 has been restated in the plan: its original "zero visual change except the
 typeface" described a Phase A that no longer exists, since splitting V2b put a
