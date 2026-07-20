@@ -5,7 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Title is set from strings.js by main.js on load -->
   <title>Minhocário</title>
-  <link rel="stylesheet" href="css/style.css">
+  <!-- Cascade order is load order, and this list is its source of truth.
+       tokens → base → components → screens → motion. motion.css must stay last:
+       its prefers-reduced-motion block is a blanket `*` override that only wins
+       from here. Five <link>s, never @import (which serialises round trips). -->
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/screens.css">
+  <link rel="stylesheet" href="css/motion.css">
 </head>
 <body>
   <!-- Developer navigation: jumps between screens without playing through the

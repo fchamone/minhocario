@@ -37,7 +37,7 @@ These need no human and are re-runnable at any time. All pass at the T23 commit.
       (T22 audit).
 - [x] **Deploy dry-run — static verification** (see §C): all 48 runtime ES-module
       import specifiers resolve **inside** the pruned copy; every `index.html`
-      reference (`css/style.css`, `js/main.js`) exists; **no** runtime external
+      reference (the five `css/*.css` sheets, `js/main.js`) exists; **no** runtime external
       URLs and **no** `fetch`/`XHR`/`WebSocket`/`sendBeacon` reachable. The two
       `http(s)` strings inside vendored Three.js are (1) the pinned-version
       provenance **comment** header and (2) the `http://www.w3.org/1999/xhtml`

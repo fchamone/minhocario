@@ -8,7 +8,15 @@
 
 ## Phase A — Foundations (zero visual change)
 
-- [ ] **V1** Split `css/style.css` into 5 files, byte-for-byte, 5 `<link>`s (S) — deps: none
+- [x] **V1** Split `css/style.css` into 5 files, 5 `<link>`s (S) — deps: none
+      Rules moved verbatim, grouped by kind. **AC amended mid-task:** byte-identical concatenation is
+      unsatisfiable alongside the specified grouping (the five categories interleave in `style.css` —
+      `.shop-card` sits between `.home` and `.setup`, `.banner` after `.speed__paused`). Replaced with
+      rule-multiset equivalence against `tests/fixtures/style.baseline.css`; rationale recorded in the
+      plan. New `tests/css.test.js` (3 tests): link order, no `@import`, rule equivalence — **all three
+      broken deliberately first** (reordered links, injected `@import`, silently edited
+      `.gauge__marker` width; each failed naming the exact cause). Suite 289 → 292.
+      The equivalence test + fixture **retire at V2**, which rewrites declarations by design.
 - [ ] **V2** `css/tokens.css` + migrate declarations to tokens, identical computed values (M) — deps: V1
 - [ ] **V3** `tests/css.test.js` + `tests/markup.test.js` static guards (S/M) — deps: V2
 - [ ] **V4** `DESIGN.md` at root + `CLAUDE.md` pointer + release-checklist exclusion (S) — deps: V2

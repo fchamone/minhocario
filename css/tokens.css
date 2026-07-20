@@ -1,0 +1,25 @@
+/* Minhocário — design tokens.
+   Cascade position 1 of 5: tokens → base → components → screens → motion.
+   index.html is the source of truth for that order; never use @import.
+
+   This file holds custom properties ONLY. Nothing here selects an element, so
+   it can never win or lose a cascade fight — which is what lets every later
+   file reference it freely. */
+
+:root {
+  --bg: #1b2a1b;
+  --panel: #223322;
+  --panel-2: #2c3f2c;
+  --ink: #eaf2e6;
+  --ink-dim: #a9bda2;
+  --accent: #7bc043;
+  --accent-ink: #14210f;
+  /* The "filling up" tier, one step before --danger. Warm enough to read as a
+     caution against the green panels, and light enough to stay legible as a
+     value colour on the dark background (the readouts tint text, not just
+     borders). Distinct from --accent so a warned gauge never reads as healthy. */
+  --warn: #e0b13c;
+  --danger: #c0563f;
+  --radius: 8px;
+  --gap: 12px;
+}

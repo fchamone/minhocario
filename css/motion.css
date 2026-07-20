@@ -1,0 +1,100 @@
+/* Minhocário — motion, transitions, and animated edge states.
+   Cascade position 5 of 5: tokens → base → components → screens → motion.
+   index.html is the source of truth for that order; never use @import.
+
+   LAST ON PURPOSE. The `prefers-reduced-motion` block at the bottom is a
+   blanket `*` override, and the T22 transition rules re-declare properties on
+   components and screens. Loading this file last is what lets both win without
+   reaching for !important — moving it earlier silently breaks reduced-motion.
+
+   ============================================================================
+   T22 — UX polish: transitions, focus/press feedback, and explicit edge states.
+   Colors and weights carry the meaning; motion is decorative and fully opts out
+   under prefers-reduced-motion (bottom of this file).
+   ========================================================================== */
+
+/* Screen entry: a brief fade/rise so switching screens is not a hard cut. Runs
+   on every reveal because [hidden] removes the section from the render tree. */
+.screen:not([hidden]) { animation: screen-in 0.16s ease-out both; }
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Shop / setup cards lift on hover for affordance; disabled ones stay put. */
+.shop-card { transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease; }
+.shop-card:not(.shop-card--disabled):hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+.setup-species { transition: background-color 0.12s ease; }
+
+/* Action feedback line: flash on each new message so a repeated outcome (e.g.
+   two rejected clicks) still registers. showFeedback re-applies the class with a
+   forced reflow every call, restarting the animation. */
+.actions__feedback--flash { animation: feedback-in 0.28s ease-out; }
+@keyframes feedback-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Modal chooser: fade the backdrop and pop the dialog in. */
+dialog.chooser[open] { animation: dialog-in 0.18s ease-out; }
+dialog.chooser[open]::backdrop { animation: backdrop-in 0.18s ease-out; }
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.chooser__option { transition: background-color 0.12s ease, border-color 0.12s ease; }
+
+/* Colony-dead banner: slide in so the interruption is noticed (edge state). */
+.banner { animation: banner-in 0.22s ease-out; }
+@keyframes banner-in {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* --- Explicit edge states --------------------------------------------------
+   The action that clears a filling/full tray/tank points the player at the fix
+   (toggled from js/ui/actions.js only while the colony is alive). Two tiers, the
+   same ones the gauges use: a calm yellow border while it is filling up, then
+   the red pulse once it is full and production is actually suffering.
+
+   The warning tier deliberately does NOT animate. Motion is what separates
+   "act now" from "act soon" here, so spending it on the earlier tier would flatten
+   the distinction — and under prefers-reduced-motion (below) colour is carrying
+   the whole message anyway. The static `--warn` tier lives here rather than in
+   components.css so the two tiers of one signal stay readable side by side. */
+.actions__btn--warn { border-color: var(--warn); }
+.actions__btn--alert {
+  border-color: var(--danger);
+  animation: urgent-pulse 1.4s ease-in-out infinite;
+}
+@keyframes urgent-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 86, 63, 0); }
+  50%      { box-shadow: 0 0 0 4px rgba(192, 86, 63, 0.28); }
+}
+
+/* An env variable outside its comfort band gently pulses its marker/value, so a
+   stressed colony is noticeable even before it turns critical. */
+.gauge--alert .gauge__marker,
+.stat--alert .stat__value { animation: alert-pulse 1.2s ease-in-out infinite; }
+@keyframes alert-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+/* Honor a reduced-motion preference: keep every color/weight cue, drop motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

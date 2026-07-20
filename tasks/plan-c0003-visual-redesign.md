@@ -111,7 +111,16 @@ V5 → V14 → V15 → V16 → V19
 ## Phase A — Foundations (zero visual change)
 
 ### V1. Split `css/style.css` into five files — S
-Byte-for-byte move, **no rule edits**; verify the concatenation equals the original.
+Move rules verbatim, **no rule edits**; verify no rule was lost, edited or invented.
+
+> **AC amended 2026-07-20 (during implementation).** The original AC — "concatenation of the five
+> files is byte-identical to the original" — is unsatisfiable alongside the grouping this same task
+> specifies. Byte-identity requires each file to be a *contiguous slice* of `style.css`, but the five
+> categories interleave there: `.shop-card` (components) sits between `.home` and `.setup` (screens);
+> `.banner` (components) sits after `.speed__paused` (screens); `.internals` (components) sits between
+> `.actions__feedback` and `.stat`. The per-file header comments the task also requires would break
+> byte-identity independently. Grouping was kept and the check was replaced with the property that AC
+> was actually protecting — see the amended AC below.
 `tokens.css` (`:root` only) / `base.css` (reset, html/body, button, headings, `.screen`, dev-nav) /
 `components.css` (`.stat .gauge .shop-card .banner .chooser .ico`) / `screens.css` (`.home .shop
 .setup .screen--game` grid, `.hud .actions .speed`) / `motion.css` (all `@keyframes`, transitions,
@@ -121,10 +130,17 @@ Five `<link>`s in `index.html` in that exact order — **never `@import`** (seri
 `motion.css` last so the `prefers-reduced-motion` block (`style.css:558`) and the T22 overrides
 keep winning without `!important`. Each file gets a header comment naming its cascade position and
 stating `index.html` is the source of truth for order.
-- **AC:** concatenation of the five files is byte-identical to the original `style.css`; page renders
-  indistinguishably; no `@import` anywhere.
-- **Verify:** `npx serve .` → walk all four screens; diff the concatenation.
-- **Deps:** none. **Files:** `css/*.css`, `index.html`.
+- **AC (amended):** the five files parse to exactly the same multiset of normalized rule blocks as the
+  pre-split `style.css` (fixture `tests/fixtures/style.baseline.css`) — nothing lost, edited or
+  invented; `index.html` links exactly the five sheets in cascade order; no `@import` anywhere; page
+  renders indistinguishably.
+- **Verify:** `node --test tests/css.test.js`; `npx serve .` → walk all four screens.
+- **Deps:** none. **Files:** `css/*.css`, `index.html`, `tests/css.test.js`,
+  `tests/fixtures/style.baseline.css`.
+- **Retires at V2:** the equivalence test and its baseline fixture are deleted by V2, which rewrites
+  declarations by design. V2's own AC (identical *computed* values, spot-checked in devtools) is the
+  successor guard. The two durable assertions — link order and no-`@import` — stay in `css.test.js`
+  and are joined by V3's token-resolution and no-stray-hex checks.
 
 ### V2. `css/tokens.css` + mechanical migration — M
 Add the full token set, then rewrite existing declarations to reference tokens **producing
@@ -151,7 +167,8 @@ identical computed values**.
 
 ### V3. Static guard tests — S/M
 - `tests/css.test.js` — every `var(--token)` across `css/*.css` is defined in `tokens.css`; **no hex
-  literal outside `tokens.css`**; the V1 concatenation identity.
+  literal outside `tokens.css`**. Joins V1's two durable assertions already in this file (link order,
+  no `@import`); V1's rule-equivalence test is gone by now, retired by V2 as planned.
 - `tests/markup.test.js` — **no element carries both `data-string` and a descendant `<svg>`**
   (finding #1 as a permanent tripwire); every `data-action` in `index.html` has a handler in
   `actions.js`; every id passed to `getElementById` in `js/ui/*` exists in `index.html`.

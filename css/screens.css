@@ -1,0 +1,194 @@
+/* Minhocário — per-screen layout.
+   Cascade position 4 of 5: tokens → base → components → screens → motion.
+   index.html is the source of truth for that order; never use @import.
+
+   Layout and screen-specific chrome for home / shop / setup / game. Loaded
+   after components.css so a screen can position a component without raising
+   specificity. */
+
+/* --- Home --- */
+.home {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* Language selector: a native-name button group. Home-only (spec fork 2). */
+.lang-select {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+.lang-select__label { color: var(--ink-dim); }
+.lang-select__options { display: flex; gap: 6px; }
+.lang-select__btn {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  background: var(--panel-2);
+}
+.lang-select__btn.is-active { background: var(--accent); color: var(--accent-ink); }
+.home__subtitle { color: var(--ink-dim); }
+.home__actions {
+  display: flex;
+  gap: var(--gap);
+  justify-content: center;
+  margin: 24px 0;
+}
+.home__actions button { background: var(--accent); color: var(--accent-ink); }
+
+.home__nickname {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-dim);
+  margin-top: 20px;
+}
+.home__nickname strong { color: var(--ink); }
+.home__nickname button { padding: 4px 10px; font-size: 0.85rem; }
+.home__notice {
+  color: var(--danger);
+  background: rgba(192, 86, 63, 0.12);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+.home__notice[hidden] { display: none; }
+
+.ranking { text-align: left; margin-top: 24px; }
+.ranking__table { width: 100%; border-collapse: collapse; }
+.ranking__table th,
+.ranking__table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-2);
+}
+.ranking__empty { color: var(--ink-dim); }
+
+/* --- Shop / Setup --- */
+.shop__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap);
+  max-width: 900px;
+  margin: 0 auto;
+}
+.wallet { color: var(--ink-dim); }
+
+.setup { max-width: 640px; margin: 0 auto; display: grid; gap: var(--gap); }
+.setup fieldset { border: 1px solid var(--panel-2); border-radius: var(--radius); display: grid; gap: 8px; }
+
+.setup-species {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.setup-species:hover { background: var(--panel-2); }
+.setup-species__body { display: grid; gap: 2px; }
+.setup-species__latin { color: var(--ink-dim); font-size: 0.85rem; }
+.setup-species__desc { font-size: 0.9rem; }
+.setup-species__price { color: var(--accent); font-size: 0.85rem; }
+
+.setup-bedding__row,
+.setup-waste__amount {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.setup-bedding__row input,
+.setup-waste__amount input { width: 90px; }
+#setup-waste { display: grid; gap: 8px; }
+#setup-waste select { padding: 6px; }
+
+/* --- Game screen grid --- */
+/* Regions: HUD across the top, stage (3D canvas) fills the middle,
+   actions on the right, speed bar across the bottom. */
+.screen--game {
+  padding: 0;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'hud     hud'
+    'stage   actions'
+    'speed   speed';
+}
+
+.hud {
+  grid-area: hud;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--panel-2);
+}
+/* Same clearance deal as `.screen` — only dev mode has a bar to clear. */
+body.dev-mode .hud { padding-top: 44px; }
+.hud__item { color: var(--ink-dim); }
+.hud__item span:last-child { color: var(--ink); font-weight: 600; }
+
+.stage {
+  grid-area: stage;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(#2a3a4a, #1b2a1b);
+}
+.stage canvas { display: block; width: 100%; height: 100%; }
+
+.actions {
+  grid-area: actions;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--panel);
+  border-left: 1px solid var(--panel-2);
+  overflow-y: auto;
+}
+.actions__slider { display: grid; gap: 4px; color: var(--ink-dim); font-size: 0.85rem; }
+
+.speed {
+  grid-area: speed;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--panel-2);
+}
+.speed__buttons { display: flex; gap: 6px; }
+.speed__buttons button { padding: 6px 12px; }
+
+.actions__feedback {
+  margin: 4px 0 0;
+  padding: 8px;
+  min-height: 1em;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--panel-2);
+  border-radius: var(--radius);
+}
+.actions__feedback:empty { display: none; }
+.actions__feedback--error { color: var(--danger); }
+
+.speed__paused {
+  color: var(--danger);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+/* The HUD status turns alert-colored whenever the farm is not "all good" (dead
+   colony / full humus tray / full leachate tank), so the condition reads at a
+   glance rather than as one word among five. The id keeps this ahead of the
+   `.hud__item span:last-child` color rule without !important. */
+#hud-status.hud__status--alert { color: var(--danger); font-weight: 700; }

@@ -1,0 +1,211 @@
+/* Minhocário — reusable UI components.
+   Cascade position 3 of 5: tokens → base → components → screens → motion.
+   index.html is the source of truth for that order; never use @import.
+
+   Widgets that are not tied to one screen: cards, panels, readouts, gauges,
+   the modal chooser, the colony-dead banner. Rules keep their original relative
+   order within this file, because several pairs rely on it (`.internals` then
+   `.internals--right`, `.gauge__fill` then its `--warn`/`--alert` variants). */
+
+/* --- Shop card --- */
+.shop-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-2);
+  border-radius: var(--radius);
+}
+.shop-card h3 { margin: 0; }
+.shop-card__desc { color: var(--ink-dim); font-size: 0.9rem; margin: 0; }
+.shop-card__stats { font-size: 0.85rem; margin: 0; }
+.shop-card__buy { margin-top: auto; background: var(--accent); color: var(--accent-ink); }
+.shop-card--disabled { opacity: 0.6; }
+.shop-card--disabled .shop-card__buy { background: var(--panel-2); color: var(--ink); }
+.shop-card__reason { color: var(--danger); font-size: 0.8rem; margin: 0; }
+
+/* --- Internals panel --- */
+/* Overlays the stage. Always present (the x-ray toggle no longer hides it), so
+   the player collapses it themselves via the <details> disclosure — and a
+   collapsed panel shrinks to its summary instead of leaving a 280px empty bar,
+   handing the 3D scene its area back. */
+.internals {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 280px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  padding: 12px;
+  font-size: 0.85rem;
+  background: rgba(34, 51, 34, 0.92);
+  border: 1px solid var(--panel-2);
+  border-radius: var(--radius);
+}
+.internals:not([open]) { width: auto; overflow: visible; }
+/* Mirrors `.stats > summary` — the same disclosure affordance in the other box. */
+.internals > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink-dim);
+}
+.internals[open] > summary { margin-bottom: 8px; }
+/* Flipped to the far side when the player slides the composter under the panel
+   (see `internalsSide` in js/ui/actions.js). `left: auto` releases the default
+   anchor above, which is otherwise still in play — so this rule MUST stay after
+   `.internals` in this file. */
+.internals--right { left: auto; right: 12px; }
+.internals h4 {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+.internals__group { margin-bottom: 12px; }
+.internals__group:last-child { margin-bottom: 0; }
+.internals__empty { margin: 0; color: var(--ink-dim); }
+
+/* --- Readouts --- */
+.stat { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.stat__label { color: var(--ink-dim); }
+.stat__value { font-variant-numeric: tabular-nums; }
+.stat--warn .stat__value { color: var(--warn); font-weight: 600; }
+.stat--alert .stat__value { color: var(--danger); font-weight: 600; }
+
+/* A gauge: label + value on one line, then a bar whose highlighted zone is the
+   species' comfort band and whose marker is the current value. */
+.gauge {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 3px 0;
+}
+.gauge__label { color: var(--ink-dim); }
+.gauge__value { font-variant-numeric: tabular-nums; }
+.gauge__bar {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.gauge__comfort {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(123, 192, 67, 0.35);
+  transition: left 0.3s ease, width 0.3s ease;
+}
+.gauge__marker {
+  position: absolute;
+  top: -1px;
+  width: 3px;
+  height: calc(100% + 2px);
+  margin-left: -1px;
+  background: var(--ink);
+  border-radius: 2px;
+  /* Glide to the new value each tick instead of jumping (T22 polish). */
+  transition: left 0.3s ease, background-color 0.2s ease;
+}
+.gauge--warn .gauge__value { color: var(--warn); font-weight: 600; }
+.gauge--warn .gauge__marker { background: var(--warn); }
+.gauge--alert .gauge__value { color: var(--danger); font-weight: 600; }
+.gauge--alert .gauge__marker { background: var(--danger); }
+
+/* A band-less gauge: the bar is filled from the left to the current level. Used
+   by the statistics box for the humus tray / leachate tank, which have no
+   comfort band — only a "filling up" tier and a "full" edge that stops
+   production (§2.8). */
+.gauge__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(123, 192, 67, 0.55);
+  transition: width 0.3s ease, background-color 0.2s ease;
+}
+.gauge--warn .gauge__fill { background: var(--warn); }
+.gauge--alert .gauge__fill { background: var(--danger); }
+
+/* --- Statistics box (score detail) --- */
+/* Sits in the .actions sidebar flow, not over the stage — see js/ui/stats.js. */
+.stats {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  background: var(--panel-2);
+  border-radius: var(--radius);
+}
+.stats > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+.stats h4 {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+.stats__group { margin-top: 10px; }
+/* The bar's own track reads as a hole against the lighter box background, so it
+   borrows the panel color here instead of the page background it uses on the
+   (darker) internals overlay. */
+.stats .gauge__bar { background: var(--panel); }
+
+/* --- Modal chooser (add waste / portion / worm pack) --- */
+.chooser {
+  min-width: 260px;
+  max-width: 90vw;
+  padding: 16px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--panel-2);
+  border-radius: var(--radius);
+}
+.chooser::backdrop { background: rgba(0, 0, 0, 0.55); }
+.chooser h3 { margin: 0 0 12px; font-size: 1rem; }
+.chooser__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.chooser__option { text-align: left; }
+.chooser__cancel { width: 100%; }
+
+/* --- Colony-dead banner (§2.1) --- */
+/* Centered over the stage: production has stopped, so it should interrupt. */
+.banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  max-width: 340px;
+  padding: 12px 16px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.banner strong { color: var(--danger); display: block; margin-bottom: 4px; }
+.banner p { margin: 0 0 10px; font-size: 0.9rem; color: var(--ink-dim); }
+.banner button { background: var(--accent); color: var(--accent-ink); }
+
+/* --- Shop: mid-farm upgrade extras --- */
+.shop-card__tradein { margin: 0; font-size: 0.85rem; color: var(--accent); }
+.shop-card--current { border-color: var(--accent); }
+
+.internals__model {
+  margin: -4px 0 10px;
+  padding-bottom: 8px;
+  font-weight: 600;
+  color: var(--accent);
+  border-bottom: 1px solid var(--panel-2);
+}
