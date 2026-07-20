@@ -116,6 +116,18 @@ function makeRng(seed) {
  * washing them toward the sky colour (the sun patch opts out the same way).
  * Emissive is kept partial, not 1.0, so flat-shaded facets still catch some
  * scene light and the volumes keep their shape instead of reading as flat decals.
+ *
+ * `toneMapped: false` (V14) is the third opt-out in the same spirit as `fog` and
+ * the emissive lift: ACES compresses the top end hardest, which is exactly where
+ * this palette was deliberately placed. These colours were calibrated by eye to
+ * be readable through a faded shell, so they skip the display curve entirely
+ * rather than being re-tuned against it.
+ *
+ * Every self-lit material in this file must do the same — they only work as a
+ * calibrated SET, and one member going through the curve while its neighbours do
+ * not shifts it relative to them. tests/lighting.test.js enforces that across
+ * the file rather than trusting this helper to be the only place it matters,
+ * because it is not (see the leachate fill).
  */
 function solidMaterial(color) {
   return new MeshStandardMaterial({
@@ -126,6 +138,7 @@ function solidMaterial(color) {
     metalness: 0,
     flatShading: true,
     fog: false,
+    toneMapped: false,
   });
 }
 
@@ -221,9 +234,18 @@ export function buildXrayInternals(composterId) {
   const leachateFill = new Mesh(
     new BoxGeometry(1, 1, 1),
     // Its own material rather than solidMaterial(): the liquid stays translucent
-    // so the tank reads as wet. Emissive/fog match solidMaterial for the same
-    // reason — it pools at the bottom of the cavity, the least-lit spot of all,
-    // and being transparent it also picks up whatever dark thing is behind it.
+    // so the tank reads as wet. Emissive/fog/toneMapped match solidMaterial for
+    // the same reasons — it pools at the bottom of the cavity, the least-lit spot
+    // of all, and being transparent it also picks up whatever dark thing is
+    // behind it.
+    //
+    // `toneMapped: false` matters MORE here than in the helper, not less: this is
+    // the one internal built outside solidMaterial(), so it is the one that
+    // silently gets left behind when the palette is adjusted as a group. Leaving
+    // it mapped while the humus it pools under is not would shift the amber
+    // against its own neighbours — a worse read than compressing all of them
+    // together. tests/lighting.test.js checks every emissive material here, not
+    // just the helper, precisely because of this material.
     new MeshStandardMaterial({
       color: LEACHATE_COLOR,
       emissive: LEACHATE_COLOR,
@@ -233,6 +255,7 @@ export function buildXrayInternals(composterId) {
       transparent: true,
       opacity: 0.72,
       fog: false,
+      toneMapped: false,
     }),
   );
   leachateFill.userData.xrayPart = true;

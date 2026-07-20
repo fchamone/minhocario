@@ -20,6 +20,7 @@ import {
   Scene,
   PerspectiveCamera,
   WebGLRenderer,
+  ACESFilmicToneMapping,
   Color,
   Fog,
   HemisphereLight,
@@ -127,44 +128,54 @@ const SOIL_COLOR = 0x373028;
 // only shared quantity is solarGain, sampled below for the sun patch.
 //   sky   background + fog + hemisphere sky tint
 //   sun   directional light colour        sunI/hemiI/ambI  light intensities
-const DAY_CYCLE = [
-  { h: 0, sky: 0x1c2740, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.16, ambI: 0.1 },
-  { h: 5, sky: 0x1b2440, sun: 0x40506e, sunI: 0.14, hemiI: 0.22, ambI: 0.12 },
-  { h: 6.5, sky: 0xd98a5c, sun: 0xffb066, sunI: 0.55, hemiI: 0.45, ambI: 0.2 },
-  { h: 9, sky: 0x9fb8cc, sun: 0xfff1d6, sunI: 0.9, hemiI: 0.7, ambI: 0.25 },
-  { h: 12, sky: 0xaecfe0, sun: 0xfff6e2, sunI: 1.0, hemiI: 0.82, ambI: 0.3 },
-  { h: 15, sky: 0x9fb8cc, sun: 0xfff0d0, sunI: 0.9, hemiI: 0.7, ambI: 0.25 },
-  { h: 17.5, sky: 0xe0743c, sun: 0xff8a48, sunI: 0.55, hemiI: 0.45, ambI: 0.2 },
-  { h: 19, sky: 0x2a2742, sun: 0x4a4668, sunI: 0.16, hemiI: 0.26, ambI: 0.13 },
-  { h: 21, sky: 0x1a2338, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.17, ambI: 0.1 },
+// Intensities are PHYSICAL UNITS, handed to the lights unchanged (V14).
+//
+// They used to be legacy-era numbers put through `litIntensity(curve, floor)`,
+// which lifted each by a per-light LIGHT_FLOOR and scaled it by a global
+// LIGHT_GAIN of 1.9 to compensate for r170's physically-correct light units.
+// That remap is folded into the values below and deleted: two representations of
+// the same brightness, one of them hidden in a function, is how a table stops
+// meaning what it says. Every value here is exactly what the old floor+gain
+// produced, so this fold changed nothing on screen — tests/lighting.test.js
+// proves it against the pre-V14 table.
+//
+// Two properties the deleted floor used to guarantee STRUCTURALLY, which are now
+// merely authored and therefore tested instead:
+//   - no keyframe darkens past the night floor (ambient 0.49, total 1.45). The
+//     floor was added after the fact, so no authored number could breach it;
+//     now one edit can.
+//   - h:24 duplicates h:0 so interpolation wraps cleanly through midnight.
+export const DAY_CYCLE = [
+  { h: 0, sky: 0x1c2740, sun: 0x2b3a5c, sunI: 0.31, hemiI: 0.654, ambI: 0.49 },
+  { h: 5, sky: 0x1b2440, sun: 0x40506e, sunI: 0.386, hemiI: 0.768, ambI: 0.528 },
+  { h: 6.5, sky: 0xd98a5c, sun: 0xffb066, sunI: 1.165, hemiI: 1.205, ambI: 0.68 },
+  { h: 9, sky: 0x9fb8cc, sun: 0xfff1d6, sunI: 1.83, hemiI: 1.68, ambI: 0.775 },
+  { h: 12, sky: 0xaecfe0, sun: 0xfff6e2, sunI: 2.02, hemiI: 1.908, ambI: 0.87 },
+  { h: 15, sky: 0x9fb8cc, sun: 0xfff0d0, sunI: 1.83, hemiI: 1.68, ambI: 0.775 },
+  { h: 17.5, sky: 0xe0743c, sun: 0xff8a48, sunI: 1.165, hemiI: 1.205, ambI: 0.68 },
+  { h: 19, sky: 0x2a2742, sun: 0x4a4668, sunI: 0.424, hemiI: 0.844, ambI: 0.547 },
+  { h: 21, sky: 0x1a2338, sun: 0x2b3a5c, sunI: 0.31, hemiI: 0.673, ambI: 0.49 },
   // Duplicate of h:0 so interpolation wraps cleanly through midnight.
-  { h: 24, sky: 0x1c2740, sun: 0x2b3a5c, sunI: 0.1, hemiI: 0.16, ambI: 0.1 },
+  { h: 24, sky: 0x1c2740, sun: 0x2b3a5c, sunI: 0.31, hemiI: 0.654, ambI: 0.49 },
 ];
 
-// Exposure correction for the vendored Three r170, which uses the post-r155
-// physically-correct light units (`useLegacyLights` was removed in r165). The
-// DAY_CYCLE intensities above are authored in legacy-era numbers and render far
-// too dim under r170, so every intensity is remapped as `floor + GAIN * curve`
-// before it reaches a light.
+// ACES filmic tone mapping (V14). The scene totals ~4.8 at noon against ~1.45 at
+// midnight, which is a genuine HDR range being written to an LDR framebuffer; up
+// to here it was simply clamped, so the brightest surfaces flattened into each
+// other at the top end. ACES rolls the highlights off instead and adds the warm
+// contrast curve the art direction asks for.
 //
-// The FLOOR is what keeps the bin readable at midnight; the GAIN preserves the
-// authored day/night SHAPE on top of it. Deliberately a floor-lift rather than a
-// flat multiply: a pure multiply would leave night proportionally as black as it
-// is now. Ambient runs 0.10 -> 0.49 at night and 0.30 -> 0.87 at noon, so the
-// day/night ratio compresses from 3.0x to ~1.8x — dimmer at night, never black.
-// Scene-wide the totals go 0.36 -> 1.45 at midnight and 2.12 -> 4.80 at noon,
-// leaving night 3.3x darker than noon.
+// Exposure is the one knob, and it is the only value in this file that is a
+// judgement rather than a measurement — everything else about V14 is a provable
+// no-op. 1.0 is the neutral starting point; the day/night matrix decides.
 //
-// Why these values are safe rather than merely brighter: pre-r155 Three scaled
-// these light types by PI internally, so an authored 1.0 already MEANT ~3.14.
-// Measured against that original intent, every daytime value here still lands
-// BELOW it (noon sun 64%, hemi 74%, ambient 92%) — this restores brightness the
-// renderer upgrade silently took away, it does not add new, so midday cannot
-// clip to flat white and no tone-mapping curve is needed. Only the night end is
-// pushed past the old intent (ambient 156%), which is the deliberate floor.
-// These two constants are the only brightness knobs; tune them by eye.
-const LIGHT_FLOOR = { sun: 0.12, hemi: 0.35, amb: 0.3 };
-const LIGHT_GAIN = 1.9;
+// NOT a fix for clipping that the old comment here claimed could not happen.
+// That claim ("no tone-mapping curve is needed") was argued from light INTENSITY
+// staying under the pre-r155 PI-scaled intent, which bounds the input to the
+// lighting equation, not the radiance that reaches the framebuffer — albedo,
+// N·L and three summed lights all sit in between. It is deleted rather than
+// left standing next to the curve it says is unnecessary.
+const TONE_MAPPING_EXPOSURE = 1.0;
 
 // Directional-light arc: the "sun" rises on the left, peaks overhead at noon, and
 // sets on the right — matching the sun patch, which sweeps wallPosition 0 → 1.
@@ -181,7 +192,13 @@ const VISUAL_SUNSET = 18; // must match temperature.js SUNSET_HOUR
 // night — no separate on/off logic. Normalised by the function's own peak so it
 // auto-tracks any future SOLAR_MAX change (SOLAR_MAX is private to the sim).
 const WALL_SEGMENTS = 64; // horizontal columns — smooth gradient across the wall
-const SUN_PATCH_STRENGTH = 0.6; // additive gain at the function's peak
+// Lowered from 0.6 in V14. The old value was calibrated against a wall that ran
+// past 1.0 and clipped at midday, so much of the patch was swallowed by the
+// clamp. ACES leaves headroom below white, so the same additive value now reads
+// considerably stronger — the number had to come down for the patch to stay a
+// warm band rather than a blown-out stripe. A starting point for the day/night
+// matrix, not a measurement.
+const SUN_PATCH_STRENGTH = 0.35; // additive gain at the function's peak
 const SUN_TINT_R = 1.0;
 const SUN_TINT_G = 0.82;
 const SUN_TINT_B = 0.5;
@@ -378,12 +395,25 @@ function buildScene(target) {
 
   const patch = new Mesh(
     patchGeom,
+    // `toneMapped: false` (V14), for the patch's SHAPE rather than its
+    // brightness. Three tone-maps per material, before blending, so neither
+    // option here reproduces ACES(wall + patch) — the question is only which
+    // approximation distorts less. Mapped, the patch's own gradient goes through
+    // the curve independently, and ACES LIFTS midtones (0.2 -> 0.30, 0.5 -> 0.62),
+    // so the soft falloff flattens and the faint edges get boosted. Unmapped, the
+    // added value stays exactly `SUN_PATCH_STRENGTH * solarGain / SOLAR_PEAK`.
+    //
+    // That linearity is the whole point: this band traces solarGain, and it has
+    // to keep tracking the bin's temperature advantage as the player drags along
+    // the wall. Absolute brightness is what the strength constant is for; the
+    // gradient's shape is the information, and it must not be curved.
     new MeshBasicMaterial({
       vertexColors: true,
       transparent: true,
       blending: AdditiveBlending,
       depthWrite: false,
       fog: false,
+      toneMapped: false,
     }),
   );
   patch.position.set(0, WALL_HEIGHT / 2, 0.02);
@@ -464,6 +494,12 @@ export function initScene(canvas) {
   }
 
   renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, 2));
+
+  // `outputColorSpace` is deliberately NOT set: r170 already defaults it to
+  // SRGBColorSpace, so assigning it again would just be a line that looks
+  // load-bearing. Only the tone-mapping half of the pipeline was ever missing.
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = TONE_MAPPING_EXPOSURE;
 
   scene = new Scene();
   camera = new PerspectiveCamera(45, 1, 0.1, 100);
@@ -579,19 +615,6 @@ function lerp(a, b, t) {
 }
 
 /**
- * Map an authored DAY_CYCLE intensity onto the r170 physical light scale: lift it
- * by a per-light floor so night never bottoms out to black, then apply the global
- * gain so the authored day/night shape survives on top of the floor. See the
- * LIGHT_FLOOR/LIGHT_GAIN comment for why this is a floor-lift, not a multiply.
- * @param {number} curveValue interpolated DAY_CYCLE intensity
- * @param {number} floor the light's LIGHT_FLOOR entry
- * @returns {number} intensity to hand to the light
- */
-function litIntensity(curveValue, floor) {
-  return floor + LIGHT_GAIN * curveValue;
-}
-
-/**
  * Sweep the directional light along its daytime arc: low on the left at sunrise,
  * high overhead at noon, low on the right at sunset. At night it parks at an end
  * (intensity is near-zero there anyway). Direction matches the sun patch, which
@@ -642,15 +665,15 @@ function applyDayNight(hour) {
 
   if (sunLight) {
     sunLight.color.copy(_sunColor.set(k0.sun).lerp(_lerpTmp.set(k1.sun), t));
-    sunLight.intensity = litIntensity(lerp(k0.sunI, k1.sunI, t), LIGHT_FLOOR.sun);
+    sunLight.intensity = lerp(k0.sunI, k1.sunI, t);
     positionSun(hour);
   }
   if (hemiLight) {
-    hemiLight.intensity = litIntensity(lerp(k0.hemiI, k1.hemiI, t), LIGHT_FLOOR.hemi);
+    hemiLight.intensity = lerp(k0.hemiI, k1.hemiI, t);
     hemiLight.color.copy(_skyColor);
   }
   if (ambientLight) {
-    ambientLight.intensity = litIntensity(lerp(k0.ambI, k1.ambI, t), LIGHT_FLOOR.amb);
+    ambientLight.intensity = lerp(k0.ambI, k1.ambI, t);
   }
 
   updateSunPatch(hour);
