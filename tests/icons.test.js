@@ -136,6 +136,22 @@ test('every food icon carries the identical circular frame', () => {
   assert.ok([...frames][0], 'no food icon carries a frame circle at all');
 });
 
+test('every food icon draws its glyph under identical group settings', () => {
+  // Subsumes fill/stroke/weight AND the shared scale transform that sizes the
+  // glyph inside its frame. One tag, byte-identical across the set: if a future
+  // icon needs its own scale to "look right", the drawing is wrong, not the
+  // treatment — and this is what stops that being fixed in the treatment.
+  const groups = new Set(
+    foodSymbols().map(([, s]) => /<g\b[^>]*>/.exec(s.body)?.[0].replace(/\s+/g, ' ')),
+  );
+  assert.equal(
+    groups.size,
+    1,
+    `food icons open their glyph group ${groups.size} different ways:\n${[...groups].join('\n')}`,
+  );
+  assert.ok([...groups][0], 'no food icon wraps its glyph in a group at all');
+});
+
 test('every food icon paints in currentColor only — no per-food hue', () => {
   for (const [id, s] of foodSymbols()) {
     for (const m of s.body.matchAll(/\b(fill|stroke)="([^"]*)"/g)) {

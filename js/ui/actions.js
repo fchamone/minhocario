@@ -612,7 +612,12 @@ function chooseFrom(titleKey, options) {
     for (const option of options) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'chooser__option';
+      // An option with a glyph becomes a TILE: the glyph stacks above the label
+      // instead of sitting beside it. That is what lets the icon be large enough
+      // to actually read, and it also pins the glyph to the same spot in every
+      // cell — in a side-by-side row a two-line food name shifts its neighbour's
+      // icon, and irregular placement is its own grouping cue across 14 items.
+      button.className = option.icon ? 'chooser__option chooser__option--tile' : 'chooser__option';
       const label = document.createElement('span');
       label.textContent = option.label;
       if (option.icon) button.append(option.icon);

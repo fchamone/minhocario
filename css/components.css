@@ -219,7 +219,9 @@
 .chooser h3 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
 .chooser__options {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  /* 112px suits a tile (a 52px glyph over a centred, wrapping name) and still
+     holds the text-only worm-pack options comfortably. */
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
@@ -232,6 +234,21 @@
   gap: var(--space-2);
   text-align: left;
 }
+/* Tiles: glyph stacked above the label. In the add-waste chooser the icon IS the
+   content, not an ornament on a label, so it gets the room to say what it is —
+   at chrome size (1.15em) the drawing inside the frame lands under 11px, which
+   is what made the set unreadable. Fixed icon box + centred label also keeps
+   all 14 cells geometrically identical however long the name runs. */
+.chooser__option--tile {
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  text-align: center;
+  line-height: var(--leading-tight);
+}
+.chooser__option--tile .ico { width: 3.25em; height: 3.25em; }
+.chooser__option--tile .ico-volume { width: 3em; height: 3em; }
 .chooser__cancel { width: 100%; }
 
 /* --- Colony-dead banner (§2.1) --- */
