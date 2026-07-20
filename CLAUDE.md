@@ -19,7 +19,7 @@ Node is needed only for tests. There are no runtime dependencies other than the 
 
 ## Development workflow
 
-- Develop **directly on `master`** — this project does **not** use git worktrees. Commit straight to `master` (or a short-lived branch merged back promptly) and keep history linear.
+- Develop **directly on `main`** — this project does **not** use git worktrees. Commit straight to `main` (or a short-lived branch merged back promptly) and keep history linear. `main` is also what GitHub Pages serves.
 - No build step and no toolchain: edits to `index.html` / `css/` / `js/` are the deliverable. Deploy = FTP-upload the project folder (minus `tests/`, `.harn/`, `.claude/`).
 
 ## Architecture
