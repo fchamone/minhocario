@@ -284,6 +284,63 @@ the i18n catalogs and tests.
 ## Sign-off
 
 - [x] **CP9** — v1 ship gate, signed off 2026-07-20. §D activated.
-- [ ] **CPV5** — C-0003 ship gate. Requires §B.8 (the mobile walk above all) plus
-      §B.1–B.7 on the redesigned build, and the §D.1 freeze check re-run.
-      *(Leave unchecked until a human has walked it.)*
+- [x] **CPV5 — APPROVED by the maintainer, 2026-07-21.** C-0003 is shipped.
+      Walked at commit `c4e76e9` (confirmed on `origin/main`), which includes both
+      of that day's late changes — the shop's reworded affordability reasons and
+      the desktop-only gate.
+      **Recorded as the blanket confirmation it was given as** — "I've tested it,
+      and the phone as well" — on the CPV3/CPV4 precedent. Inventing per-item
+      findings the maintainer did not report is the dressed-up record those gates
+      were careful to avoid. The set put to them is §B.1–B.8 above.
+      **Walked against GitHub Pages rather than the pruned copy**, the maintainer
+      having pushed first. That is a *stronger* test in the way that mattered
+      most here — a real remote host over the public internet, reached from a
+      real phone, which is the only way the desktop-only gate could be exercised
+      honestly. It is weaker in one respect: Pages serves the whole repository,
+      so the walk does not demonstrate that the **pruned FTP set is complete**.
+      That half is covered by §A's automated dry run (34→35 URLs, zero 404s,
+      module graph resolved through the served bytes), which is the stronger
+      instrument for exactly that question. Between them the two halves cover it.
+      **Freeze re-verified mechanically at the gate**, per §D.1:
+      `git log --oneline 612aacb..HEAD -- js/sim js/storage.js` → **empty**. The
+      scoring formula and the save schema are untouched since CP9, and the whole
+      of C-0003 is CSS, markup, UI, render, i18n and tests.
+      **One finding, which does not block the gate and is filed below:** Pages
+      serves the paths §C.1 deliberately excludes.
+
+---
+
+## E. Open after CPV5 — the second deployment surface
+
+**GitHub Pages serves the whole repository, including everything §C.1 excludes.**
+Verified 2026-07-21: `/docs/game-reference.md`, `/DESIGN.md`, `/CLAUDE.md`,
+`/tasks/…` and `/tests/…` all return **200** at
+`https://fchamone.github.io/minhocario/`.
+
+The exclusion decisions in §C.1/§C.2 were written for **one** deploy path — the
+FTP upload — and that path is clean and now enforced by
+`tests/release.test.js`. Pages arrived as a second path and no checklist item
+ever covered it.
+
+**Severity is real but narrow, and worth stating precisely rather than
+dramatising.** The repository is **public**, so `docs/game-reference.md` was
+already readable on github.com by anyone who looked; Pages does not leak
+something otherwise secret. What it changes is *who trips over it*: a **player**
+holding the game's URL can now reach the mechanics spoiler sheet by editing the
+address bar, and that is precisely the audience §C.2 excluded it from. `DESIGN.md`
+is the more pointed one — it does not merely list the food numbers, it **names
+the anti-spoiler discipline**, i.e. tells the player the food list hides
+suitability on purpose.
+
+Options, none taken yet — this is a maintainer decision:
+
+1. **Point Pages at a `gh-pages` branch carrying only the ship set.** Correct and
+   permanent, but publishing to it is a step someone has to run, and this project
+   has no build step by rule (CLAUDE.md: ask first).
+2. **Make the repository private and keep Pages public** (needs a paid plan for
+   Pages on a private repo). Closes the github.com side too.
+3. **Move the spoiler docs out of the served tree** — e.g. into `.harn/`, which
+   is equally served, so this only helps combined with (1).
+4. **Accept it**, on the grounds that the repo is public anyway and a player who
+   goes looking for a spoiler sheet has chosen to. Cheapest; the discovery-is-
+   gameplay rule then rests on nobody guessing the path.

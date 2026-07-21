@@ -531,12 +531,31 @@
       the *served* CSS. `npx serve` was unavailable offline, so a throwaway Node server stood in.
       Also folded in: the carried `disposeScene` open item (below). 19 guards broken deliberately
       first across three commits. Suite 398 → **418**.
-- [ ] **CPV5** — ship gate. Confirm explicitly that the scoring formula and save schema are
-      **untouched** since the CP9 freeze — **mechanically, not by reading the diff**:
-      `git log --oneline 612aacb..HEAD -- js/sim js/storage.js` (612aacb is the CP9 freeze commit).
-      **Empty as of V20.** The load-bearing human item is the **mobile walk** — see
-      `tasks/release-checklist.md` §B.8. Nothing in C-0003 has ever been walked on a phone, and the
-      breakpoint that makes one possible shipped in V20 unseen.
+- [x] **CPV5 — APPROVED by the maintainer, 2026-07-21. C-0003 IS SHIPPED.**
+      Walked at `c4e76e9` (confirmed on `origin/main`), including the two changes that landed after
+      V20: the shop's reworded affordability reasons and the desktop-only gate.
+      **Recorded as the blanket confirmation it was given as** — "I've tested it, and the phone as
+      well" — on the CPV3/CPV4 precedent. The set put to the maintainer is `release-checklist.md`
+      §B.1–B.8.
+      **Freeze re-verified mechanically, not by reading a diff:**
+      `git log --oneline 612aacb..HEAD -- js/sim js/storage.js` → **empty**. The scoring formula and
+      the save schema are untouched since CP9; the whole of C-0003 is CSS, markup, UI, render, i18n
+      and tests. That claim was kept continuous from CPV3 onward rather than reconstructed here.
+      **The load-bearing item resolved differently than V20 predicted.** V20 left the mobile walk as
+      the gate's biggest risk — nothing in C-0003 had ever been seen on a phone. Between V20 and the
+      gate the maintainer chose to make the game **desktop-only**, so what was actually walked was
+      the *gate* rather than the layout: the notice on a real phone, served from GitHub Pages.
+      Walking it against Pages rather than the pruned copy was the right call for that question — a
+      real remote host over the public internet is the only honest way to exercise a device gate —
+      and the half it cannot answer (is the pruned FTP set complete?) is exactly the half V20's
+      automated dry run answers better.
+      **One finding, filed as `release-checklist.md` §E and NOT blocking:** Pages serves the whole
+      repository, so `/docs/game-reference.md`, `/DESIGN.md`, `/CLAUDE.md`, `/tasks/` and `/tests/`
+      are all live (verified, 200). The §C.1 exclusions were written for the FTP path — which is
+      clean and now enforced — and Pages arrived as a **second deployment surface no checklist item
+      ever covered**. The repo is public, so nothing secret leaked; what changed is that a *player*
+      holding the game URL can reach the spoiler sheet by editing the address bar, which is the
+      audience §C.2 excluded it from. Four options recorded there; the decision is the maintainer's.
 
 ---
 
@@ -685,7 +704,27 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: V20 landed — CPV5 (ship gate) is all that remains
+## Status: COMPLETE — CPV5 approved 2026-07-21, C-0003 is shipped
+
+All 20 tasks and all 5 checkpoints are closed. Suite **433 green** (289 at the
+baseline). The project ran A→E without a spec, on the plan's "Decisions locked"
+table alone.
+
+**Landed after V20 and inside the gate**, both from play rather than from the
+plan: the shop now says *why* a bin is out of reach (at the starting 200 coins
+the 200-coin electric bin read "Saldo insuficiente" beside a wallet showing 200),
+and the game became **desktop-only** — a capability gate, `(pointer: coarse) and
+(hover: none)`, never a user-agent string. That second one retired V20's biggest
+open risk by removing the requirement rather than by satisfying it, and spec §6's
+mobile clause was amended to match.
+
+**Open, deliberately, and not blocking:** GitHub Pages serves the whole
+repository, so the §C.1 exclusions hold for the FTP path only. See
+`tasks/release-checklist.md` §E — four options, maintainer's call.
+
+---
+
+### Earlier status: V20 landed — CPV5 (ship gate) is all that remains
 
 **V20 is done and the suite is 418 green.** It found one ship blocker and fixed
 it: **the game screen had no mobile layout at all** since V12 — three tracks with
