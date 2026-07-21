@@ -1308,6 +1308,34 @@ export function enableDragMove(onWallPositionChange) {
 }
 
 /**
+ * Free the geometry and material of every mesh still parented to `root`.
+ *
+ * The composter group is freed by disposeComposterMesh, which also unparents it,
+ * so by the time this runs the only meshes left are the ones buildScene added to
+ * the scene itself: the wall, the floor, the soil block, the sun patch and the
+ * sky backdrop. Until V20 nobody owned those five.
+ *
+ * Textures are deliberately NOT freed here, which is the one behavioural
+ * difference from disposeComposterMesh's material walk. The grain maps are
+ * shared and cached (textures.js); disposeSurfaceTextures frees them *and* nulls
+ * the cache, so a rebuilt scene regenerates. Freeing them through a mesh would
+ * leave the cache pointing at disposed textures — every surface after the first
+ * teardown dressed in a dead map, and nothing to report it.
+ *
+ * @param {import('three').Object3D|null} root
+ */
+export function disposeRootMeshes(root) {
+  if (!root) return;
+  root.traverse((obj) => {
+    if (!obj.isMesh) return;
+    obj.geometry?.dispose?.();
+    const material = obj.material;
+    if (Array.isArray(material)) material.forEach((m) => m?.dispose?.());
+    else material?.dispose?.();
+  });
+}
+
+/**
  * Tear down the renderer and detach listeners. Not needed in the single-page
  * happy path (the scene lives for the page's lifetime) but keeps the module
  * self-contained and testable.
@@ -1345,11 +1373,15 @@ export function disposeScene() {
   ambientLight = null;
   floorMesh = null;
   soilMesh = null;
-  // The surface grain (V15) belongs to the scene root, not to composterGroup, so
-  // disposeComposterMesh never reaches it — these three textures are the only
-  // things in the render layer with no owner at teardown. Freed here rather than
-  // left to renderer.dispose(), which frees the renderer's own resources and not
-  // textures it happens to have uploaded.
+  // Everything buildScene added to the scene ITSELF — the wall, floor, soil, sun
+  // patch and sky backdrop — is reached by nothing else: disposeComposterMesh
+  // only ever walks the composter group, which it has just unparented above.
+  disposeRootMeshes(scene);
+  // The surface grain (V15) belongs to the scene root too, but the maps are
+  // shared and cached, so they are freed by their cache rather than through the
+  // meshes that wear them (see disposeRootMeshes). Freed here rather than left to
+  // renderer.dispose(), which frees the renderer's own resources and not textures
+  // it happens to have uploaded.
   disposeSurfaceTextures();
   skyColors = null;
   skyFactors = null;
