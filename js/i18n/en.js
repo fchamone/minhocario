@@ -10,6 +10,11 @@
 export const en = {
   appTitle: 'Minhocário',
 
+  desktopOnly: {
+    title: 'Desktop only',
+    body: 'Minhocário is built for a large screen and for dragging the composter with a mouse. Open this address on a computer to play.',
+  },
+
   devNav: {
     label: 'Navigation (dev)',
     home: 'Home',

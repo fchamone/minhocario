@@ -10,6 +10,11 @@
 export const es = {
   appTitle: 'Minhocário',
 
+  desktopOnly: {
+    title: 'Solo en computadora',
+    body: 'Minhocário está hecho para pantallas grandes y para arrastrar la compostera con el ratón. Abre esta dirección en una computadora para jugar.',
+  },
+
   devNav: {
     label: 'Navegación (dev)',
     home: 'Inicio',

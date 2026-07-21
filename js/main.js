@@ -21,6 +21,7 @@ import {
   DEFAULT_SPEED,
 } from './ui/speed.js';
 import { load, save, LOAD_STATUS } from './storage.js';
+import { isTouchPrimary } from './ui/platform.js';
 import { initScene, renderState, resizeScene, enableDragMove, setXrayView, renderStats } from './render/scene.js';
 import {
   STARTING_WALLET,
@@ -735,6 +736,20 @@ function init() {
   const lang = resolveLang(readStoredLang(), navLanguages);
   setLang(lang);
   document.documentElement.lang = lang;
+
+  // Desktop-only gate (2026-07-21). css/screens.css has already painted the
+  // notice and hidden #app by the time this runs — the CSS half needs no JS and
+  // survives a script failure. What this adds is the refusal to BOOT: without
+  // it a phone would still parse Three.js, spin up a WebGL context, start the
+  // tick loop and run a full game behind a wall it cannot see past.
+  //
+  // Placed after the locale is resolved, so the notice is read in the player's
+  // own language, and before everything else. Returning here leaves no
+  // listeners bound and no timers running.
+  if (isTouchPrimary(globalThis.matchMedia?.bind(globalThis))) {
+    applyStrings();
+    return;
+  }
 
   // Drop the dev nav from the DOM entirely for players — leaving it hidden
   // would still expose the screen-jump buttons to anyone poking at the markup.

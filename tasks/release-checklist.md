@@ -108,7 +108,9 @@ the pruned deploy copy served cold (§C), so the test matches what ships.
 - [ ] Opens and runs from a plain static file server with **zero build step** —
       no console errors, no 404s in the Network tab.
 - [ ] **Desktop:** 3D scene renders (garage wall + ground + the composter mesh).
-- [ ] **Mobile (one browser):** same scene renders; layout is usable; touch works.
+- [ ] **Mobile (one browser):** the **desktop-only notice** appears and the game
+      does not boot. ~~same scene renders; layout is usable; touch works~~ —
+      withdrawn 2026-07-21, see §B.8 and the spec §6 amendment.
 
 ### B.2 Visuals (spec acceptance criterion)
 - [ ] Day/night is **perceivable at 1×** within ~1 real minute (dawn→day→dusk→night).
@@ -161,18 +163,30 @@ the pruned deploy copy served cold (§C), so the test matches what ships.
 
 ### B.8 C-0003 additions — what CPV5 owes beyond CP9
 
-- [ ] **The mobile walk, in full.** This is the one that matters. **No C-0003
-      checkpoint has ever been walked on a phone** — CPV1–CPV4 were all desktop —
-      and V20 found the game screen had *no* mobile layout at all: V12's three
-      fixed-minimum tracks demanded 540px, so under that the page overflowed
-      sideways and the stage collapsed to **zero width**. Fixed in V20 by the
-      stacking breakpoint (`max-width: 899px`), which **has never been seen in a
-      browser**. Walk §B.1–B.4 on a real phone: the bands stack in order (hud /
-      stage / speed / actions / readouts), the canvas has real height, **drag-move
-      works under touch**, and the readouts `<details>` still collapses.
-- [ ] **The panel collapsed, on the phone.** The narrow rule repeats the `:has()`
-      selector because that selector carries an ID and would otherwise outrank it.
-      A test asserts the column counts agree; only a browser shows the result.
+- [ ] **The desktop-only gate, on a real phone.** *(Supersedes the mobile walk.
+      Maintainer decision 2026-07-21: the game is desktop-only — spec §6 amended,
+      and the reasoning is in `js/ui/platform.js`.)* On an actual Android and/or
+      iOS browser: the notice appears, it is **in the player's language**, and
+      **`#app` is not merely hidden — nothing boots**. Confirm in DevTools that
+      **no WebGL context is created and Three.js never runs a frame**; the CSS
+      alone would leave a phone paying for a scene behind a wall, which is
+      precisely what the JS half of the gate exists to prevent.
+- [ ] **iPadOS specifically.** It reports itself as macOS, so it is the case a
+      user-agent blocklist would have missed and the capability rule is chosen to
+      catch. If any device is going to slip through, it is this one.
+- [ ] **A touchscreen laptop must NOT be blocked.** The rule is `coarse AND
+      no-hover`, so a Windows touch laptop with a mouse should play normally.
+      This is the false-positive direction, and it is the one a player would
+      report as "the game refuses to run".
+- [ ] **A narrow desktop window still plays.** V20's stacking breakpoint
+      (`max-width: 899px`) is **kept** and now serves this case rather than
+      phones: a half-screen desktop window is not touch-primary, so it is not
+      gated, and without the breakpoint it would hit the same zero-width-canvas
+      bug V20 fixed. Resize a desktop window below 900px and confirm the bands
+      stack and the canvas keeps real area — with the readouts panel **collapsed
+      as well as open** (the narrow rule repeats the `:has()` selector because
+      that selector carries an ID and would otherwise outrank it; a test asserts
+      the column counts agree, only a browser shows the result).
 - [ ] **The three-column desktop layout is unchanged** by the breakpoint at
       ≥900px — a regression here would be the fix eating the layout it protects.
 - [ ] Anything CPV1–CPV4 left open. Per those entries, nothing is outstanding:

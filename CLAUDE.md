@@ -35,6 +35,10 @@ Three layers with a **hard boundary**:
 
 - `js/sim/` — **pure simulation engine**: no DOM, no Three.js, no browser globals. Must be importable and testable under Node. Core is `engine.js` (`tick(state, rng)` → new state); catalogs live in `composters.js`, `worms.js`, `foods.js`; plus `scoring.js` and `rng.js` (seeded RNG).
 - `js/ui/` — DOM screens/controls (home, shop, setup, hud, actions, speed). Reads sim state.
+  Also `platform.js`: the **desktop-only gate**. The game refuses to run on a touch-primary device
+  (`(pointer: coarse) and (hover: none)` — capability, never a user-agent string). The rule is
+  stated there *and* in `css/screens.css`, and a test holds the two identical; changing one means
+  changing both. Spec §6's mobile clause was amended on 2026-07-21 to match.
 - `js/render/` — Three.js layer (scene with day/night lighting, per-model composter meshes, x-ray view). Reads sim state.
 
 Only `js/main.js` orchestrates between layers. Tests (`tests/`, using `node:test` + `node:assert`) cover `js/sim/*`, `js/storage.js` and the i18n catalogs. One deliberate exception: `tests/composter3d.test.js` covers `js/render/composter3d.js`, because its mesh builders and `composterCavity` share structural dimensions whose drift is otherwise silent (the x-ray internals just render outside the shell). Three.js core imports fine under Node — geometry needs no WebGL — so render-layer *geometry* is testable; anything needing a renderer, a canvas or the DOM is not.

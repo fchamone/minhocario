@@ -311,6 +311,20 @@
     <span id="dev-perf" class="dev-nav__perf" aria-hidden="true"></span>
   </nav>
 
+  <!-- Desktop-only gate. A SIBLING of #app, never a `.screen` and never inside
+       it: the same media query that reveals this hides #app wholesale, so a
+       notice living in there would hide itself, and showScreen() would fight the
+       gate over anything carrying `.screen`.
+
+       Detection is capability-based — `(pointer: coarse) and (hover: none)`,
+       stated in css/screens.css and again in js/ui/platform.js, with a test
+       holding the two identical. The CSS half is what paints this; the JS half
+       stops main.js booting a WebGL scene behind it. -->
+  <section id="desktop-only" aria-live="polite">
+    <h1 data-string="desktopOnly.title"></h1>
+    <p data-string="desktopOnly.body"></p>
+  </section>
+
   <main id="app">
     <!-- HOME -->
     <section id="screen-home" class="screen" data-screen="home" hidden>

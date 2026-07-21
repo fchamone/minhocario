@@ -219,6 +219,11 @@ D:\FABIANO\projects\minhocario\
 - **Determinism:** every test seeds the RNG; same seed + same actions ⇒ same state.
 - **Manual playtest checklist (per release):** 3D scene renders on desktop + one mobile browser; day/night + sun patch visible; x-ray toggle; each action works incl. drag-move; speed changes take effect; state survives browser restart; each failure chain reachable.
 
+> **AMENDED 2026-07-21 — the game is desktop-only; the mobile clause above is withdrawn.**
+> Maintainer decision, taken during C-0003's release audit (V20). The redesign is built around a large screen and around dragging the composter along the wall with a mouse, and shipping a phone experience was judged worse than declining one. A touch-primary device now gets a plain notice and the app never boots.
+> Detection is by **capability** — `(pointer: coarse) and (hover: none)` — never by user agent: iPadOS reports itself as macOS and would slip past a UA blocklist, while a touchscreen laptop would be wrongly caught by one. `js/ui/platform.js` and `css/screens.css` state the rule, and a test holds the two identical.
+> This is consistent with "Out of scope (v1): mobile-specific layout polish" above, and it touches no acceptance criterion — none of them mentions mobile. The replacement manual check ("the notice appears on a real phone, in the player's language, and no WebGL context is created") lives in `tasks/release-checklist.md` §B.8.
+
 ---
 
 ## 7. Boundaries

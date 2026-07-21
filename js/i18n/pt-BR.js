@@ -10,6 +10,14 @@
 export const ptBR = {
   appTitle: 'Minhocário',
 
+  // Desktop-only gate — the only text a phone or tablet ever sees. Says what the
+  // game needs and what to do about it; it is a wall, so it must not read as an
+  // error the player could have caused.
+  desktopOnly: {
+    title: 'Só no computador',
+    body: 'O Minhocário é feito para tela grande e para arrastar a composteira com o mouse. Abra este endereço em um computador para jogar.',
+  },
+
   // Developer navigation — jumps between screens without playing through the
   // flow. Gated behind `?dev=1`; players never see it (see main.js).
   devNav: {

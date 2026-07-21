@@ -321,9 +321,23 @@ flatten the distinction.
 
 ## Viewport
 
-The design is **desktop-first with one stacking breakpoint**, and that is a
-decision rather than an omission — but it was an omission for four tasks, which
-is why it is written down here now.
+**The game is desktop-only** (maintainer decision, 2026-07-21; spec §6 amended).
+A touch-primary device gets a plain notice and the app never boots — the
+reasoning, and why detection is by capability rather than user agent, is in
+`js/ui/platform.js`. Two consequences for everything below:
+
+- **The stacking breakpoint is kept, and it is not for phones.** A narrow desktop
+  window — half a screen, a split view — is not touch-primary and is not gated,
+  so it still has to work. Deleting the breakpoint would re-open the bug it was
+  added for at exactly those widths.
+- **The gate is stated twice**, in `css/screens.css` and `js/ui/platform.js`, and
+  the two are held identical by a test. CSS paints the notice and needs no JS;
+  the JS half is what stops a phone parsing Three.js and spinning up a WebGL
+  context behind a wall it cannot see past. Neither half is redundant.
+
+The design is otherwise **desktop-first with one stacking breakpoint**, and that
+is a decision rather than an omission — but it was an omission for four tasks,
+which is why it is written down here now.
 
 `@media (max-width: 899px)` in `css/screens.css` stacks the game screen into
 bands: hud / stage / speed / actions / readouts. Above it, three columns. There
