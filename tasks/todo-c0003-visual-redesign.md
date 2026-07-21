@@ -488,9 +488,55 @@
 
 ## Phase E — Release
 
-- [ ] **V20** Audits + spec §6 checklist + deploy dry run (S/M) — deps: V13, V19
+- [x] **V20** Audits + spec §6 checklist + deploy dry run (S/M) — deps: V13, V19
+      **The audits found a ship blocker, which is the whole reason the task exists.**
+      **THE GAME SCREEN HAD NO MOBILE LAYOUT.** V12 replaced v1's `1fr 260px` with three tracks
+      carrying **fixed** minimums (280 + 260), and a grid track is never shrunk below its `minmax`
+      minimum — so the screen demanded **540px** before anything gave way. Under that the page
+      overflowed sideways *and* the stage (`minmax(0, 1fr)`, correctly floorless) resolved to **zero
+      width**: no 3D scene at all, on the one criterion the spec has carried since v1. There was no
+      width query anywhere below 1600px, and `width=device-width` meant no scale-down rescue.
+      Nothing could report it — not a parse error, not a break on the desktop it was designed for,
+      and **CPV1–CPV4 were all desktop walks**. v1 passed CP9's mobile gate precisely because its
+      stage had no floor and simply gave way. Fixed with a stacking breakpoint (`max-width: 899px`
+      → hud / stage / speed / actions / readouts) after the maintainer chose to fix rather than
+      defer. **It has never been seen in a browser — that is now CPV5's load-bearing item.**
+      The guard for it had to be corrected **twice**, both times by the V6 discipline: its rule
+      parser could not see comma-separated selector lists, so it silently failed to see *the very
+      fix* (a guard that cannot see the fix reports the bug forever); and its stated failure mode
+      was wrong — omitting the `:has()` variant does **not** overflow (the collapsed list floors at
+      260 and fits a phone). What it actually does is desynchronise the grid: the collapsed rule
+      keeps winning `grid-template-columns` (3 tracks, since `:has()` takes its argument's
+      specificity and carries an **ID**, and a media query adds none) while the narrow rule wins
+      `grid-template-areas` (1), so every named area piles into the first track and the other two
+      sit empty. Silent in every direction. `DESIGN.md` gains a **Viewport** section; it had none,
+      which is half of why four tasks could pass over this.
+      **The audits themselves became tests instead of prose** (`tests/release.test.js`, 13 guards).
+      The old checklist asserted "48 import specifiers resolve", "no external URLs" and "no
+      hardcoded UI literals" from a single sweep at T22/T23, with nothing re-checking them across a
+      webfont, an icon sprite, four render modules and a sixth stylesheet. Now guarded: the ship-set
+      partition (a new root dir gets a deploy decision), the module graph from `js/main.js`, orphan
+      modules, `index.html`'s assets, nothing browser-fetched pointing at an excluded path, no
+      network API in the first-party layer, the webfont staying a `data:` URI with its OFL text,
+      `js/sim/` purity + no `Math.random`, and no pt-BR literal outside the catalog. Comments are
+      stripped first — `rng.js` names `Math.random` in the comment forbidding it.
+      **The vendor claim was sharpened rather than repeated.** "No external URLs" was never true as
+      written: there are five `http` strings and none is a request. They are now inventoried by
+      *fetching position*, and Three's `fetch(` is handled by testing the real claim — no
+      first-party module may import a `*Loader`, which is where that `fetch` lives.
+      **Deploy dry run, cold, 2026-07-21:** pruned copy served over HTTP, every URL a browser would
+      load requested against it — the module graph walked **through the served bytes**, so a file
+      present locally but missing from the upload appears as the 404 it would be. **34 URLs,
+      1179 KB, zero 404s**; five excluded paths confirmed unreachable; webfont confirmed embedded in
+      the *served* CSS. `npx serve` was unavailable offline, so a throwaway Node server stood in.
+      Also folded in: the carried `disposeScene` open item (below). 19 guards broken deliberately
+      first across three commits. Suite 398 → **418**.
 - [ ] **CPV5** — ship gate. Confirm explicitly that the scoring formula and save schema are
-      **untouched** since the CP9 freeze
+      **untouched** since the CP9 freeze — **mechanically, not by reading the diff**:
+      `git log --oneline 612aacb..HEAD -- js/sim js/storage.js` (612aacb is the CP9 freeze commit).
+      **Empty as of V20.** The load-bearing human item is the **mobile walk** — see
+      `tasks/release-checklist.md` §B.8. Nothing in C-0003 has ever been walked on a phone, and the
+      breakpoint that makes one possible shipped in V20 unseen.
 
 ---
 
@@ -611,7 +657,16 @@
           x-rayed, buried↔tier3 while x-rayed), and the shadow **direction must track the sun**
           across the day. A solid slab beside a see-through bin means the mesh-level `castShadow`
           stash did not fire.
-- [ ] **V20 candidate — `disposeScene` leaves scene-root geometry/materials unfreed.** It frees
+- [x] **RESOLVED in V20 — `disposeScene` left scene-root geometry/materials unfreed.** New
+      `disposeRootMeshes(root)` frees the geometry and material of every mesh still parented to the
+      scene; `disposeComposterMesh` cannot reach them, since it only walks the group it unparents.
+      **It deliberately does NOT free textures**, the one behavioural difference from that walk: the
+      grain maps are shared and cached, and `disposeSurfaceTextures` frees them *and* nulls the cache
+      so a rebuild regenerates. Freeing them through a mesh would leave the cache holding disposed
+      textures — every surface after the first teardown wearing a dead map, with nothing to report
+      it. 5 guards broken first; the ordering one matters most, because calling the walk after
+      `scene = null` frees nothing, throws nothing and reads correctly in a diff.
+      *Original entry:* it freed
       the composter group and the renderer but not the wall / floor / soil / sun-patch / sky-backdrop
       **geometries and materials** (V15 closed it for its three textures; V17's backdrop added one
       more unfreed root mesh). Not a leak in the single-page happy path — the scene lives for the
@@ -630,7 +685,29 @@
   that development happened on `master` (a branch that never existed). Both fixed in this project's
   first two commits; keep the doc honest as the redesign moves things.
 
-## Status: Phases A–D approved — Phase E (release) is all that remains
+## Status: V20 landed — CPV5 (ship gate) is all that remains
+
+**V20 is done and the suite is 418 green.** It found one ship blocker and fixed
+it: **the game screen had no mobile layout at all** since V12 — three tracks with
+fixed minimums demanding 540px, so under that the page overflowed sideways and
+the 3D stage collapsed to zero width. That is the spec's mobile acceptance
+criterion failing outright, on a build four checkpoints had approved. Every
+C-0003 walk so far was desktop, and the redesign has **still never been seen on a
+phone**. The stacking breakpoint that fixes it shipped unwalked, which makes the
+mobile pass the load-bearing item of CPV5 rather than a formality.
+
+The rest of V20 turned the release audits from prose into `tests/release.test.js`
+(13 guards) and re-ran the deploy dry run for real — the pruned copy served cold
+over HTTP, 34 URLs, zero 404s. The carried `disposeScene` teardown gap closed
+alongside it.
+
+**What CPV5 needs:** `tasks/release-checklist.md` §B.8 (mobile first), §B.1–B.7
+on the redesigned build, and the freeze check re-run mechanically —
+`git log --oneline 612aacb..HEAD -- js/sim js/storage.js`, **empty as of V20**.
+
+---
+
+### Earlier status, kept for the record: Phases A–D approved
 
 V1, V2a, V2b, V3, V4, V5, V6, V7 landed; **CPV1 approved 2026-07-20**.
 V8, V9, V10, V11 landed and **CPV2 approved 2026-07-20**.
