@@ -30,7 +30,7 @@ const abs = (rel) => path.join(rootDir, rel);
 // Source: tasks/release-checklist.md §C.1. Deploy is an FTP upload of these
 // paths and nothing else.
 
-const SHIP = ['index.html', 'css', 'js', 'vendor'];
+const SHIP = ['index.html', 'favicon.ico', 'css', 'js', 'vendor', 'assets'];
 
 /**
  * Everything deliberately left on the floor, with the reason it is not shipped.
@@ -308,6 +308,54 @@ test('no first-party module can reach the network', () => {
         `${rel} uses ${api} — the game must be fully self-contained (spec §7)`,
       );
     }
+  }
+});
+
+test('image loading is confined to js/render/murals.js', () => {
+  // The murals (V21) are the FIRST thing this game fetches after its initial
+  // load, and `new Image()` is invisible to the NETWORK_APIS guard above — it is
+  // not `fetch`, not XHR, and would never trip it. So the offline claim in
+  // tasks/release-checklist.md §A is no longer unconditional, and this is what
+  // keeps the exception a single known one instead of a growing habit: exactly
+  // one module may reach for an image, and it is the one whose failure path is
+  // written to leave the wall as plain plaster.
+  const offenders = firstPartySources()
+    .filter(([rel]) => rel !== 'js/render/murals.js')
+    .filter(([, src]) => /\bnew\s+Image\s*\(/.test(stripComments(src)))
+    .map(([rel]) => rel);
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `${offenders.join(', ')} loads an image — image fetching is confined to ` +
+      'js/render/murals.js, where the offline exception is documented and where a ' +
+      'failed load degrades to the pre-V21 wall rather than to a broken one',
+  );
+});
+
+test('every mural the catalog names ships, and is credited', () => {
+  // Three ways this feature 404s in production and in no test: a catalog entry
+  // whose file was never prepared, a file that ships without being reachable
+  // (dead weight in an FTP upload done by hand), and a work used without its
+  // provenance — which is the one that matters legally rather than visually.
+  const catalog = [...read('js/render/murals.js').matchAll(/\{\s*id:\s*'([^']+)'\s*\}/g)].map(
+    (m) => m[1],
+  );
+  assert.ok(catalog.length >= 4, `parsed only ${catalog.length} murals — the regex has drifted`);
+
+  const shipped = readdirSync(abs('assets/murals'))
+    .filter((f) => f.endsWith('.webp'))
+    .map((f) => f.replace(/\.webp$/, ''))
+    .sort();
+  assert.deepEqual([...catalog].sort(), shipped, 'the mural catalog and assets/murals/ disagree');
+
+  const credits = read('assets/murals/CREDITS.txt');
+  for (const id of catalog) {
+    assert.ok(
+      credits.includes(`${id}.webp`),
+      `assets/murals/CREDITS.txt does not account for ${id}.webp — every work must carry its ` +
+        'provenance and the reasoning for its public-domain status',
+    );
   }
 });
 

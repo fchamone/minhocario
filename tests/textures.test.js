@@ -403,6 +403,27 @@ test('scene.js compensates every grain map by its measured mean', () => {
   );
 });
 
+test('scene.js compensates the wall by the mean measured off its composite', () => {
+  // The same obligation as above, for the one surface grainMean cannot serve. The
+  // wall's map is grain x mural x feather x headroom, so its mean is measured
+  // rather than derived — and WALL_BASE_LEVEL alone darkens it by a third, so
+  // forgetting this division is not a subtle 5-13% shift but a visibly dim garage.
+  assert.match(
+    SCENE_SRC,
+    /multiplyScalar\(1 \/ built\.linearMean\)/,
+    'scene.js dresses the wall without dividing its albedo by the measured mean of the ' +
+      'composited map — the wall would render markedly darker than the floor beside it.',
+  );
+  // Set, not multiplied in place: successive murals would otherwise compound the
+  // division and the wall would brighten a little with every farm.
+  assert.match(
+    SCENE_SRC,
+    /material\.color\.set\(WALL_COLOR\)\.multiplyScalar/,
+    'the wall albedo must be re-derived from WALL_COLOR on each dressing, or the ' +
+      'compensation compounds across mural swaps.',
+  );
+});
+
 /**
  * Map assignments in scene.js that are deliberately NOT albedo compensation, each
  * listed with the argument for it. An allowlist rather than a widened pattern, on
@@ -419,6 +440,25 @@ const SANCTIONED_MAPS = [
   'map: texture,', // V16 contact shadow — unlit MeshBasicMaterial, black + alpha
 ];
 
+/**
+ * Map assignments that ARE albedo on a lit surface, and ARE compensated — just
+ * not by `grainMean()`.
+ *
+ * V21's wall is the first and, so far, only one. It could not join
+ * SANCTIONED_MAPS: that list means "there is no albedo here to preserve", and
+ * writing the wall into it would put a false statement in the codebase to buy a
+ * green test. The wall's map is a COMPOSITE — grain, mural, feather and headroom —
+ * whose mean no formula predicts, so it is measured off the finished pixels
+ * instead (murals.js `buildWallTexture`) and divided out in `dressWall`.
+ *
+ * The exemption is CONDITIONAL on that division still being there, checked below.
+ * An unconditional entry here would be indistinguishable from deleting the guard
+ * for the largest surface on screen.
+ */
+const MEASURED_MAPS = [
+  'wallMesh.material.map = built.texture;', // V21 wall — compensated by linearMean
+];
+
 test('scene.js routes every textured surface through the one compensating builder', () => {
   // The realistic regression is not removing the division — it is adding a fourth
   // textured surface next to the three and assigning `.map` directly, which skips
@@ -426,7 +466,12 @@ test('scene.js routes every textured surface through the one compensating builde
   // shift, because only one surface moves.
   const outside = SCENE_SRC
     // Drop the builder itself; it is the sanctioned place to assign a map.
-    .replace(/function surfaceMaterial[\s\S]*?\n}\n/, '')
+    // `\r?\n`, not `\n`: this repo's working tree is mixed (js/main.js and
+    // js/sim/engine.js are CRLF today) and core.autocrlf is on, so a plain `\n}\n`
+    // silently fails to strip the function the moment scene.js is checked out on
+    // Windows — and the test then reports surfaceMaterial's OWN assignment as the
+    // violation, which is a genuinely baffling place to start debugging.
+    .replace(/function surfaceMaterial[\s\S]*?\r?\n}\r?\n/, '')
     .split('\n')
     // Any `<something>map =` or `map:` assignment, on any object and in any slot
     // (`normalMap`, `roughnessMap`, …). Written this wide after a narrower version
@@ -434,7 +479,14 @@ test('scene.js routes every textured surface through the one compensating builde
     // — the exact regression the test is for. `.map(` never matches, since a call
     // is followed by `(` rather than `:` or `=`.
     .filter((line) => /(?:^|[\s.])[a-zA-Z]*[Mm]ap\s*[:=](?!=)/.test(line) && !line.trim().startsWith('*') && !line.trim().startsWith('//'))
-    .filter((line) => !SANCTIONED_MAPS.includes(line.trim()));
+    .filter((line) => !SANCTIONED_MAPS.includes(line.trim()))
+    // The measured-mean route is only an exemption while the division it names is
+    // actually present — otherwise this list would be a way to silently drop the
+    // largest surface on screen out of the guard.
+    .filter(
+      (line) =>
+        !(MEASURED_MAPS.includes(line.trim()) && /multiplyScalar\(1 \/ built\.linearMean\)/.test(SCENE_SRC)),
+    );
 
   assert.deepEqual(
     outside,

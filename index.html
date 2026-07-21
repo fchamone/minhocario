@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Title is set from strings.js by main.js on load -->
   <title>Minhocário</title>
+  <!-- Declared explicitly rather than left to the browser's automatic
+       /favicon.ico probe: that probe only ever looks at the ORIGIN root, so it
+       misses whenever the game is served from a subdirectory — which is exactly
+       how a GitHub Pages project site is served. A relative href resolves against
+       this document either way. The .ico carries 16/32/48px so the tab, the
+       bookmark bar and the Windows shortcut each get a size drawn for them. -->
+  <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
   <!-- Cascade order is load order, and this list is its source of truth.
        tokens -> font -> base -> components -> screens -> motion. motion.css must
        stay last: its prefers-reduced-motion block is a blanket `*` override that

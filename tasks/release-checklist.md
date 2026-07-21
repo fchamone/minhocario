@@ -52,9 +52,19 @@ them across two projects' worth of commits.
       copy is diacritic-dense, so a hardcoded string almost certainly carries one.
       The cheap half of the T22 audit, but it cannot go stale; the expensive half
       is the key-parity suite above.
-- [x] **Offline after first load, statically** — no `fetch`/`XHR`/`WebSocket`/
-      `sendBeacon`/`importScripts`/`serviceWorker` anywhere in the first-party
-      layer; the webfont is a `data:` URI and its OFL text ships beside it.
+- [x] **Offline after first load, statically — with one stated exception** — no
+      `fetch`/`XHR`/`WebSocket`/`sendBeacon`/`importScripts`/`serviceWorker`
+      anywhere in the first-party layer; the webfont is a `data:` URI and its OFL
+      text ships beside it.
+      **The exception is the wall mural (V21)**, which is an `Image` load — a path
+      the `NETWORK_APIS` guard cannot see, since it is neither `fetch` nor XHR. It
+      is lazy: a farm loads only its own mural, so an *existing* farm reopened
+      offline finds it already cached and is unaffected. Starting a **brand-new**
+      farm while offline requests a file that has never been fetched, and gets
+      plain plaster until the next online load — the failure path is written to
+      degrade to exactly the pre-V21 wall rather than to a broken one.
+      `tests/release.test.js` confines image loading to `js/render/murals.js`, so
+      this stays one known exception rather than a habit.
 - [x] **The vendored Three.js is inert on the network** — exactly two `http(s)`
       strings: the pinned-version provenance **comment** and the
       `http://www.w3.org/1999/xhtml` namespace constant `createElementNS` needs.
@@ -201,14 +211,29 @@ the pruned deploy copy served cold (§C), so the test matches what ships.
 bundler, no `npm install` at runtime.
 
 ### C.1 Files uploaded (ship set)
-Include: `index.html`, `css/`, `js/`, `vendor/`. **35 files, ~1.2 MB**, of which
-`vendor/three.module.min.js` is ~680 KB and the embedded webfont ~48 KB of
-`css/font.css`.
+Include: `index.html`, `favicon.ico`, `css/`, `js/`, `vendor/`, `assets/`.
+**45 files, ~1.4 MB**, of which `vendor/three.module.min.js` is ~680 KB, the
+embedded webfont ~48 KB of `css/font.css`, and the eight wall murals ~136 KB of
+`assets/murals/`.
+
+`favicon.ico` is 2.3 KB and holds 16/32/48px. It is **referenced explicitly from
+`index.html`** rather than left to the browser's automatic probe, because that
+probe only ever looks at the *origin root* — so on a GitHub Pages project site
+(served from a subdirectory) the automatic lookup misses and a declared relative
+href is the only thing that works. It must be uploaded to the same directory as
+`index.html`.
 
 **`css/IBMPlexSans-OFL.txt` must be uploaded**, not pruned as documentation. The
 SIL Open Font License requires its text to accompany redistributed font software,
 and `css/font.css` redistributes IBM Plex Sans as an embedded `data:` URI. It is
-the one `.txt` in the ship set and it is there for licence compliance.
+one of the two `.txt` files in the ship set and it is there for licence compliance.
+
+**`assets/murals/CREDITS.txt` must be uploaded** for the same class of reason,
+though not the same legal one (V21). The eight murals are all public domain, so
+nothing *requires* attribution — but the file is what lets the next maintainer
+verify that claim without redoing the research, and what would catch a work that
+turns out not to be free. It also records what was done to each image. Excluding
+it would leave eight paintings on the wall and no account of where they came from.
 
 Exclude: `tests/`, `tasks/`, `docs/`, `.harn/`, `.claude/`, `.git/`, `DESIGN.md`,
 `CLAUDE.md`, `README.md`, `LICENSE`, `.gitignore`, `.nojekyll`. The last five are

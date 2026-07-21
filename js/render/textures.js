@@ -71,6 +71,12 @@ export const SURFACES = {
   // Garage wall: plaster. The finest and faintest of the three — it is the
   // largest area on screen and the backdrop for the sun patch, so pattern here
   // would compete with the one gradient that carries information.
+  //
+  // The wall is the one surface that does NOT ship as a tiling texture (see
+  // TILED_SURFACES). Its grain is sampled into the full-wall canvas that carries
+  // the mural instead — but its parameters stay here, in one table with the other
+  // two, because "one physical grain scale across all three surfaces" is the rule
+  // they exist to hold and moving one out is how that rule quietly stops applying.
   wall: { seed: 0x7a11, world: [12, 4.5], lattice: 10, octaves: 3, grainMin: 0.92 },
   // Garage floor: concrete. Coarser and a touch stronger than the wall; it is
   // seen at a grazing angle, which compresses the grain vertically, so a wall
@@ -187,6 +193,32 @@ function grainByte(v, grainMin) {
 }
 
 /**
+ * Mean of an RGBA byte buffer in LINEAR space, read off the red channel.
+ *
+ * The buffer half of {@link grainMean}, and it exists for the same reason: a
+ * colour map MULTIPLIES albedo, so whatever its mean is, the surface is darkened
+ * by that factor and the albedo has to be divided back out. `grainMean` can work
+ * from the noise field because a grain is nothing but the field; the wall's map
+ * is a COMPOSITE (grain, mural, feather, headroom) whose mean no formula predicts,
+ * so it has to be measured from the finished pixels instead.
+ *
+ * Red channel only: everything this module paints is greyscale, and the assertion
+ * that it stays greyscale is cheaper to make in a test than to re-derive per texel.
+ * @param {Uint8ClampedArray|number[]} data RGBA bytes
+ * @returns {number} mean linear multiplier in (0, 1]
+ */
+export function linearMeanOf(data) {
+  if (!data || data.length < 4) return 1;
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    sum += srgbToLinear(data[i] / 255);
+    n += 1;
+  }
+  return n > 0 ? sum / n : 1;
+}
+
+/**
  * Mean of a surface's grain in LINEAR space — i.e. the factor by which dressing
  * that surface would darken it.
  *
@@ -294,6 +326,124 @@ export function buildSurfaceTexture(name, canvas) {
   return texture;
 }
 
+// --- The wall canvas (V21) ---------------------------------------------------
+// The wall stops being a tiling surface, because a mural does not tile. Instead
+// it gets ONE canvas at the wall's own aspect, into which the same grain is
+// sampled at the same physical scale and the mural is composited (js/render/
+// murals.js). The other two surfaces are untouched and still tile.
+
+/**
+ * The wall canvas, in texels. Chosen so that BOTH axes land on exactly
+ * {@link WALL_TILE_TEXELS} per grain tile — 1152/6 = 432/2.25 = 192 — which is
+ * what keeps the grain isotropic and at V15's one physical scale. Pick a size
+ * that does not divide evenly and the plaster silently stretches on one axis.
+ *
+ * 1152/12 = 96 texels per world unit. The camera frames very nearly the whole
+ * 12-unit wall, so at a typical ~900px canvas the wall runs about 75 screen
+ * pixels per world unit (see NOISE_SIZE) — 96 stays above that, so neither the
+ * grain nor the mural resolves as blocky. It is BELOW the 128/unit the old
+ * tiling wall achieved, which is the real cost of this change and is affordable
+ * precisely because 128 was already well past what the screen can show.
+ */
+export const WALL_TEX_WIDTH = 1152;
+export const WALL_TEX_HEIGHT = 432;
+/** Texels per grain tile on the wall canvas — the same 2 world units as ever. */
+export const WALL_TILE_TEXELS = WALL_TEX_WIDTH / (SURFACES.wall.world[0] / TILE_WORLD_SIZE);
+
+/**
+ * Headroom. The wall base is painted at this fraction of its natural level so
+ * the mural's brightest passages have somewhere to go instead of clipping at 255.
+ *
+ * It is FREE, and that is the non-obvious part: scene.js divides the material's
+ * albedo by the map's MEASURED linear mean, and scaling every texel by a constant
+ * scales that mean by the same constant, so it divides straight back out. The
+ * wall's mean radiance is identical at any headroom — all this buys is 8-bit
+ * range for the mural to swing in without the highlights flattening.
+ *
+ * 0.66 puts the composite's extremes at roughly 0.35..0.94 of full scale for the
+ * strongest mural, so nothing clips at either end and ~150 of the 256 levels are
+ * in use.
+ */
+export const WALL_BASE_LEVEL = 0.66;
+
+/**
+ * Bilinearly sample a tileable noise field at fractional lattice coordinates,
+ * wrapping on both axes.
+ *
+ * Bilinear rather than nearest because the wall canvas resamples the 256-texel
+ * grain tile down to 192, a non-integer 4:3 ratio — nearest would drop every
+ * fourth sample on a fixed grid and lay a faint regular pattern over a field
+ * whose entire job is to look irregular.
+ * @param {Float32Array} field NOISE_SIZE square
+ * @param {number} fx
+ * @param {number} fy
+ * @returns {number}
+ */
+function sampleField(field, fx, fy) {
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const tx = fx - x0;
+  const ty = fy - y0;
+  const at = (xx, yy) => {
+    const wx = ((xx % NOISE_SIZE) + NOISE_SIZE) % NOISE_SIZE;
+    const wy = ((yy % NOISE_SIZE) + NOISE_SIZE) % NOISE_SIZE;
+    return field[wy * NOISE_SIZE + wx];
+  };
+  const top = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * tx;
+  const bottom = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * tx;
+  return top + (bottom - top) * ty;
+}
+
+/**
+ * The painted base, kept so it is computed once per page rather than once per
+ * wall build. See {@link paintWallBase}.
+ * @type {Uint8ClampedArray|null}
+ */
+let wallBaseCache = null;
+
+/**
+ * Paint the wall's plaster into a full-wall RGBA buffer: the same grain as ever,
+ * sampled at the same 2-world-unit scale, scaled by {@link WALL_BASE_LEVEL}.
+ *
+ * This is the wall WITHOUT a mural, and it is deliberately the same code path the
+ * mural build starts from — so "the mural failed to load" and "the first frame
+ * before it arrives" both render exactly the pre-V21 wall rather than a second,
+ * separately-maintained fallback that nothing ever looks at.
+ *
+ * CACHED, because the wall is 1152x432 and this loop measures ~27 ms — an order
+ * of magnitude past the "few milliseconds of noise at init" the three tiling
+ * grains cost, and it would otherwise run TWICE per farm load (once bare, once
+ * when the mural arrives) plus again on every mural swap. The result depends only
+ * on constants in this file, so it can never go stale; the copy is a ~2 MB memcpy
+ * and lands under a millisecond. Freed by disposeSurfaceTextures with everything
+ * else this module owns.
+ * @param {{data: Uint8ClampedArray}} imageData target, WALL_TEX_WIDTH*HEIGHT*4
+ */
+export function paintWallBase(imageData) {
+  if (wallBaseCache) {
+    imageData.data.set(wallBaseCache);
+    return;
+  }
+
+  const field = noiseField('wall');
+  const { grainMin } = SURFACES.wall;
+  const { data } = imageData;
+  const scale = NOISE_SIZE / WALL_TILE_TEXELS;
+
+  for (let y = 0; y < WALL_TEX_HEIGHT; y += 1) {
+    for (let x = 0; x < WALL_TEX_WIDTH; x += 1) {
+      const v = sampleField(field, x * scale, y * scale);
+      const g = Math.round((grainMin + (1 - grainMin) * v) * WALL_BASE_LEVEL * 255);
+      const i = (y * WALL_TEX_WIDTH + x) * 4;
+      data[i] = g;
+      data[i + 1] = g;
+      data[i + 2] = g;
+      data[i + 3] = 255;
+    }
+  }
+  wallBaseCache = Uint8ClampedArray.from(data);
+}
+
 // --- Contact shadow (V16) ----------------------------------------------------
 
 /**
@@ -379,18 +529,24 @@ export function buildContactShadowTexture(canvas = createShadowCanvas()) {
 let cache = null;
 
 /**
- * Create a NOISE_SIZE-square offscreen canvas, or null where neither canvas API
- * exists (Node, and any browser hostile enough to lack both). Returning null is
- * the graceful path the whole render layer uses: scene.js simply leaves the
- * materials untextured, which is precisely how they looked before V15.
+ * Create an offscreen canvas, or null where neither canvas API exists (Node, and
+ * any browser hostile enough to lack both). Returning null is the graceful path
+ * the whole render layer uses: scene.js simply leaves the materials untextured,
+ * which is precisely how they looked before V15.
+ *
+ * Exported since V21 so murals.js can raise its own scratch canvases without a
+ * second copy of the OffscreenCanvas/document fallback — there is exactly one
+ * place in this project that decides how a canvas comes into being.
+ * @param {number} width
+ * @param {number} [height=width]
  * @returns {HTMLCanvasElement|OffscreenCanvas|null}
  */
-function createCanvas(size = NOISE_SIZE) {
-  if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(size, size);
+export function createCanvas(width = NOISE_SIZE, height = width) {
+  if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(width, height);
   if (typeof document !== 'undefined' && document.createElement) {
     const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
+    canvas.width = width;
+    canvas.height = height;
     return canvas;
   }
   return null;
@@ -402,14 +558,25 @@ function createShadowCanvas() {
 }
 
 /**
- * The three surface textures, generated once and cached. A few milliseconds of
+ * Which surfaces ship as a repeating texture.
+ *
+ * The wall is absent, and its absence is the V21 change: a mural does not tile,
+ * so the wall is painted once at its own aspect by {@link paintWallBase} instead.
+ * Building its tiling texture anyway would cost a 256-square canvas and its VRAM
+ * for a map nothing samples — and would leave two representations of the wall's
+ * plaster, which is exactly the shape V14 and V15 each got bitten by.
+ */
+export const TILED_SURFACES = ['floor', 'soil'];
+
+/**
+ * The tiling surface textures, generated once and cached. A few milliseconds of
  * noise at init; nothing per frame.
- * @returns {{wall: CanvasTexture|null, floor: CanvasTexture|null, soil: CanvasTexture|null}}
+ * @returns {{floor: CanvasTexture|null, soil: CanvasTexture|null}}
  */
 export function surfaceTextures() {
   if (cache) return cache;
   cache = {};
-  for (const name of Object.keys(SURFACES)) {
+  for (const name of TILED_SURFACES) {
     cache[name] = buildSurfaceTexture(name, createCanvas());
   }
   return cache;
@@ -421,6 +588,10 @@ export function surfaceTextures() {
  * they are the one thing in the render layer with no owner at teardown.
  */
 export function disposeSurfaceTextures() {
+  // The wall base is a plain buffer rather than a GPU texture, so it has nothing
+  // to dispose — but it is ~2 MB held by this module, and leaving it behind would
+  // make "textures.js owns nothing after teardown" false by exactly one object.
+  wallBaseCache = null;
   if (!cache) return;
   for (const texture of Object.values(cache)) texture?.dispose?.();
   cache = null;

@@ -1,0 +1,79 @@
+Minhocário — wall murals
+========================
+
+The garage wall carries one of these works per farm, chosen from the farm's own
+seed (js/render/murals.js). Every one is in the PUBLIC DOMAIN worldwide.
+
+This file SHIPS with the game, in the same spirit as css/IBMPlexSans-OFL.txt.
+Public-domain works carry no legal attribution requirement; recording provenance
+anyway is how the next maintainer can verify the licence claim without redoing
+the research, and how a work that turns out NOT to be free gets caught.
+
+
+The public-domain test applied here
+-----------------------------------
+
+Every artist below died MORE THAN 70 YEARS AGO. That clears the life+70 term used
+by Brazil (Lei 9.610/98) and the EU, and every work also predates 1930, which
+clears the United States. The reproductions come from Wikimedia Commons, where a
+faithful photograph of a two-dimensional public-domain work carries no new
+copyright (Bridgeman v. Corel).
+
+Deliberately EXCLUDED despite being the obvious Brazilian choices: Tarsila do
+Amaral (d. 1973) and Anita Malfatti (d. 1964). Neither enters the public domain
+until 2044 and 2035 respectively.
+
+
+The works
+---------
+
+gleaners.webp
+  Des glaneuses (The Gleaners), 1857
+  Jean-François Millet (1814-1875)
+  https://commons.wikimedia.org/wiki/File:Jean-François_Millet_(II)_002.jpg
+
+great-wave.webp
+  Under the Wave off Kanagawa (The Great Wave), original c. 1829-1832
+  After Katsushika Hokusai (1760-1849); this impression c. 1930
+  https://commons.wikimedia.org/wiki/File:The_Great_Wave_off_Kanagawa.jpg
+
+harvesters.webp
+  De graanoogst (The Harvesters), 1565
+  Pieter Bruegel the Elder (c. 1525-1569)
+  https://commons.wikimedia.org/wiki/File:Pieter_Bruegel_de_Oude_-_De_graanoogst.jpg
+
+o-violeiro.webp
+  O Violeiro, 1899
+  José Ferraz de Almeida Júnior (1850-1899)
+  https://commons.wikimedia.org/wiki/File:Almeida_Júnior_-_O_Violeiro_(2).jpg
+
+rhinoceros.webp
+  Rhinocerus, 1515 (woodcut)
+  Albrecht Dürer (1471-1528)
+  https://commons.wikimedia.org/wiki/File:Dürer's_Rhinoceros,_1515.png
+
+starry-night.webp
+  De sterrennacht (The Starry Night), 1889
+  Vincent van Gogh (1853-1890)
+  https://commons.wikimedia.org/wiki/File:Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg
+
+sudden-shower.webp
+  Ohashi Atake no yudachi (Sudden Shower over Shin-Ohashi Bridge and Atake), 1857
+  Utagawa Hiroshige (1797-1858)
+  https://commons.wikimedia.org/wiki/File:Hiroshige_Atake_sous_une_averse_soudaine.jpg
+
+vitruvian-man.webp
+  Le proporzioni del corpo umano (Vitruvian Man), c. 1492
+  Leonardo da Vinci (1452-1519)
+  https://commons.wikimedia.org/wiki/File:Da_Vinci_Vitruve_Luc_Viatour.jpg
+
+
+What was done to them
+---------------------
+
+None of these files is the source image. Each was reduced to a single tonal
+channel and normalised onto one shared contrast budget, so that no mural reads as
+a different KIND of thing from the others, and so the wall never becomes a second
+saturated object competing with the bin. The exact preparation is recorded in
+DESIGN.md under "Wall murals"; it is a one-time dev step with no runtime
+dependency, exactly like the webfont subsetting.

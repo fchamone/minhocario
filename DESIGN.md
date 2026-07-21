@@ -51,8 +51,16 @@ Two related shape rules the same coupling forces:
 
 The stage's three fixed surfaces — wall plaster, floor concrete, packed earth —
 carry a **procedural grain**, generated at load from a seeded RNG into a 256²
-canvas (`js/render/textures.js`). No image assets: the grain is computed, like
-everything else here, so the site stays fully static and offline.
+canvas (`js/render/textures.js`). The grain itself is computed, never authored, so
+it costs no bytes and cannot go stale.
+
+> **Amended at V21 (was "No image assets").** That was true of the whole project
+> when it was written and is no longer: `assets/murals/` ships eight prepared
+> paintings. The site is still fully static — the murals are ordinary files served
+> from the same origin, with no CDN and no network API — but "offline" now carries
+> one stated exception, recorded in `tasks/release-checklist.md` §A. What remains
+> unchanged is the *principle*: nothing is fetched that the deploy does not
+> contain, and nothing renders differently because a request failed.
 
 It exists to serve the tone curve. An untextured plane under ACES is still a
 plane — a flat 12×4.5 rectangle of one albedo gives a filmic rolloff nothing to
@@ -80,6 +88,135 @@ Three rules hold it to the "matte, tactile, never decorative" register:
 Anyone swapping a surface to a real image asset inherits all three obligations —
 and loses the seam guarantee, which here is one character (the noise lattice is
 indexed modulo its own size, so the field is continuous across its own edge).
+
+> V21 is the first thing to take that paragraph up on its offer, for the wall.
+> It inherits all three obligations and discharges them explicitly (see **Wall
+> murals** below); it escapes the seam problem rather than solving it, because the
+> wall canvas covers the wall exactly once and therefore has no seam to hide.
+
+#### Wall murals (V21)
+
+Each farm's garage wall carries one **public-domain painting**, chosen from the
+farm's own seed. A new game brings a new painting; the same farm brings back the
+same one, forever. It exists because the wall is the largest thing on screen and
+was blank, and because "a new farm feels like a new place" is cheap to buy here.
+
+**The choice is derived, never stored.** `muralOf` hashes the farm's `createdAt`,
+on the exact model of `hotSideOf` / `hotSideFromSeed` in `js/sim/engine.js` and
+for their reasons: determinism without touching the farm's RNG stream, and —
+decisively — **no change to the save schema**, which has been frozen since CP9.
+
+> **`createdAt`, and not `seed`.** The first implementation keyed on `state.seed`
+> and shipped a wall with no mural on it, because **`FarmState` has no such
+> field**: `createInitialFarmState` *takes* a seed, but it survives only as
+> `rngState`. That leaves two candidates and one of them is a trap — `rngState`
+> advances as the RNG is drawn, so it would have re-rolled the painting mid-game
+> on whichever ticks the population step happened to draw. `createdAt` is stamped
+> once and never written again, which is precisely why `hotSideOf` already used it
+> as *its* stable fallback. The lesson generalises: every test covering the choice
+> passed a number the test itself invented, so none of them ever asked whether the
+> field being read existed. `tests/murals.test.js` now builds a real farm, ticks
+> it, and asserts both.
+
+One consequence that is easy to miss: it uses a **different mixing constant** from
+`hotSideFromSeed`. Sharing one would make the two derived properties the same
+random variable, so every farm with a given painting would have its warm end on
+the same side of the garage. Nothing would look broken; the garage would just be
+quietly less varied than it claims.
+
+**The mural is baked into the wall's albedo, not laid over it.** An overlay plane
+(the `sunPatch` technique) would be a second lit surface that subtly fails to
+match the wall's lighting, shadow reception and grain. Baked in, the mural *is*
+the wall — it darkens at night, warms at dusk, and takes the sun's shadow — at no
+extra material, draw call or shadow-flag exception. The cost is that the wall
+stops being a tiling surface, so it alone is painted once at its own aspect
+(1152×432, both axes landing on exactly 192 texels per grain tile, which is what
+keeps the plaster at V15's one physical scale).
+
+Three rules hold it to the art direction, and each is enforced somewhere:
+
+- **Monochrome, always.** Every mural is a single tonal channel. The bin is the
+  one saturated object on stage, and this is the largest surface there is — a
+  colour mural would not compete with the bin so much as defeat it. This is true
+  by construction, not by restraint: there is no colour in the assets to leak.
+- **One optical weight.** The murals are normalised to a shared contrast budget
+  (σ = 38/255) when they are prepared, which is the food-icon discipline applied
+  to paintings: an unnormalised set would make some murals shout and others vanish,
+  and the single runtime strength knob could not fix both at once. It is also what
+  makes the headroom budget hold — see below.
+- **The mural must not change the wall's brightness.** The same rule the grain
+  obeys, discharged twice. Structurally, the blend is **zero-mean**: the mural
+  contributes `base × (1 + strength × (luma − mean))`, so it redistributes light
+  rather than adding it, and a flat image provably does nothing. Numerically, the
+  residual is **measured off the finished pixels** and divided out of the albedo,
+  exactly as `grainMean` is — but measured rather than derived, because the wall's
+  map is a composite of grain, mural, feather and headroom whose mean no formula
+  predicts.
+
+Two smaller things that are load-bearing and look like polish:
+
+- **The mural feathers to exactly zero at its edge.** Any weight left at the
+  boundary draws the mural's own *rectangle* on the plaster, and the eye finds a
+  straight line long before it finds a painting. Same failure the contact shadow's
+  radial falloff exists to avoid, and the same fix.
+- **The wall base is painted at 66% level.** This is free — the albedo
+  compensation divides any constant straight back out — and it buys the 8-bit
+  headroom the mural's highlights need. Its sufficiency depends on the assets
+  being mean-normalised (`MURAL_MAX_DEVIATION`), which is a coupling between the
+  prep step and the runtime and is therefore asserted arithmetically in
+  `tests/murals.test.js` rather than left to hold by luck.
+
+**The blend's shape is applied in encoded space, its brightness corrected in
+linear.** This deliberately departs from V15's "amplitude is read in linear space"
+and is worth being explicit about, because the two rules are about different
+things. Linear is the only correct space to measure *mean radiance* in, so the
+compensation is linear and always will be. But a painting's values cluster around
+mid-grey, where linear space is violently asymmetric — sRGB 0.5 is linear 0.216,
+so a zero-mean deviation taken there runs −0.22 down and +0.78 up, and the
+highlights would tear away while the shadows barely moved. Encoded space is where
+the asset was normalised and where its light and dark halves are symmetric, so it
+is where the *shape* belongs.
+
+##### Licensing, and what is not allowed on this wall
+
+Every work is public domain **worldwide**, tested as *artist died more than 70
+years ago* — which clears Brazil's term (Lei 9.610/98) as well as the EU, and all
+eight also predate 1930, which clears the US. Provenance for each ships in
+`assets/murals/CREDITS.txt`, in the same spirit as the font's OFL text.
+
+Two exclusions worth writing down so they are not re-litigated:
+
+- **Real graffiti and street art cannot ship**, however well it would suit a
+  garage wall. It is copyrighted by living artists, and this is a redistributable
+  static site.
+- **Tarsila do Amaral (d. 1973) and Anita Malfatti (d. 1964) cannot ship**,
+  despite being the obvious Brazilian choices. They enter the public domain in
+  2044 and 2035. `Almeida Júnior` (d. 1899) is the Brazilian work that qualifies.
+
+##### Preparing a mural
+
+A one-time dev step with no runtime dependency, exactly like the webfont
+subsetting: a throwaway `npm i sharp` outside the repo. Sources come from
+Wikimedia Commons (`upload.wikimedia.org` serves automated clients; the Art
+Institute's IIIF endpoint does not, though its metadata API is useful for
+confirming public-domain status).
+
+Per image: greyscale → contain-fit into 864×346 texels → measure the **resized**
+image's mean and standard deviation → linear-remap onto σ = 38 about a mean of
+127.5 → WebP q72. Measuring after the resize matters: downscaling averages detail
+away and drops σ, so statistics taken from the source over-correct every mural.
+Verify from the **encoded** bytes, not from the arithmetic — WebP is lossy, and
+the whole point of normalising is that the shipped file is what the runtime sees.
+
+Result: 8 murals, ~136 KB total.
+
+**That 346 is `MURAL_BOX_HEIGHT`, and the two must move together.** `muralLayout`
+never enlarges an image, so the box is only an upper bound and the prepared assets
+are what actually set the mural's size on the wall. Raising the constant without
+re-running this step leaves every mural at its old size and looks like the change
+did nothing; re-running this step without raising the constant just wastes bytes
+being downscaled at load. `tests/murals.test.js` reads each shipped file's
+dimensions straight out of its WebP header and fails if the two disagree.
 
 #### Light and atmosphere (V14, V17, V19)
 

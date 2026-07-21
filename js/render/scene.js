@@ -42,6 +42,7 @@ import {
 } from '../../vendor/three.module.min.js';
 import { buildComposterMesh, disposeComposterMesh } from './composter3d.js';
 import { surfaceTextures, grainMean, disposeSurfaceTextures } from './textures.js';
+import { muralOf, loadMuralImage, buildWallTexture } from './murals.js';
 import {
   buildXrayInternals,
   updateXrayInternals,
@@ -564,6 +565,22 @@ let floorMesh = null;
  * @type {import('three').Mesh|null}
  */
 let soilMesh = null;
+/**
+ * The garage wall, retained so its map can be swapped when the farm changes (see
+ * syncWallMural). Unlike the floor and soil, the wall's texture is per-FARM
+ * rather than shared, so it is owned here rather than by the grain cache.
+ * @type {import('three').Mesh|null}
+ */
+let wallMesh = null;
+/** The live wall texture, freed on every swap and at teardown. @type {import('three').Texture|null} */
+let wallTexture = null;
+/**
+ * Which mural the wall is currently showing (or loading). Compared against the
+ * seed-derived choice each frame, exactly as `composterModelId` is compared
+ * against `state.composterId` — a rebuild is a change of identity, not an event.
+ * @type {string|null}
+ */
+let wallMuralId = null;
 /** @type {import('three').BufferAttribute|null} the sky backdrop's per-vertex colours. */
 let skyColors = null;
 /**
@@ -659,6 +676,67 @@ function surfaceMaterial(color, roughness, surface, map) {
   return material;
 }
 
+/**
+ * Dress the wall with a freshly built texture — plaster alone when `image` is
+ * null, plaster plus mural when it is not.
+ *
+ * The albedo division is the same compensation `surfaceMaterial` applies to the
+ * floor and soil, and it is here for the same reason: a colour map MULTIPLIES the
+ * material's colour, so a map that averages below 1.0 darkens the surface. What
+ * differs is that the wall's factor cannot be looked up from a formula — the map
+ * is a composite of grain, mural, feather and headroom — so buildWallTexture
+ * measures it off the finished pixels and hands it back. Set from WALL_COLOR each
+ * time rather than multiplied in place, or successive murals would compound the
+ * division and the wall would brighten with every swap.
+ * @param {CanvasImageSource|null} image
+ */
+function dressWall(image) {
+  if (!wallMesh) return;
+  const built = buildWallTexture(image);
+  // No canvas API (Node, or a hostile browser) — the wall keeps its flat albedo,
+  // which is precisely how it looked before V15.
+  if (!built) return;
+  wallTexture?.dispose();
+  wallTexture = built.texture;
+  wallMesh.material.map = built.texture;
+  wallMesh.material.color.set(WALL_COLOR).multiplyScalar(1 / built.linearMean);
+  wallMesh.material.needsUpdate = true;
+}
+
+/**
+ * Reconcile the wall's mural with the current farm (V21): each farm's seed picks
+ * one, so a new game brings a new painting and a reload brings back the same one.
+ *
+ * Shaped like syncComposter — compare the derived identity, rebuild only on
+ * change — so it is cheap to call every frame and correct after any transition,
+ * rather than being an event that something has to remember to fire.
+ *
+ * The decode is asynchronous, so the farm can change while it is in flight; the
+ * id is re-checked on arrival and a stale image is dropped. Without that, loading
+ * a different save mid-decode would paint the previous farm's mural over it.
+ * @param {import('../sim/engine.js').FarmState|null} state
+ */
+function syncWallMural(state) {
+  if (!wallMesh) return;
+  // Gate on there being a FARM at all, not on any particular field: muralOf is
+  // already defensive about the field itself, and duplicating that judgement here
+  // is how the two get to disagree. The null case is the home/shop screens, where
+  // there is no farm and the wall is plain plaster.
+  const mural = state ? muralOf(state) : null;
+  const id = mural ? mural.id : null;
+  if (id === wallMuralId) return;
+  wallMuralId = id;
+
+  if (!mural) {
+    dressWall(null);
+    return;
+  }
+  loadMuralImage(mural).then((image) => {
+    if (wallMuralId !== id) return;
+    dressWall(image);
+  });
+}
+
 function buildScene(target) {
   target.background = new Color(SKY_COLOR);
   // Procedural surfaces (V15). Generated once and cached; a few milliseconds at
@@ -709,13 +787,21 @@ function buildScene(target) {
 
   // Garage wall: a vertical plane at z=0, its base on the ground, facing +z
   // (toward the camera). A thin box would also work; a plane keeps it cheap.
+  //
+  // Unlike the floor and soil it is NOT dressed by surfaceMaterial: since V21 its
+  // map is a single full-wall canvas carrying both the plaster and the farm's
+  // mural (js/render/murals.js), so it cannot come from the tiling grain cache.
+  // It is built with a flat albedo here and dressed immediately below, so the
+  // "no mural yet" and "mural failed to load" paths are the same code.
   const wall = new Mesh(
     new PlaneGeometry(WALL_WIDTH, WALL_HEIGHT),
-    surfaceMaterial(WALL_COLOR, 0.95, 'wall', grain.wall),
+    new MeshStandardMaterial({ color: WALL_COLOR, roughness: 0.95, metalness: 0 }),
   );
   wall.position.set(0, WALL_HEIGHT / 2, 0);
   wall.name = 'garageWall';
+  wallMesh = wall;
   target.add(wall);
+  dressWall(null);
 
   // Sun patch: a warm additive overlay a hair in front of the wall, subdivided
   // horizontally so its per-column brightness can trace solarGain across the
@@ -1083,6 +1169,7 @@ function applyDayNight(hour) {
 export function renderState(state, continuousHour = 0) {
   if (!ready || !renderer || !scene || !camera) return;
   syncComposter(state);
+  syncWallMural(state);
   // Refresh the x-ray internals from the live state every frame while it is on,
   // so fill volumes track drain/harvest and worm/queue hints stay current — a
   // read-only view, so this never perturbs the sim.
@@ -1373,6 +1460,14 @@ export function disposeScene() {
   ambientLight = null;
   floorMesh = null;
   soilMesh = null;
+  // The wall's texture is the one map in the scene that is NOT in the shared
+  // grain cache — it is built per farm and owned here — so disposeSurfaceTextures
+  // will not reach it and disposeRootMeshes deliberately frees no textures at all.
+  // Without this line it is the single leak at teardown.
+  wallTexture?.dispose();
+  wallTexture = null;
+  wallMesh = null;
+  wallMuralId = null;
   // Everything buildScene added to the scene ITSELF — the wall, floor, soil, sun
   // patch and sky backdrop — is reached by nothing else: disposeComposterMesh
   // only ever walks the composter group, which it has just unparented above.
