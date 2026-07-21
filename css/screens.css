@@ -263,6 +263,55 @@
   }
 }
 
+/* V20: below the width where three columns stop fitting, the game screen stacks.
+   Found by the release audit, not by a checkpoint — CPV1–CPV4 were all walked on
+   desktop, and this is invisible from one.
+
+   The three tracks above carry FIXED minimums (280 + 260), and a grid track is
+   never shrunk below its minmax minimum. So under 540px the page overflowed
+   sideways AND the stage — `minmax(0, 1fr)`, correctly floorless — resolved to
+   zero width: no 3D scene at all, which is the spec's mobile acceptance
+   criterion. v1's `1fr 260px` had no such floor and simply gave way, so this
+   arrived with V12 and nothing could report it: not a parse error, not a visual
+   break on the desktop it was designed for. `tests/css.test.js` now asserts the
+   arithmetic at 360px, the narrowest viewport still in real use.
+
+   Stacked order puts the two controls you reach for while watching the scene
+   directly under it (speed, then actions) and the reference panel last — it is a
+   <details> the player can collapse, and on a phone it is the one band that can
+   afford to be scrolled to.
+
+   `:has()` is repeated deliberately. It takes the specificity of its argument,
+   so `.screen--game:has(#internals:not([open]))` carries an ID and would beat a
+   plain `.screen--game` here — a media query adds no specificity. Without the
+   second selector this rule would fix the layout only while the panel is open,
+   and collapsing it on a phone would silently restore the broken grid. That is
+   V13's specificity note in the opposite direction: there the wide rule is
+   deliberately WEAKER so a collapsed panel keeps its `auto` track; here the
+   narrow rule must be strong enough to win in both states. */
+@media (max-width: 899px) {
+  .screen--game,
+  .screen--game:has(#internals:not([open])) {
+    /* `height` becomes a floor: the bands size to their content and the page
+       scrolls, rather than five rows being crushed into one viewport. */
+    height: auto;
+    min-height: 100vh;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 55vh auto auto auto;
+    grid-template-areas:
+      'hud'
+      'stage'
+      'speed'
+      'actions'
+      'readouts';
+  }
+  /* Side hairlines separated columns; stacked, the same job is done from above.
+     Left as borders rather than dropped, so each band still reads as its own
+     surface against the stage. */
+  .internals { border-right: 0; border-top: 1px solid var(--surface-2); }
+  .actions { border-left: 0; border-top: 1px solid var(--surface-2); }
+}
+
 /* An instrument strip: hairline-divided cells rather than free-floating chips.
    The rules are what make it read as one panel of six gauges instead of six
    unrelated labels, and they cost nothing but a border. */

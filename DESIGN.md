@@ -319,6 +319,48 @@ flatten the distinction.
 
 ---
 
+## Viewport
+
+The design is **desktop-first with one stacking breakpoint**, and that is a
+decision rather than an omission — but it was an omission for four tasks, which
+is why it is written down here now.
+
+`@media (max-width: 899px)` in `css/screens.css` stacks the game screen into
+bands: hud / stage / speed / actions / readouts. Above it, three columns. There
+is no other width query in the six sheets; the only other one at all is V13's
+`min-width: 1600px`, which widens the readouts track so its sub-grid can go
+two-up.
+
+**What made the breakpoint necessary is worth keeping, because nothing reported
+it.** V12's three tracks carry fixed minimums (`minmax(280px, …)` and
+`minmax(260px, …)`), and **a grid track is never shrunk below its `minmax`
+minimum**. So the game screen demanded 540px before anything gave way, and under
+that the page overflowed sideways while the stage — `minmax(0, 1fr)`, correctly
+floorless — resolved to **zero width**. No 3D scene, on the one criterion the
+spec has carried since v1 ("renders on desktop *and* one mobile browser").
+v1's `1fr 260px` had no floor and simply gave way; the regression arrived with
+the three-column grid and was invisible from every desktop walk.
+
+Two rules follow, both enforced in `tests/css.test.js`:
+
+1. **Any fixed track minimum must fit the narrowest viewport that rule applies
+   to.** 360px is the floor used — the narrowest phone still in real use.
+2. **A narrow-viewport rule must cover the `:has()` collapse variant too.**
+   `:has()` takes the specificity of its argument, so
+   `.screen--game:has(#internals:not([open]))` carries an **ID** and outranks a
+   plain `.screen--game` — and a media query contributes no specificity at all.
+   Forget it and the collapsed rule keeps winning for `grid-template-columns`
+   (three tracks) while the narrow rule wins for `grid-template-areas` (one), so
+   every named area piles into the first track and the other two sit empty.
+   Nothing overflows and nothing throws.
+
+Note the direction is the opposite of V13's, which is deliberately *weaker* than
+the `:has()` rule so a collapsed panel keeps its `auto` track at wide viewports.
+Same selector, opposite requirement — which is exactly why both are asserted
+rather than remembered.
+
+---
+
 ## Icons
 
 Hand-authored inline SVG. A `<symbol>` sprite at the top of `<body>`, plus one

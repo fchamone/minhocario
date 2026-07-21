@@ -515,6 +515,180 @@ test('the wide-viewport readouts track can actually fit two sub-grid columns', (
   );
 });
 
+// --- The game screen fits a phone ------------------------------------------
+// V20's audit finding, and the one thing in this project that a green suite,
+// four desktop checkpoints and a careful diff read all missed together.
+//
+// V12 replaced the v1 layout (`1fr 260px`, whose stage had no floor and simply
+// shrank) with three tracks carrying FIXED minimums. A grid track never shrinks
+// below its minmax minimum, so 280 + 260 is a hard 540px floor: under that the
+// page overflows horizontally AND the stage — `minmax(0, 1fr)`, correctly
+// floorless — resolves to zero width. No 3D scene at all, which is the spec's
+// mobile acceptance criterion failing outright.
+//
+// Nothing warned. It is not a parse error, the desktop layout it was designed
+// for is fine, and CPV1–CPV4 were all walked on desktop. `<meta name="viewport"
+// content="width=device-width">` means there is no scale-down rescue either.
+
+/** Split a `grid-template-columns` value into tracks, keeping `minmax(a, b)` whole. */
+function trackList(columns) {
+  return columns.split(/\s+(?![^(]*\))/).filter(Boolean);
+}
+
+/** Total width the track list demands before anything is allowed to shrink. */
+function trackFloor(columns) {
+  let total = 0;
+  for (const track of trackList(columns)) {
+    // `minmax(A, B)` floors at A; `auto`, `1fr` and `minmax(0, 1fr)` floor at 0.
+    const minmax = /^minmax\(\s*([^,]+),/.exec(track);
+    const value = minmax ? minmax[1] : track;
+    const px = /^(-?\d+(?:\.\d+)?)px$/.exec(value.trim());
+    total += px ? Number(px[1]) : 0;
+  }
+  return total;
+}
+
+test('the track-floor arithmetic matches how grid actually sizes tracks', () => {
+  // Guards the guard, because every number below comes out of it.
+  assert.equal(trackFloor('minmax(280px, 340px) minmax(0, 1fr) minmax(260px, 320px)'), 540);
+  assert.equal(trackFloor('auto minmax(0, 1fr) minmax(260px, 320px)'), 260);
+  assert.equal(trackFloor('minmax(0, 1fr)'), 0);
+  assert.equal(trackFloor('1fr 260px'), 260); // the v1 layout, which fitted a phone
+});
+
+test('the game screen fits the narrowest phone, panel open or collapsed', () => {
+  // 360px is the narrowest viewport still in real use (Galaxy A-series and the
+  // small-Android floor); an iPhone SE is 375 and a modern iPhone 390. If the
+  // layout clears 360 it clears all of them.
+  const PHONE = 360;
+  const screens = stripComments(readSheet('screens.css'));
+
+  // Every `.screen--game` column declaration, with the media context it sits in.
+  // Source order matters and so does the `:has()` variant: `:has()` takes the
+  // specificity of its argument, so `.screen--game:has(#internals:not([open]))`
+  // carries an ID and BEATS a plain `.screen--game` inside any media query. A
+  // narrow-viewport rule that forgets it fixes the layout only while the panel
+  // is open — the exact silent-degradation trap V13 documented in the opposite
+  // direction.
+  // Split into media contexts first (an @media body nests braces, so one flat
+  // rule regex over the whole sheet cannot see inside it), then read each rule's
+  // full selector LIST. Both halves were learned by getting them wrong: the
+  // first draft of this parser matched only a selector sitting immediately after
+  // `@media (...) {` and only a single selector before `{`, so it silently
+  // failed to see the very rule that fixes this — a guard that cannot see the
+  // fix reports the bug forever, which is the same vacuity trap in a new coat.
+  const contexts = [];
+  let rest = '';
+  for (let i = 0; i < screens.length; ) {
+    const at = screens.indexOf('@media', i);
+    if (at === -1) {
+      rest += screens.slice(i);
+      break;
+    }
+    rest += screens.slice(i, at);
+    const open = screens.indexOf('{', at);
+    let depth = 1;
+    let j = open + 1;
+    while (j < screens.length && depth > 0) {
+      if (screens[j] === '{') depth += 1;
+      else if (screens[j] === '}') depth -= 1;
+      j += 1;
+    }
+    contexts.push({ media: squash(screens.slice(at + 6, open)), body: screens.slice(open + 1, j - 1) });
+    i = j;
+  }
+  contexts.unshift({ media: null, body: rest });
+
+  const rules = [];
+  for (const { media, body } of contexts) {
+    for (const m of body.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const columns = /(?:^|;)\s*grid-template-columns\s*:\s*([^;}]+)/.exec(m[2]);
+      const areas = /(?:^|;)\s*grid-template-areas\s*:\s*([^;}]+)/.exec(m[2]);
+      if (!columns && !areas) continue;
+      for (const selector of m[1].split(',').map(squash)) {
+        if (!/^\.screen--game(:has\(.*\))?$/.test(selector)) continue;
+        rules.push({
+          media,
+          selector,
+          collapsed: selector.includes(':has'),
+          columns: columns ? squash(columns[1]) : null,
+          // Column count of the named grid: the tokens in one quoted row.
+          areaColumns: areas ? (/'([^']*)'/.exec(areas[1])?.[1] ?? '').trim().split(/\s+/).length : null,
+        });
+      }
+    }
+  }
+  assert.ok(rules.length > 0, 'no .screen--game grid-template-columns found');
+
+  /** Does this rule's media context apply at `width`? */
+  const applies = (media, width) => {
+    if (!media) return true;
+    const min = /min-width:\s*(\d+)px/.exec(media);
+    const max = /max-width:\s*(\d+)px/.exec(media);
+    if (min && width < Number(min[1])) return false;
+    if (max && width > Number(max[1])) return false;
+    return true;
+  };
+
+  /**
+   * The rule that wins for `prop` in the given panel state: `:has()` carries an
+   * ID and outranks a plain `.screen--game`; otherwise later source order wins.
+   * A media query contributes no specificity at all.
+   */
+  const winnerFor = (prop, collapsed) => {
+    const candidates = rules.filter(
+      (r) => r[prop] != null && applies(r.media, PHONE) && (collapsed || !r.collapsed),
+    );
+    if (collapsed) {
+      const byId = candidates.filter((r) => r.collapsed);
+      if (byId.length > 0) return byId.at(-1);
+    }
+    return candidates.at(-1);
+  };
+
+  for (const collapsed of [false, true]) {
+    const winner = winnerFor('columns', collapsed);
+    assert.ok(winner, 'no rule applies at phone width');
+
+    // The two halves of one grid must agree on how many columns there are. This
+    // is what a narrow rule that forgets the `:has()` variant actually breaks —
+    // NOT the width: `auto minmax(0,1fr) minmax(260px,320px)` floors at 260 and
+    // fits a phone fine. What happens instead is that the collapsed rule wins
+    // for `grid-template-columns` (three tracks) while the narrow rule still
+    // wins for `grid-template-areas` (one), so every named area lands in the
+    // first track and the other two sit empty. Nothing overflows, nothing
+    // throws, and the screen is wrecked — a mismatch that only a real browser
+    // or this line will ever report.
+    const areaWinner = winnerFor('areaColumns', collapsed);
+    if (areaWinner) {
+      assert.equal(
+        trackList(winner.columns).length,
+        areaWinner.areaColumns,
+        `at ${PHONE}px with the panel ${collapsed ? 'collapsed' : 'open'}, ` +
+          `\`${winner.selector}\` declares ${trackList(winner.columns).length} column(s) ` +
+          `(\`${winner.columns}\`) while \`${areaWinner.selector}\` names ` +
+          `${areaWinner.areaColumns} — the named areas all collapse into the first ` +
+          'track. A narrow-viewport rule must cover the `:has()` collapse variant ' +
+          'too: that selector carries an ID and outranks a plain .screen--game, ' +
+          'and a media query adds no specificity.',
+      );
+    }
+
+    const floor = trackFloor(winner.columns);
+    assert.ok(
+      floor <= PHONE,
+      `at ${PHONE}px with the readouts panel ${collapsed ? 'collapsed' : 'open'}, ` +
+        `\`${winner.selector}\` demands ${floor}px of fixed track ` +
+        `(\`${winner.columns}\`). Grid never shrinks a track below its minmax ` +
+        'minimum, so the page overflows sideways and the stage — floorless by ' +
+        'design — collapses to zero width: no 3D scene, which is the spec §6 ' +
+        'mobile criterion. Add a narrow-viewport rule that stacks the columns, ' +
+        'and make it cover the :has() collapse variant too (that selector carries ' +
+        'an ID and outranks a plain .screen--game inside a media query).',
+    );
+  }
+});
+
 // The token layer is enforced, not offered. Without this, a colour system is a
 // suggestion that decays back into literals one "just this once" at a time.
 test('no colour literal appears outside tokens.css', () => {
