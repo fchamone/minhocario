@@ -31,16 +31,30 @@ export function startingWormReserve() {
  * Annotate each composter with whether `wallet` can buy it AND keep `reserve` —
  * i.e. whether it can begin a viable farm. Pure. Default reserve is the starting
  * worm reserve; pass `0` for the mid-farm case where no worms are bought.
+ *
+ * `blockedByReserve` separates the TWO ways a first purchase can be out of
+ * reach, because they need different sentences. A bin the wallet cannot cover at
+ * all is "not enough coins". A bin the wallet CAN cover, which would leave
+ * nothing for worms, is not — and saying so was actively wrong at the boundary
+ * that matters most: with the starting 200 coins the electric bin costs exactly
+ * 200, so the card read "not enough coins" beside a wallet showing 200.
+ *
  * @param {number} wallet
  * @param {readonly import('../sim/composters.js').Composter[]} [composters]
  * @param {number} [reserve]
- * @returns {{composter: import('../sim/composters.js').Composter, affordable: boolean}[]}
+ * @returns {{composter: import('../sim/composters.js').Composter, affordable: boolean,
+ *   blockedByReserve: boolean, shortfall: number}[]}
  */
 export function affordability(wallet, composters = listComposters(), reserve = startingWormReserve()) {
-  return composters.map((composter) => ({
-    composter,
-    affordable: wallet >= composter.price + reserve,
-  }));
+  return composters.map((composter) => {
+    const affordable = wallet >= composter.price + reserve;
+    return {
+      composter,
+      affordable,
+      blockedByReserve: !affordable && wallet >= composter.price,
+      shortfall: affordable ? 0 : composter.price + reserve - wallet,
+    };
+  });
 }
 
 /**
@@ -84,6 +98,12 @@ export function upgradeOffers(currentComposterId, wallet, composters = listCompo
       // Migrating to the model you are already on is rejected by the engine, so
       // it is never offered as affordable however rich the player is.
       affordable: !isCurrent && wallet >= netCost,
+      // Always false here, and stated rather than omitted: mid-farm there IS no
+      // worm reserve (the colony migrates with the farm), so a blocked upgrade
+      // is always a plain price shortfall. Showing "leaves nothing for worms" to
+      // a player whose worms are already in the bin would be nonsense.
+      blockedByReserve: false,
+      shortfall: isCurrent || wallet >= netCost ? 0 : netCost - wallet,
     };
   });
 }
@@ -99,7 +119,10 @@ export function upgradeOffers(currentComposterId, wallet, composters = listCompo
  * @param {(id: string) => void} onBuy
  * @returns {HTMLElement}
  */
-function buildCard({ composter, affordable, cost, tradeIn = 0, isCurrent = false }, onBuy) {
+function buildCard(
+  { composter, affordable, cost, tradeIn = 0, isCurrent = false, blockedByReserve = false, shortfall = 0 },
+  onBuy,
+) {
   const card = document.createElement('article');
   card.className = 'shop-card';
   if (!affordable) card.classList.add('shop-card--disabled');
@@ -150,7 +173,12 @@ function buildCard({ composter, affordable, cost, tradeIn = 0, isCurrent = false
   } else if (!affordable) {
     const reason = document.createElement('p');
     reason.className = 'shop-card__reason';
-    reason.textContent = t('shop.cannotAfford');
+    // Two different sentences for the two different reasons, plus the number
+    // that makes either actionable. "Not enough coins" beside a wallet that
+    // visibly covers the price is the bug this replaces.
+    reason.textContent =
+      `${blockedByReserve ? t('shop.needsWormReserve') : t('shop.cannotAfford')} · ` +
+      `${t('shop.shortfallLabel')} ${Math.ceil(shortfall)} ${t('common.coins')}`;
     card.appendChild(reason);
   }
   return card;

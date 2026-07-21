@@ -59,6 +59,79 @@ test('an empty wallet affords nothing', () => {
   assert.ok(affordability(0).every((r) => !r.affordable));
 });
 
+// --- Why a model is out of reach, not just that it is -------------------------
+//
+// Reported from play: with the starting 200 coins the electric bin (price 200)
+// shows "Saldo insuficiente" / "Not enough coins" — while the wallet reads 200.
+// From the player's side that is simply false, and it is the exact boundary
+// where the message matters most: they CAN buy the bin, they just cannot then
+// buy a single worm, and nothing on the card says so.
+//
+// The rule is unchanged (it is the T7 starting-budget invariant); what changes
+// is that the two ways of being unaffordable are now distinguishable, so the UI
+// can say which one applies.
+
+test('a model priced within the wallet but not within the reserve is flagged separately', () => {
+  const reserve = startingWormReserve();
+  const model = listComposters()[0];
+
+  // Exactly the reported case: wallet == price, so the bin alone is coverable.
+  const atPrice = affordability(model.price, [model], reserve)[0];
+  assert.equal(atPrice.affordable, false, 'still not startable — no worms could be bought');
+  assert.equal(
+    atPrice.blockedByReserve,
+    true,
+    'the wallet covers the bin; it is the worm reserve that is missing',
+  );
+  assert.equal(atPrice.shortfall, reserve, 'shortfall is exactly the missing reserve');
+});
+
+test('a model priced beyond the wallet is not blamed on the worm reserve', () => {
+  const reserve = startingWormReserve();
+  const model = listComposters()[0];
+  const wallet = model.price - 10;
+
+  const row = affordability(wallet, [model], reserve)[0];
+  assert.equal(row.affordable, false);
+  assert.equal(row.blockedByReserve, false, 'the bin itself is out of reach — plain shortfall');
+  assert.equal(row.shortfall, model.price + reserve - wallet);
+});
+
+test('an affordable model reports no shortfall and no reserve block', () => {
+  const model = listComposters().reduce((a, b) => (a.price <= b.price ? a : b));
+  const row = affordability(model.price + startingWormReserve(), [model])[0];
+  assert.equal(row.affordable, true);
+  assert.equal(row.blockedByReserve, false);
+  assert.equal(row.shortfall, 0);
+});
+
+test('at the starting wallet the electric bin is blocked by the reserve, not its price', () => {
+  // The reported case, asserted against the real catalog and the real wallet
+  // rather than a constructed one — so a retune of either number keeps this
+  // honest instead of quietly making it vacuous.
+  const rows = affordability(STARTING_WALLET);
+  const electric = rows.find((r) => r.composter.id === 'electric');
+  assert.ok(electric, 'the catalog should still carry the electric model');
+
+  if (STARTING_WALLET >= electric.composter.price) {
+    assert.equal(electric.affordable, false);
+    assert.equal(electric.blockedByReserve, true);
+  } else {
+    // If a future retune puts the bin itself out of reach, the message should
+    // go back to the plain one — and this test should say so rather than fail.
+    assert.equal(electric.blockedByReserve, false);
+  }
+});
+
+test('the upgrade shop never blames the worm reserve — it has none', () => {
+  // Mid-farm there is no reserve at all (the colony migrates), so a blocked
+  // upgrade is always a plain price shortfall. Getting this wrong would show
+  // "leaves you no worms" to a player whose worms are already in the bin.
+  for (const offer of upgradeOffers('tier2', 0)) {
+    assert.equal(offer.blockedByReserve ?? false, false);
+  }
+});
+
 // --- Mid-farm upgrade (T15) ---------------------------------------------------
 //
 // The shop must quote exactly what `migrateToComposter` will charge. These tests

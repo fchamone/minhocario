@@ -41,6 +41,8 @@ export const en = {
     priceLabel: 'Price',
     buy: 'Buy',
     cannotAfford: 'Not enough coins',
+    needsWormReserve: 'Covers the bin, but leaves nothing for worms',
+    shortfallLabel: 'short by',
     upgradeSubtitle: 'Swap composter — the colony, queue, and age all come along.',
     tradeInLabel: 'Trade-in on your current model',
     listPriceLabel: 'list price',

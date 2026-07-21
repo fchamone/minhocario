@@ -41,6 +41,8 @@ export const es = {
     priceLabel: 'Precio',
     buy: 'Comprar',
     cannotAfford: 'Saldo insuficiente',
+    needsWormReserve: 'Alcanza para la compostera, pero no deja nada para las lombrices',
+    shortfallLabel: 'faltan',
     upgradeSubtitle: 'Cambia de compostadora — la colonia, la fila y la edad te acompañan.',
     tradeInLabel: 'Cambio por tu modelo actual',
     listPriceLabel: 'precio de lista',

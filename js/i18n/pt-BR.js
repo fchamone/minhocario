@@ -43,6 +43,11 @@ export const ptBR = {
     priceLabel: 'Preço',
     buy: 'Comprar',
     cannotAfford: 'Saldo insuficiente',
+    // Shown when the wallet DOES cover the bin but nothing would be left to
+    // stock the first colony. Distinct from `cannotAfford` because at the
+    // starting balance the electric bin costs exactly what the player holds.
+    needsWormReserve: 'Dá para a composteira, mas não sobra para as minhocas',
+    shortfallLabel: 'faltam',
     upgradeSubtitle: 'Troque de composteira — a colônia, a fila e a idade vão junto.',
     tradeInLabel: 'Troca do modelo atual',
     listPriceLabel: 'preço cheio',
