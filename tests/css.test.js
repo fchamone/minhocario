@@ -704,3 +704,54 @@ test('no colour literal appears outside tokens.css', () => {
     );
   }
 });
+
+// --- The brand mark's knock-outs are the page, not ink -----------------------
+// The worm's eye and its two segment marks are drawn AS the ground showing
+// through: .home__mark-cut paints them in whatever colour body's background is.
+// Repaint the page and forget this one line and the worm keeps three blobs of
+// the OLD ground colour — visible, plainly wrong, and reported by nothing,
+// because both declarations are individually valid and both use real tokens.
+
+/**
+ * The custom property `selector` paints `property` from, or null if that rule
+ * does not declare it (or declares it with something other than a bare var()).
+ * @param {string} sheet
+ * @param {string} selector
+ * @param {string} property
+ * @returns {string|null}
+ */
+const tokenFor = (sheet, selector, property) => {
+  const block = parseBlocks(stripComments(readSheet(sheet)))
+    .find((b) => b.startsWith(`${selector}{`) && b.includes(`${property}:`));
+  if (!block) return null;
+
+  const decl = block
+    .slice(selector.length + 1, -1)
+    .split(';')
+    .find((d) => d.startsWith(`${property}:`));
+
+  return /^var\((--[\w-]+)\)$/.exec(decl.slice(property.length + 1).trim())?.[1] ?? null;
+};
+
+test('the logo mark knocks out in exactly the colour the page is painted', () => {
+  const ground = tokenFor('base.css', 'body', 'background');
+  const cut = tokenFor('screens.css', '.home__mark-cut', 'color');
+
+  assert.ok(ground, 'body should paint its background from a token');
+  assert.ok(cut, '.home__mark-cut should paint its colour from a token');
+  assert.equal(
+    cut,
+    ground,
+    `.home__mark-cut paints var(${cut}) but the page ground is var(${ground}) — ` +
+      "the worm's eye and segment marks are the page showing through, so the two " +
+      'are one decision and must move together',
+  );
+});
+
+test('the knock-out check actually reads both declarations', () => {
+  // Guards the guard (the V6 lesson): a helper that silently returns null for
+  // both sides would make the assertion above pass on a repo with no mark left.
+  assert.equal(tokenFor('base.css', 'body', 'background'), '--surface-0');
+  assert.equal(tokenFor('screens.css', '.home__mark', 'color'), '--accent');
+  assert.equal(tokenFor('screens.css', '.home__mark', 'background'), null);
+});

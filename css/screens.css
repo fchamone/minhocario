@@ -60,6 +60,23 @@
 .lang-select__btn:hover { background: var(--surface-3); color: var(--ink); border-color: var(--surface-2); }
 .lang-select__btn.is-active { background: var(--accent); color: var(--accent-ink); }
 
+/* The brand mark. Sized by width alone — `height: auto` lets the viewBox's own
+   ratio (54:43) do the rest, so retuning the artwork never needs a second edit
+   here. 112px is a component dimension, not a step on the spacing scale, which
+   is why it is a literal (see the ALLOWED_LENGTHS note in tests/css.test.js). */
+.home__mark {
+  display: block;
+  width: 112px;
+  height: auto;
+  margin: 0 auto var(--space-4);
+  color: var(--accent);
+}
+/* The eye and the two segment marks are knock-outs: they are the page showing
+   through the worm, so this must stay whatever body paints behind it.
+   tests/css.test.js asserts the two are the same token — get it wrong and the
+   worm grows three slightly-off-colour blobs that nothing else reports. */
+.home__mark-cut { color: var(--surface-0); }
+
 .home__title { margin-bottom: var(--space-1); }
 .home__subtitle { color: var(--ink-dim); font-size: var(--text-md); margin: 0; }
 .home__actions {

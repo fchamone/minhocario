@@ -512,6 +512,87 @@ rather than remembered.
 
 ---
 
+## The brand mark (V22)
+
+One worm, curled into an S: a coil at the lower left, the body sweeping up and
+over, a round head at the upper right with a single eye and two segment marks
+scored into it. It ships in three places and they are **one drawing**:
+`favicon.ico` (16/32/48px, on a `--surface-0` squircle plate), the home screen's
+hero (`.home__mark` in `index.html`) and `assets/logo.svg`.
+
+### Why the mark exists twice in source
+
+`index.html` inlines it: zero HTTP requests, and its colour comes from the
+tokens through `currentColor`. Neither is available to a file loaded with
+`<img>` — which is exactly what everything *outside* the app needs (the README,
+`docs/`, a social preview). So `assets/logo.svg` is the standalone copy, and it
+differs in the two ways it has to:
+
+| | inlined in `index.html` | `assets/logo.svg` |
+|---|---|---|
+| Colour | `currentColor`, set from `--accent` in CSS | `#7bc043` baked in |
+| Eye + segment marks | painted in `--surface-0`, the page ground | knocked out to **transparent** via a `<mask>` |
+| Ground | the page | none — drops onto any surface |
+
+The knock-outs differ because an asset does not know what it will be dropped
+onto, and a hole is the only version that stays correct on every ground.
+
+There is **no build step to generate one from the other**, so the geometry is a
+hand-copy — the failure mode CLAUDE.md records for the stale
+`THROUGHPUT_CAP_PER_LITER`. `tests/logo.test.js` holds the two to identical
+shapes, stroke weights and viewBox, and holds the baked hex equal to `--accent`;
+it compares geometry only, so the three deliberate differences above stay free
+to differ. **Retune the mark in both files in the same commit.** It is the same
+arrangement `js/ui/platform.js` and `css/screens.css` already use for the
+desktop-only media query.
+
+**The home mark is a redraw, not an upscale.** The .ico is raster; blown up to
+112px it would show its 48px edges. The hero is hand-authored vector on a
+64-unit design grid, cropped to `viewBox="6 14 54 43"` — the artwork's own
+bounding box plus about a unit of air. Retuning the artwork therefore changes
+one number in one place: `.home__mark` sizes by `width` alone and lets
+`height: auto` take the ratio from the viewBox.
+
+**No plate on the home screen.** The favicon needs its squircle because a tab
+gives it no ground of its own; the page already *is* `--surface-0`, so a plate
+there would only draw a box around a mark that reads perfectly well without
+one. The relationship to the favicon is unchanged — green worm on `--surface-0`
+— it is just the page supplying the ground.
+
+**It is a centreline, not an outline.** The body is a single round-capped
+`stroke` at width 13 following the worm's spine; the head is one filled circle;
+the eye and both segment marks are short strokes. Nothing is a traced outline.
+That matters because an outline is a shape nobody can retune — moving a curve
+means recomputing both offset edges by hand — whereas a centreline can be nudged
+a unit at a time and stays legible as *what the worm is doing*.
+
+The one number worth explaining: the head circle sits at `cy="28.5"`, not on the
+neck's centreline. The neck ends at `(50, 26.5)` with half-width 6.5, so its top
+edge is at y 20; a head of radius 8.5 whose top is also at y 20 must be centred
+at 28.5. Line the two up that way and the extra radius spills entirely downward
+and reads as a **jaw**. Centre the head on the neck instead and the same radius
+pokes out above as a lump — a visible shoulder at the crown, which is the single
+thing that made earlier drafts look wrong.
+
+**The eye and the segment marks are knock-outs.** They are not dark ink painted
+on the worm: they are the page showing through it, so `.home__mark-cut` carries
+`--surface-0` — the same token `body` paints its background with. The two are
+one decision. Repaint the page, forget the mark, and the worm keeps three blobs
+of the old ground colour: plainly wrong, and reported by nothing, since both
+declarations remain individually valid and both still use real tokens.
+`tests/css.test.js` holds them equal.
+
+Everything else follows the icon rules below: paint comes from CSS through
+`currentColor` so no colour literal lives in `index.html`, and the mark is
+`aria-hidden="true"` / `focusable="false"` because the `<h1>` beside it already
+says *Minhocário* — the mark and that heading are the lockup, mark above
+wordmark, because `.home` is a centred column and a horizontal lockup would
+fight it. It is a **sibling** of that `<h1>`, never a child: `applyStrings()`
+sets `textContent` on every `[data-string]` node, which would wipe the mark on
+load and on every language switch (`tests/markup.test.js`).
+
+---
+
 ## Icons
 
 Hand-authored inline SVG. A `<symbol>` sprite at the top of `<body>`, plus one

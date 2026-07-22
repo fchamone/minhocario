@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minhocário — the brand mark, as a standalone reusable asset.
+
+     THIS IS THE SAME DRAWING as the hero mark inlined in index.html
+     (`.home__mark`) and as favicon.ico. tests/logo.test.js holds this file and
+     index.html to identical geometry, so a retune here that is not mirrored
+     there — or the reverse — fails rather than quietly leaving two worms in the
+     product that no longer match. See DESIGN.md, "The brand mark".
+
+     Why the duplication is deliberate: index.html inlines the mark so it costs
+     zero HTTP requests and takes its colour from CSS tokens through
+     currentColor. Neither is possible from a file loaded with <img>, which is
+     what everything OUTSIDE the app (README, docs, a social preview) needs. No
+     build step exists to generate one from the other, so the copy is held by a
+     test instead — the same arrangement js/ui/platform.js and css/screens.css
+     already use for the desktop-only media query.
+
+     Self-contained: no external references, no embedded raster, no fonts.
+     Transparent ground, so it drops onto any surface — light or dark.
+
+     Colour is transcribed FROM css/tokens.css, never the reverse:
+       #7bc043 = --accent
+     tests/logo.test.js asserts the two still agree. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6 14 54 43" width="216" height="172"
+     role="img" aria-labelledby="minhocario-logo-title">
+  <title id="minhocario-logo-title">Minhocário</title>
+
+  <!-- The eye and the two segment marks are knocked out to TRANSPARENT rather
+       than painted in the page colour, which is what the inlined copy does. An
+       asset does not know what it will be dropped onto, so a hole is the only
+       version that stays correct on every ground. -->
+  <mask id="minhocario-logo-cut" maskUnits="userSpaceOnUse" x="6" y="14" width="54" height="43">
+    <rect x="6" y="14" width="54" height="43" fill="#ffffff"/>
+    <circle cx="52" cy="25" r="2.8" fill="#000000"/>
+    <path d="M34.5 30C35.5 31.2 36.5 32.2 37.8 33.2"
+          fill="none" stroke="#000000" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M20 44.5C21 45.6 22 46.4 23.2 47"
+          fill="none" stroke="#000000" stroke-width="1.8" stroke-linecap="round"/>
+  </mask>
+
+  <g mask="url(#minhocario-logo-cut)">
+    <!-- Body: one round-capped stroke along the worm's spine, tail tip round
+         the coil and up the neck. -->
+    <path d="M13.5 38C13.5 44.8 18.5 49.3 24 49.3C29.5 49.3 34 44.8 34 39.3C34 34 33.5 28.5 36 25C40 20.5 47 21 50 26.5"
+          fill="none" stroke="#7bc043" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- The head, dropped to cy 28.5 so its top runs flush with the neck's top
+         edge and the extra radius reads as a jaw instead of a lump. -->
+    <circle cx="50" cy="28.5" r="8.5" fill="#7bc043"/>
+  </g>
+</svg>

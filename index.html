@@ -344,6 +344,40 @@
           <span id="lang-select-label" class="lang-select__label" data-string="home.languageLabel"></span>
           <div class="lang-select__options" id="lang-options"></div>
         </div>
+        <!-- THE BRAND MARK. The same worm favicon.ico carries, redrawn as vector
+             so it holds together at hero size instead of being an upscaled 48px
+             raster. Mark above wordmark: .home is a centred column, and the h1
+             below IS the wordmark — see DESIGN.md.
+
+             Decorative, so aria-hidden: the h1 already says "Minhocário". It is
+             a SIBLING of the [data-string] h1 and never a child, because
+             applyStrings() sets textContent on those and would wipe it on every
+             language switch (tests/markup.test.js).
+
+             Paint comes entirely from CSS via currentColor, the same rule the
+             sprite follows — no colour literal lives in this file. The eye and
+             the two segment marks are the PAGE GROUND showing through, not ink:
+             .home__mark-cut carries --surface-0, and tests/css.test.js holds it
+             equal to what body paints its background. -->
+        <svg class="home__mark" viewBox="6 14 54 43" aria-hidden="true" focusable="false">
+          <!-- Body: one round-capped stroke from the tail tip, round the coil,
+               up the neck. Uniform width, so it stays an editable centreline
+               rather than a traced outline nobody can retune. -->
+          <path d="M13.5 38C13.5 44.8 18.5 49.3 24 49.3C29.5 49.3 34 44.8 34 39.3C34 34 33.5 28.5 36 25C40 20.5 47 21 50 26.5"
+                fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- The head. Dropped to cy 28.5 so its top runs flush with the neck's
+               top edge (26.5 - 13/2 = 20 = 28.5 - 8.5): the bulge then reads as
+               a jaw. Centre it on the neck instead and the extra radius pokes
+               out above as a lump. -->
+          <circle cx="50" cy="28.5" r="8.5" fill="currentColor"/>
+          <g class="home__mark-cut">
+            <circle cx="52" cy="25" r="2.8" fill="currentColor"/>
+            <path d="M34.5 30C35.5 31.2 36.5 32.2 37.8 33.2"
+                  fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M20 44.5C21 45.6 22 46.4 23.2 47"
+                  fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </g>
+        </svg>
         <h1 class="home__title" data-string="home.title"></h1>
         <p class="home__subtitle" data-string="home.subtitle"></p>
         <!-- No ":" text node between label and value. In a flex row a bare text
