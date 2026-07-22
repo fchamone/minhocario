@@ -10,12 +10,41 @@
 export const ptBR = {
   appTitle: 'Minhocário',
 
+  // Document-level text: the tab title and the <meta name="description">, both
+  // written by applyStrings() so a language switch updates them too. Distinct
+  // from `appTitle`, which is the WORDMARK — a proper noun that does not
+  // translate and says nothing about what the game is. A search result needs
+  // the second thing, so the title here is descriptive and per-locale.
+  //
+  // The description is what a search result and a link preview quote. Kept
+  // under ~160 characters, the point at which Google starts truncating.
+  // tests/seo.test.js holds these identical to the static copies in index.html.
+  meta: {
+    title: 'Minhocário — simulador de compostagem com minhocas',
+    description:
+      'Simulador de minhocário no navegador: compre uma composteira, crie minhocas e transforme restos de comida em húmus. De graça, sem instalar nada.',
+  },
+
+  // Author credit, linking back to the root domain this game is a subdomain of.
+  credit: {
+    by: 'por Fabiano Chamone',
+  },
+
   // Desktop-only gate — the only text a phone or tablet ever sees. Says what the
   // game needs and what to do about it; it is a wall, so it must not read as an
   // error the player could have caused.
+  //
+  // `about` and `features` were added for SEO and are load-bearing for it:
+  // Googlebot renders with a smartphone viewport, so this notice is the ONLY
+  // content it can index (css/screens.css hides #app under the same query). A
+  // wall was all it could ever have found. These two lines are also simply
+  // better for the human holding the phone — they say what they would be
+  // opening a computer FOR.
   desktopOnly: {
     title: 'Só no computador',
     body: 'O Minhocário é feito para tela grande e para arrastar a composteira com o mouse. Abra este endereço em um computador para jogar.',
+    about: 'Um simulador de compostagem: você compra uma composteira, povoa com minhocas e cuida da colônia dia após dia. Alimentar, drenar o chorume e colher o húmus é o jogo inteiro.',
+    features: 'Seis modelos de composteira, três espécies de minhoca, temperatura que muda conforme o sol atravessa a parede, e uma visão de raio-x que abre a caixa por dentro.',
   },
 
   // Developer navigation — jumps between screens without playing through the

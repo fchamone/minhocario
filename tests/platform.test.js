@@ -139,16 +139,60 @@ test('the notice sits outside #app, so hiding the app cannot hide it', () => {
   );
 });
 
+// The rule is "no hardcoded literal in the notice", and it was first written as
+// "every key starts with desktopOnly." because at the time every key did. The
+// SEO pass gave the notice a wordmark heading and the author credit, both of
+// which already exist as keys elsewhere — duplicating them into desktopOnly.*
+// across three catalogs to satisfy the prefix would have been the test dictating
+// the catalog. So the prefix became an allowlist: shared keys are named, and
+// anything else still has to be a notice string or a literal someone typed.
+const NOTICE_KEYS = /^(?:desktopOnly\.|appTitle$|credit\.by$)/;
+
 test('every string in the notice comes from the catalog', () => {
   const html = read('../index.html');
   const block = html.slice(html.indexOf('id="desktop-only"'));
+  // Slices to the FIRST `</section>`, so the notice must stay flat — a nested
+  // <section> would cut this short and quietly stop checking the rest of it.
   const section = block.slice(0, block.indexOf('</section>'));
 
   const keys = [...section.matchAll(/data-string="([^"]+)"/g)].map((m) => m[1]);
   assert.ok(keys.length >= 2, 'the notice should carry a title and an explanation');
   for (const key of keys) {
-    assert.match(key, /^desktopOnly\./, `unexpected key in the notice: ${key}`);
+    assert.match(key, NOTICE_KEYS, `unexpected key in the notice: ${key}`);
   }
+});
+
+test('the notice carries the content a mobile-first crawl has to live on', () => {
+  // Googlebot renders with a smartphone viewport, which matches the gate query
+  // above — so #app is invisible to it and this notice is the entire indexable
+  // document. Before the SEO pass it was a bare "desktop only" wall under an
+  // <h1>, and that was the whole of what Google could know about the game.
+  //
+  // What this guards is that it does not silently revert: the heading has to be
+  // the wordmark rather than the refusal, the description lines have to be
+  // there, and the link home has to survive. None of it is visible on a desktop,
+  // so nobody working on this project would ever see it break.
+  const html = read('../index.html');
+  const block = html.slice(html.indexOf('id="desktop-only"'));
+  const section = block.slice(0, block.indexOf('</section>'));
+
+  assert.match(
+    section,
+    /<h1[^>]*data-string="appTitle"/,
+    'the notice\'s <h1> must be the wordmark — an <h1> saying the site will not ' +
+      'run is the only heading a mobile-first crawl would ever see',
+  );
+  for (const key of ['desktopOnly.about', 'desktopOnly.features']) {
+    assert.ok(
+      section.includes(`data-string="${key}"`),
+      `the notice dropped ${key} — it is the only description of the game a crawler gets`,
+    );
+  }
+  assert.match(
+    section,
+    /<a[^>]*href="https:\/\/fchamone\.com\/"/,
+    'the notice must link back to the root domain',
+  );
 });
 
 test('boot refuses to start the scene on a touch-primary device', () => {

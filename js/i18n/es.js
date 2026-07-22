@@ -10,9 +10,21 @@
 export const es = {
   appTitle: 'Minhocário',
 
+  meta: {
+    title: 'Minhocário — simulador de vermicompostaje',
+    description:
+      'Simulador de vermicompostaje en el navegador: compra una compostera, cría lombrices y convierte restos de comida en humus. Gratis, sin instalar nada.',
+  },
+
+  credit: {
+    by: 'por Fabiano Chamone',
+  },
+
   desktopOnly: {
     title: 'Solo en computadora',
     body: 'Minhocário está hecho para pantallas grandes y para arrastrar la compostera con el ratón. Abre esta dirección en una computadora para jugar.',
+    about: 'Un simulador de compostaje: compras una compostera, la pueblas con lombrices y cuidas la colonia día tras día. Alimentarla, drenar el lixiviado y cosechar el humus es todo el juego.',
+    features: 'Seis modelos de compostera, tres especies de lombriz, una temperatura que cambia según el sol recorre la pared, y una vista de rayos X que abre la caja por dentro.',
   },
 
   devNav: {

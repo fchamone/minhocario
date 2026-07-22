@@ -30,7 +30,21 @@ const abs = (rel) => path.join(rootDir, rel);
 // Source: tasks/release-checklist.md §C.1. Deploy is an FTP upload of these
 // paths and nothing else.
 
-const SHIP = ['index.html', 'favicon.ico', 'css', 'js', 'vendor', 'assets'];
+// robots.txt and sitemap.xml ship for the same reason index.html does: a
+// subdomain is a separate host to a crawler, and neither file is inherited from
+// fchamone.com. Nothing in the page links to them — they are fetched by path —
+// so the reference-walking guards below cannot see them and this list is the
+// only thing that keeps them in the upload.
+const SHIP = [
+  'index.html',
+  'favicon.ico',
+  'robots.txt',
+  'sitemap.xml',
+  'css',
+  'js',
+  'vendor',
+  'assets',
+];
 
 /**
  * Everything deliberately left on the floor, with the reason it is not shipped.

@@ -5,7 +5,7 @@ bedding, then keep an endless worm farm alive day after day — feeding it, drai
 leachate, harvesting humus, and sliding the bin along the garage wall to chase or
 escape the sun.
 
-**▶ [Play it](https://fchamone.github.io/minhocario/)** — no install, no account, runs
+**▶ [Play it](https://minhocario.fchamone.com/)** — no install, no account, runs
 entirely in your browser. Available in Português, English and Español.
 
 ## The game
@@ -85,9 +85,13 @@ on load. There are no accounts, no backend, and no tracking or analytics of any 
 
 Upload the folder. That's the whole pipeline — the site is fully static and
 self-contained, works offline after first load, and makes no external network calls.
-`tests/`, `tasks/` and `.harn/` can be left out of a production upload.
+`tests/`, `tasks/` and `.harn/` can be left out of a production upload — `tests/release.test.js`
+holds the exact ship set, including `robots.txt` and `sitemap.xml`, which nothing links to and
+which would otherwise be easy to leave behind.
 
-The live build above is served from GitHub Pages off `main`.
+The live build above is served at `minhocario.fchamone.com`, which every canonical, OpenGraph
+and JSON-LD URL in `index.html` names absolutely. The same files also render from GitHub Pages
+off `main`; the absolute tags are what make that copy point home rather than compete with it.
 
 ## Documentation
 

@@ -104,9 +104,19 @@ function writeStoredLang(tag) {
  * Fill every element carrying a `data-string="a.b.c"` attribute with its text
  * from the ACTIVE locale. Keeps all user-facing literals in the i18n layer.
  * Missing-key fallback to pt-BR (plus console.warn) lives in `t()`.
+ *
+ * Also rewrites the two document-level strings a crawler and a browser tab read:
+ * the title and the meta description. Both are authored STATICALLY in index.html
+ * as well — that copy is the one a crawler gets without executing JS, and this
+ * one is what keeps them honest after a language switch. Neither may be dropped:
+ * delete the static pair and the page has no description until a script runs;
+ * delete this and switching to English leaves a Portuguese description behind.
  */
 function applyStrings() {
-  document.title = t('appTitle');
+  document.title = t('meta.title');
+  const description = document.querySelector('meta[name="description"]');
+  if (description) description.content = t('meta.description');
+
   for (const el of document.querySelectorAll('[data-string]')) {
     el.textContent = t(el.getAttribute('data-string'));
   }

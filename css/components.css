@@ -311,3 +311,14 @@
   color: var(--accent);
   border-bottom: 1px solid var(--surface-2);
 }
+
+/* --- Author credit --- */
+/* Appears on two screens that share nothing else — the home screen and the
+   desktop-only notice — which is why it is a component rather than a rule in
+   either. A signature: small, quiet, and never competing with the Play button
+   above it. Colour comes from the bare `a` rule in base.css. */
+.site-credit {
+  margin: var(--space-6) 0 0;
+  font-size: var(--text-xs);
+  text-align: center;
+}

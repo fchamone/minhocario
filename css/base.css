@@ -67,6 +67,20 @@ h1 { font-size: var(--text-xl); }
 h2 { font-size: var(--text-lg); }
 h1, h2 { margin: 0 0 0.4em; }
 
+/* Links. The game had none until the author credit — every navigation in it is
+   a <button> — so this is the whole rule rather than a restyle of one. The UA
+   default is #0000EE on a near-black page, which is why a bare element selector
+   is right: any link that ever appears needs this, and there is nothing to opt
+   into. Underlined by default because colour alone must not be the only signal
+   (WCAG 1.4.1), with the offset keeping it clear of the descenders. */
+a {
+  color: var(--ink-dim);
+  text-underline-offset: 2px;
+  transition: color var(--dur-fast) var(--ease);
+}
+a:hover { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* --- Developer navigation (temporary) --- */
 .dev-nav {
   position: fixed;

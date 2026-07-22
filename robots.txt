@@ -1,0 +1,15 @@
+# Minhocário — https://minhocario.fchamone.com/
+#
+# A subdomain needs its own robots.txt: fchamone.com/robots.txt does not govern
+# this host. Everything the FTP upload ships is meant to be crawled, so this is
+# an open door with one exception.
+#
+# tests/ is excluded from the upload entirely (tests/release.test.js pins that
+# set), so the Disallow below is belt-and-braces against a hand-made FTP upload
+# that includes a directory it should not have.
+
+User-agent: *
+Allow: /
+Disallow: /tests/
+
+Sitemap: https://minhocario.fchamone.com/sitemap.xml

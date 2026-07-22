@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- One URL, because the game is one page: every screen is a DOM section behind
+     the same address, and the three languages are chosen at runtime rather than
+     by URL. If a ?lang= parameter is ever added, this is where its alternates
+     and their hreflang links belong.
+
+     <lastmod> is maintained by hand — there is no build step to stamp it. Update
+     it when the page's CONTENT changes, not on every commit. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://minhocario.fchamone.com/</loc>
+    <lastmod>2026-07-22</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+</urlset>

@@ -10,9 +10,21 @@
 export const en = {
   appTitle: 'Minhocário',
 
+  meta: {
+    title: 'Minhocário — a vermicomposting simulator',
+    description:
+      'Browser-based vermicomposting simulator: buy a composter, raise worms and turn food scraps into humus. Free to play, no install, no account.',
+  },
+
+  credit: {
+    by: 'by Fabiano Chamone',
+  },
+
   desktopOnly: {
     title: 'Desktop only',
     body: 'Minhocário is built for a large screen and for dragging the composter with a mouse. Open this address on a computer to play.',
+    about: 'A composting simulator: you buy a composter, stock it with worms and keep the colony alive day after day. Feeding it, draining the leachate and harvesting the humus is the whole game.',
+    features: 'Six composter models, three worm species, a temperature that shifts as the sun crosses the wall, and an x-ray view that opens the bin up from the inside.',
   },
 
   devNav: {

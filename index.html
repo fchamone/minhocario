@@ -3,8 +3,80 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Title is set from strings.js by main.js on load -->
-  <title>Minhocário</title>
+
+  <!-- CRAWLER-FACING METADATA.
+       Authored here as static bytes, in pt-BR (the reference locale), and
+       rewritten per-locale by applyStrings() in js/main.js once a language is
+       resolved. Both halves are needed: a crawler that does not execute JS sees
+       only this one, and a player who switches to English would otherwise keep a
+       Portuguese description.
+
+       This is the ONE place user-facing pt-BR text lives outside js/i18n/. The
+       CLAUDE.md rule is about UI strings — text a player reads inside the game —
+       and these are read by search engines and link-preview scrapers, which
+       cannot wait for a module graph to load. tests/release.test.js's pt-BR
+       literal guard scans js/** only, so nothing here fights it.
+
+       The duplication is deliberate and it is also the risk: these strings are
+       transcribed from js/i18n/pt-BR.js by hand, and a stale copy is invisible
+       on screen (the JS one wins there) and wrong only in the search result.
+       tests/seo.test.js holds every restatement identical to the catalog.
+
+       Every URL below is absolute and points at the canonical origin ON PURPOSE:
+       the same file is also served from fchamone.github.io/minhocario/, and
+       absolute tags make that copy point home instead of competing with it. -->
+  <title>Minhocário — simulador de compostagem com minhocas</title>
+  <meta name="description" content="Simulador de minhocário no navegador: compre uma composteira, crie minhocas e transforme restos de comida em húmus. De graça, sem instalar nada.">
+  <link rel="canonical" href="https://minhocario.fchamone.com/">
+
+  <!-- Mirrors --surface-0 in css/tokens.css. The only colour literal outside
+       that file — it has to be an attribute, and tests/css.test.js only polices
+       stylesheets. Change one, change the other. -->
+  <meta name="theme-color" content="#1b2a1b">
+
+  <!-- OpenGraph / Twitter — what WhatsApp, X, LinkedIn and Slack quote.
+       og:image is a 1200x630 JPEG, and JPEG rather than PNG on purpose: the
+       card is a screenshot of a textured 3D scene, which is photographic
+       content, and losslessly encoded it lands over WhatsApp's ~300 KB preview
+       ceiling — past which it renders NO image at all rather than a compressed
+       one. tests/seo.test.js holds the file, its dimensions and its weight. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Minhocário">
+  <meta property="og:title" content="Minhocário — simulador de compostagem com minhocas">
+  <meta property="og:description" content="Simulador de minhocário no navegador: compre uma composteira, crie minhocas e transforme restos de comida em húmus. De graça, sem instalar nada.">
+  <meta property="og:url" content="https://minhocario.fchamone.com/">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:locale:alternate" content="es_ES">
+  <meta property="og:image" content="https://minhocario.fchamone.com/assets/og-cover.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="A composteira do Minhocário na parede da garagem, com a visão de raio-x aberta.">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- schema.org, as JSON-LD. `author.url` is the structural half of the footer
+       credit link: it states that this subdomain and fchamone.com are the same
+       person, which is what a search engine consolidates authority across. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "Minhocário",
+    "url": "https://minhocario.fchamone.com/",
+    "description": "Simulador de minhocário no navegador: compre uma composteira, crie minhocas e transforme restos de comida em húmus. De graça, sem instalar nada.",
+    "inLanguage": ["pt-BR", "en", "es"],
+    "genre": "Simulation",
+    "applicationCategory": "Game",
+    "gamePlatform": "Web browser",
+    "operatingSystem": "Web browser (desktop)",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
+    "author": {
+      "@type": "Person",
+      "name": "Fabiano Chamone",
+      "url": "https://fchamone.com/"
+    }
+  }
+  </script>
   <!-- Declared explicitly rather than left to the browser's automatic
        /favicon.ico probe: that probe only ever looks at the ORIGIN root, so it
        misses whenever the game is served from a subdirectory — which is exactly
@@ -326,10 +398,36 @@
        Detection is capability-based — `(pointer: coarse) and (hover: none)`,
        stated in css/screens.css and again in js/ui/platform.js, with a test
        holding the two identical. The CSS half is what paints this; the JS half
-       stops main.js booting a WebGL scene behind it. -->
-  <section id="desktop-only" aria-live="polite">
-    <h1 data-string="desktopOnly.title"></h1>
+       stops main.js booting a WebGL scene behind it.
+
+       IT IS ALSO THE PAGE GOOGLE INDEXES. Googlebot crawls mobile-first, with a
+       smartphone renderer that matches the very query above — so everything
+       inside #app is invisible to it and this notice is the whole document as
+       far as search is concerned. It used to be a bare wall under an <h1> that
+       said the site would not run, which is a poor thing to be the only
+       indexable content on a domain.
+
+       So it says what the game IS before it says where to open it: the wordmark
+       as the <h1>, two lines describing the game, and only then the notice,
+       demoted to an <h2>. Nothing here is written for the crawler alone — it is
+       the same content a person holding a phone gets, which is the difference
+       between this and cloaking, and they are better served by it too.
+
+       Flat on purpose: no nested <section>. tests/platform.test.js reads this
+       block by slicing to the first `</section>`, and a nested one would
+       silently truncate what it checks.
+
+       No aria-live: this content is present at load and never changes, so there
+       is nothing for a live region to announce. -->
+  <section id="desktop-only">
+    <h1 data-string="appTitle"></h1>
+    <p class="desktop-only__lead" data-string="desktopOnly.about"></p>
+    <p data-string="desktopOnly.features"></p>
+    <h2 data-string="desktopOnly.title"></h2>
     <p data-string="desktopOnly.body"></p>
+    <p class="site-credit">
+      <a href="https://fchamone.com/" rel="author" data-string="credit.by"></a>
+    </p>
   </section>
 
   <main id="app">
@@ -407,6 +505,17 @@
           </table>
           <p id="ranking-empty" class="ranking__empty" data-string="home.rankingEmpty"></p>
         </section>
+        <!-- Author credit. The link back to the root domain this game is a
+             subdomain of; the JSON-LD `author.url` in <head> states the same
+             relationship in a form a search engine reads. Deliberately quiet —
+             it is a signature, not a call to action.
+
+             No rel="nofollow": passing authority to the root domain is the
+             entire point. The whole label is the link, because applyStrings()
+             writes textContent and would wipe any sibling text node. -->
+        <p class="site-credit">
+          <a href="https://fchamone.com/" rel="author" data-string="credit.by"></a>
+        </p>
       </div>
     </section>
 

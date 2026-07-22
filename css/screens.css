@@ -236,8 +236,14 @@
   text-align: center;
   background: var(--surface-0);
 }
+/* The wordmark, and the real <h1> of the document — see the reasoning in
+   index.html. The notice itself is the <h2> below it. */
 #desktop-only h1 {
   font-size: var(--text-xl);
+  color: var(--ink);
+}
+#desktop-only h2 {
+  font-size: var(--text-lg);
   color: var(--ink);
 }
 #desktop-only p {
@@ -246,6 +252,12 @@
   font-size: var(--text-md);
   line-height: 1.5;
   color: var(--ink-dim);
+}
+/* One step up from the body copy: this line is the first thing that says what
+   the game is, on the only screen a phone ever gets. */
+#desktop-only .desktop-only__lead {
+  font-size: var(--text-base);
+  color: var(--ink);
 }
 
 /* The gate itself. `(pointer: coarse) and (hover: none)` is a device whose
